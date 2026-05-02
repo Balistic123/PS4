@@ -92,11 +92,7 @@
     </style>
 </head>
 <body>
-    <h1>🎮 PS4 COMPLETE BROWSER FINGERPRINT</h1>
-    
 
-    
-    <div class="progress" id="progress">Ready. Click "RUN ALL TESTS" to begin.</div>
     
     <div id="results"></div>
     
@@ -747,7 +743,7 @@ function generateTextReport() {
 function sendToServer() {
     log('Sending report to server...');
     
-    fetch('10.204.17.81:8888/report', {
+    fetch('http://10.204.17.81:8888/report', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
