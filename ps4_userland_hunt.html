@@ -94,11 +94,7 @@
 <body>
     <h1>🎮 PS4 COMPLETE BROWSER FINGERPRINT</h1>
     
-    <div>
-        <button class="btn" onclick="runAllTests()">▶ RUN ALL TESTS</button>
-        <button class="btn" onclick="copyToClipboard()">📋 COPY ALL RESULTS</button>
-        <button class="btn" onclick="downloadReport()">💾 DOWNLOAD REPORT</button>
-    </div>
+
     
     <div class="progress" id="progress">Ready. Click "RUN ALL TESTS" to begin.</div>
     
@@ -698,77 +694,9 @@ function runAllTests() {
     log('✓ COMPLETE! Scroll down to copy the full report.');
 }
 
-function generateTextReport() {
-    var text = '';
-    text += '========================================\n';
-    text += 'PS4 BROWSER COMPLETE FINGERPRINT\n';
-    text += '========================================\n';
-    text += 'Generated: ' + new Date().toISOString() + '\n';
-    text += 'User Agent: ' + navigator.userAgent + '\n';
-    text += 'Platform: ' + navigator.platform + '\n\n';
-    
-    // Get all sections in order
-    var sections = document.querySelectorAll('.section');
-    for (var i = 0; i < sections.length; i++) {
-        var section = sections[i];
-        var title = section.querySelector('.section-title');
-        if (!title) continue;
-        
-        text += '----------------------------------------\n';
-        text += title.textContent + '\n';
-        text += '----------------------------------------\n';
-        
-        var table = section.querySelector('table');
-        if (table) {
-            var rows = table.querySelectorAll('tr');
-            for (var j = 0; j < rows.length; j++) {
-                var cells = rows[j].querySelectorAll('td');
-                if (cells.length >= 3) {
-                    var name = cells[0].textContent;
-                    var value = cells[1].textContent;
-                    var status = cells[2].textContent;
-                    
-                    text += name + ': ' + value + ' ' + status + '\n';
-                }
-            }
-        }
-        
-        text += '\n';
-    }
-    
-    text += '========================================\n';
-    text += 'END OF REPORT\n';
-    text += '========================================\n';
-    
-    textReport = text;
-    document.getElementById('textReport').value = text;
-}
 
-function copyToClipboard() {
-    var textarea = document.getElementById('textReport');
-    textarea.select();
-    textarea.setSelectionRange(0, 99999);
-    
-    try {
-        document.execCommand('copy');
-        log('✓ Report copied to clipboard!');
-    } catch(err) {
-        log('⚠ Could not copy. Please select all text and copy manually.');
-    }
-}
 
-function downloadReport() {
-    var blob = new Blob([textReport], { type: 'text/plain' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = 'ps4_fingerprint_' + Date.now() + '.txt';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    log('✓ Report downloaded!');
-}
+
 
 window.onerror = function(msg, url, line) {
     log('ERROR: ' + msg + ' (line ' + line + ')');
