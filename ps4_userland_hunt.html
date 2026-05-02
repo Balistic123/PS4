@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PS4 13.04 - 0day Userland Hunt</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Courier New', monospace; 
+            background: #000815; 
+            color: #00ff00; 
+            padding: 10px; 
+            font-size: 11px; 
+        }
+        h1 { 
+            color: #00a8ff; 
+            font-size: 16px; 
+            margin-bottom: 10px; 
+            text-shadow: 0 0 10px #00a8ff;
+            border-bottom: 2px solid #00a8ff;
+            padding-bottom: 5px;
+        }
+        .header-info {
+            background: rgba(0,168,255,0.1);
+            border: 1px solid #00a8ff;
+            padding: 8px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            font-size: 10px;
+        }
+        .btn-group { margin-bottom: 10px; }
+        .btn { 
+            padding: 8px 12px; 
+            background: #00a8ff; 
+            border: none; 
+            color: #000; 
+            margin: 2px; 
+            cursor: pointer; 
+            font-size: 10px; 
+            font-weight: bold;
+            border-radius: 3px;
+        }
+        .btn:hover { background: #0084cc; }
+        .btn.danger { background: #e74c3c; }
+        .btn.danger:hover { background: #c0392b; }
+        
+        .grid { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 8px; 
+            margin-bottom: 8px; 
+        }
+        .panel { 
+            background: #0a0a15; 
+            border: 1px solid #1e3a5f; 
+            border-radius: 4px; 
+        }
+        .panel-head { 
+            padding: 6px 10px; 
+            background: #162447; 
+            border-bottom: 1px solid #1e3a5f; 
+            font-weight: bold; 
+            color: #00a8ff;
+            font-size: 11px;
+        }
+        .panel-body { 
+            padding: 8px; 
+            max-height: 200px; 
+            overflow-y: auto; 
+            font-size: 10px;
+            line-height: 1.4;
+        }
+        
+        .console { 
+            background: #000; 
+            border: 1px solid #1e3a5f; 
+            height: 300px; 
+            overflow-y: auto; 
+            padding: 8px; 
+            font-family: 'Courier New', monospace;
+        }
+        .log { margin: 1px 0; }
+        .log.info { color: #00a8ff; }
+        .log.success { color: #2ecc71; }
+        .log.warn { color: #f39c12; }
+        .log.error { color: #e74c3c; }
+        .log.critical { 
+            color: #ff6b6b; 
+            font-weight: bold; 
+            background: rgba(255,107,107,0.1);
+            padding: 2px 4px;
+        }
+        .log.exploit { 
+            color: #9b59b6; 
+            font-weight: bold; 
+        }
+        
+        .result { 
+            padding: 4px 6px; 
+            margin: 3px 0; 
+            border-radius: 3px; 
+            font-size: 10px;
+            border-left: 3px solid;
+        }
+        .result.vuln { 
+            background: rgba(231,76,60,0.15); 
+            border-left-color: #e74c3c; 
+            color: #ff6b6b;
+        }
+        .result.safe { 
+            background: rgba(46,204,113,0.1); 
+            border-left-color: #2ecc71; 
+            color: #2ecc71;
+        }
+        .result.info { 
+            background: rgba(0,168,255,0.1); 
+            border-left-color: #00a8ff; 
+            color: #00a8ff;
+        }
+        
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0a0a15; }
+        ::-webkit-scrollbar-thumb { background: #1e3a5f; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #2e5a8f; }
+    </style>
+</head>
+<body>
+    <h1>🎮 PS4 13.04 - WebKit 605.1.15 Userland 0day Hunt</h1>
+    
+    <div class="header-info">
+        <strong>Mission:</strong> Find exploitable WebKit bugs for userland code execution<br>
+        <strong>Target:</strong> PS4 FW 13.04 | WebKit 605.1.15 (Safari 17.0 era, ~late 2023)<br>
+        <strong>Goal:</strong> addrof() + fakeobj() primitives → arbitrary R/W → ROP chain<br>
+        <strong>Note:</strong> JIT is DISABLED on PS4 - must use ROP, not JIT spraying
+    </div>
+    
+    <div class="btn-group">
+        <button class="btn" onclick="fingerprint()">🔍 Fingerprint Browser</button>
+        <button class="btn" onclick="runBasicTests()">🧪 Basic Tests</button>
+        <button class="btn" onclick="runArrayTests()">📊 Array Bugs</button>
+        <button class="btn" onclick="runObjectTests()">🎯 Object Bugs</button>
+        <button class="btn" onclick="runProxyTests()">🪞 Proxy Bugs</button>
+        <button class="btn danger" onclick="runAggressiveTests()">⚡ Aggressive Mode</button>
+    </div>
+    
+    <div class="grid">
+        <div class="panel">
+            <div class="panel-head">🔬 Browser Fingerprint</div>
+            <div class="panel-body" id="fingerprint"></div>
+        </div>
+        <div class="panel">
+            <div class="panel-head">⚠️ Vulnerabilities Found</div>
+            <div class="panel-body" id="vulns"></div>
+        </div>
+    </div>
+    
+    <div class="grid">
+        <div class="panel">
+            <div class="panel-head">💾 Memory Primitives</div>
+            <div class="panel-body" id="primitives"></div>
+        </div>
+        <div class="panel">
+            <div class="panel-head">🎲 Test Results</div>
+            <div class="panel-body" id="results"></div>
+        </div>
+    </div>
+    
+    <div class="console" id="console"></div>
+
+<script>
+'use strict';
+
+// Global state
+var con = document.getElementById('console');
+var fingerEl = document.getElementById('fingerprint');
+var vulnsEl = document.getElementById('vulns');
+var primEl = document.getElementById('primitives');
+var resultsEl = document.getElementById('results');
+
+var findings = {
+    browser: {},
+    vulnerabilities: [],
+    primitives: {},
+    anomalies: []
+};
+
+// Type conversion helpers
+var convBuf = new ArrayBuffer(8);
+var convF64 = new Float64Array(convBuf);
+var convU32 = new Uint32Array(convBuf);
+function i2f(lo, hi) { convU32[0] = lo >>> 0; convU32[1] = hi >>> 0; return convF64[0]; }
+function f2i(f) { convF64[0] = f; return { lo: convU32[0], hi: convU32[1] }; }
+function hex(n) { return '0x' + (n >>> 0).toString(16).padStart(8, '0'); }
+function hex64(lo, hi) { return hex(hi) + hex(lo).substr(2); }
+
+// Logging
+function log(msg, level) {
+    var div = document.createElement('div');
+    div.className = 'log ' + (level || 'info');
+    var time = new Date().toISOString().substr(11, 12);
+    div.textContent = '[' + time + '] ' + msg;
+    con.appendChild(div);
+    con.scrollTop = con.scrollHeight;
+    
+    // Send to server
+    try {
+        fetch('/report', { 
+            method: 'POST', 
+            body: JSON.stringify({msg:msg,level:level,ts:Date.now()}), 
+            mode: 'no-cors' 
+        }).catch(function(){});
+    } catch(e) {}
+}
+
+function addResult(container, title, detail, type) {
+    var el = document.getElementById(container);
+    if (!el) return;
+    var div = document.createElement('div');
+    div.className = 'result ' + (type || 'info');
+    div.innerHTML = '<strong>' + title + ':</strong> ' + detail;
+    el.appendChild(div);
+}
+
+// GC helpers
+function gc() {
+    var junk = [];
+    for (var i = 0; i < 100; i++) {
+        junk.push(new ArrayBuffer(10000));
+        junk.push(new Array(1000));
+    }
+    junk = null;
+}
+
+// ========================================
+// BROWSER FINGERPRINTING
+// ========================================
+function fingerprint() {
+    log('=== FINGERPRINTING PS4 BROWSER ===', 'exploit');
+    
+    fingerEl.innerHTML = '';
+    
+    var ua = navigator.userAgent;
+    log('UA: ' + ua, 'info');
+    
+    // Parse WebKit version
+    var wkMatch = ua.match(/AppleWebKit\/([0-9.]+)/);
+    var wkVer = wkMatch ? wkMatch[1] : 'unknown';
+    
+    // Parse Safari version
+    var safariMatch = ua.match(/Version\/([0-9.]+)/);
+    var safariVer = safariMatch ? safariMatch[1] : 'unknown';
+    
+    // Parse FW version
+    var fwMatch = ua.match(/PlayStation 4\/([0-9.]+)/);
+    var fwVer = fwMatch ? fwMatch[1] : 'unknown';
+    
+    findings.browser = {
+        userAgent: ua,
+        webkitVersion: wkVer,
+        safariVersion: safariVer,
+        firmwareVersion: fwVer,
+        platform: navigator.platform,
+        language: navigator.language,
+        hardwareConcurrency: navigator.hardwareConcurrency,
+        deviceMemory: navigator.deviceMemory,
+        maxTouchPoints: navigator.maxTouchPoints
+    };
+    
+    addResult('fingerprint', 'WebKit', wkVer, 'info');
+    addResult('fingerprint', 'Safari Version', safariVer, 'info');
+    addResult('fingerprint', 'PS4 Firmware', fwVer, 'info');
+    addResult('fingerprint', 'Platform', navigator.platform, 'info');
+    addResult('fingerprint', 'CPU Cores', navigator.hardwareConcurrency || 'unknown', 'info');
+    
+    // Test available APIs
+    var apis = {
+        'WebAssembly': typeof WebAssembly !== 'undefined',
+        'SharedArrayBuffer': typeof SharedArrayBuffer !== 'undefined',
+        'Atomics': typeof Atomics !== 'undefined',
+        'BigInt': typeof BigInt !== 'undefined',
+        'Symbol': typeof Symbol !== 'undefined',
+        'Proxy': typeof Proxy !== 'undefined',
+        'Reflect': typeof Reflect !== 'undefined',
+        'WeakRef': typeof WeakRef !== 'undefined',
+        'FinalizationRegistry': typeof FinalizationRegistry !== 'undefined',
+        'Promise': typeof Promise !== 'undefined',
+        'async/await': (async function(){}).constructor !== undefined
+    };
+    
+    for (var api in apis) {
+        findings.browser[api] = apis[api];
+        addResult('fingerprint', api, apis[api] ? '✅ Available' : '❌ Disabled', apis[api] ? 'info' : 'safe');
+    }
+    
+    log('Fingerprinting complete', 'success');
+    
+    // Report
+    fetch('/report', {
+        method: 'POST',
+        body: JSON.stringify({
+            type: 'ps4_fingerprint',
+            data: findings.browser,
+            timestamp: Date.now()
+        }),
+        mode: 'no-cors'
+    }).catch(function(){});
+}
+
+// ========================================
+// BASIC WEBKIT TESTS
+// ========================================
+function runBasicTests() {
+    log('=== BASIC WEBKIT TESTS ===', 'exploit');
+    
+    // Test 1: Array.at() NaN coercion
+    log('Testing Array.at(NaN)...', 'info');
+    try {
+        var arr = [1, 2, 3];
+        var result = arr.at(NaN);
+        if (result === 1) {
+            addResult('results', 'Array.at(NaN)', 'Returns index 0 (quirk)', 'info');
+        }
+    } catch(e) {
+        log('Array.at error: ' + e.message, 'error');
+    }
+    
+    // Test 2: Negative array indices
+    log('Testing negative array length...', 'info');
+    try {
+        var badArr = [];
+        badArr.length = -1;
+        addResult('results', 'Negative length', 'Allowed! length=' + badArr.length, 'vuln');
+        findings.vulnerabilities.push('Negative array length accepted');
+    } catch(e) {
+        addResult('results', 'Negative length', 'Blocked: ' + e.message, 'safe');
+    }
+    
+    // Test 3: Large array length
+    log('Testing large array allocation...', 'info');
+    try {
+        var huge = new Array(0xFFFFFFFF);
+        addResult('results', 'Max array length', 'Allocated 4GB array!', 'warn');
+    } catch(e) {
+        addResult('results', 'Max array length', 'Blocked: ' + e.message, 'safe');
+    }
+    
+    // Test 4: Object.defineProperty data→accessor transition
+    log('Testing defineProperty transitions...', 'info');
+    try {
+        var obj = { x: 1 };
+        Object.defineProperty(obj, 'x', {
+            get: function() { return 42; },
+            configurable: true
+        });
+        if (obj.x === 42) {
+            addResult('results', 'defineProperty transition', 'data→accessor works', 'info');
+        }
+    } catch(e) {
+        log('defineProperty error: ' + e.message, 'error');
+    }
+    
+    log('Basic tests complete', 'success');
+}
+
+// ========================================
+// ARRAY EXPLOITATION TESTS
+// ========================================
+function runArrayTests() {
+    log('=== ARRAY EXPLOITATION TESTS ===', 'exploit');
+    
+    // Test 1: Array length corruption via defineProperty
+    log('Test 1: Length corruption via defineProperty...', 'info');
+    try {
+        var arr1 = [1.1, 2.2, 3.3, 4.4];
+        Object.defineProperty(arr1, 'length', { value: 0x1000 });
+        
+        if (arr1.length === 0x1000) {
+            addResult('primitives', 'Length corruption', 'SUCCESS! length=' + arr1.length, 'vuln');
+            
+            // Test OOB read
+            var oob = arr1[100];
+            if (oob !== undefined) {
+                addResult('primitives', 'OOB read', 'Read index 100: ' + oob, 'vuln');
+                findings.vulnerabilities.push('Array OOB read possible');
+            } else {
+                addResult('primitives', 'OOB read', 'Returns undefined (bounds checked)', 'safe');
+            }
+            
+            // Test OOB write
+            arr1[100] = 13.37;
+            if (arr1[100] === 13.37) {
+                addResult('primitives', 'OOB write', 'Write succeeded!', 'critical');
+                findings.primitives.oob_write = true;
+                findings.vulnerabilities.push('Array OOB write - CRITICAL');
+            } else {
+                addResult('primitives', 'OOB write', 'Write blocked or went to sparse storage', 'safe');
+            }
+        }
+    } catch(e) {
+        log('Length corruption error: ' + e.message, 'error');
+    }
+    
+    // Test 2: Array Species constructor
+    log('Test 2: Array Species exploitation...', 'info');
+    try {
+        var SpeciesArray = [];
+        SpeciesArray.constructor = {
+            get [Symbol.species]() {
+                return function() {
+                    var arr = [];
+                    arr.length = 0xFFFFFFFF;
+                    return arr;
+                };
+            }
+        };
+        
+        var mapped = SpeciesArray.map(function(x) { return x; });
+        addResult('primitives', 'Species length', 'Mapped length: ' + mapped.length, mapped.length > 100 ? 'vuln' : 'safe');
+        
+        if (mapped.length === 0xFFFFFFFF) {
+            findings.primitives.species_confusion = true;
+            findings.vulnerabilities.push('Species length confusion');
+        }
+    } catch(e) {
+        log('Species error: ' + e.message, 'error');
+    }
+    
+    // Test 3: Sort-time resize
+    log('Test 3: Array resize during sort...', 'info');
+    try {
+        var resizeArr = [1, 2, 3];
+        var resized = false;
+        
+        resizeArr.sort(function(a, b) {
+            if (!resized) {
+                resizeArr.length = 100;
+                resized = true;
+            }
+            return a - b;
+        });
+        
+        if (resizeArr.length === 100) {
+            addResult('primitives', 'Sort-time resize', 'Array grew to ' + resizeArr.length, 'vuln');
+            
+            // Check if new slots are initialized
+            var uninit = false;
+            for (var i = 10; i < 20; i++) {
+                if (resizeArr[i] !== undefined && resizeArr[i] !== 0) {
+                    uninit = true;
+                    addResult('primitives', 'Uninitialized memory', 'Found at index ' + i + ': ' + resizeArr[i], 'critical');
+                    findings.vulnerabilities.push('Uninitialized array slots - CRITICAL');
+                    break;
+                }
+            }
+            if (!uninit) {
+                addResult('primitives', 'Memory initialization', 'New slots are zero-initialized', 'safe');
+            }
+        }
+    } catch(e) {
+        log('Sort resize error: ' + e.message, 'error');
+    }
+    
+    log('Array tests complete', 'success');
+}
+
+// ========================================
+// OBJECT EXPLOITATION TESTS
+// ========================================
+function runObjectTests() {
+    log('=== OBJECT EXPLOITATION TESTS ===', 'exploit');
+    
+    // Test 1: Prototype pollution
+    log('Test 1: __proto__ pollution...', 'info');
+    try {
+        var polluted = {};
+        polluted.__proto__.polluted = true;
+        
+        var test = {};
+        if (test.polluted === true) {
+            addResult('vulns', 'Prototype pollution', 'VULNERABLE!', 'critical');
+            findings.vulnerabilities.push('Prototype pollution via __proto__');
+        } else {
+            addResult('vulns', 'Prototype pollution', 'Protected', 'safe');
+        }
+        
+        delete Object.prototype.polluted;
+    } catch(e) {
+        log('Proto pollution error: ' + e.message, 'error');
+    }
+    
+    // Test 2: valueOf side effects
+    log('Test 2: valueOf side effects...', 'info');
+    try {
+        var victim = [1.1, 2.2, 3.3];
+        var evil = {
+            valueOf: function() {
+                victim[1] = {};  // Type confusion attempt
+                return 1;
+            }
+        };
+        
+        victim[0] = evil;
+        var sum = victim[0] + victim[1];
+        
+        if (typeof victim[1] === 'object') {
+            addResult('primitives', 'valueOf type confusion', 'Possible! victim[1] is now object', 'vuln');
+        }
+    } catch(e) {
+        log('valueOf error: ' + e.message, 'error');
+    }
+    
+    // Test 3: Getter/setter during operations
+    log('Test 3: Prototype getter exploitation...', 'info');
+    try {
+        var getterFired = false;
+        var protoArr = [1, 2, 3];
+        
+        Array.prototype.__defineGetter__(10, function() {
+            getterFired = true;
+            return 'GETTER_FIRED';
+        });
+        
+        var val = protoArr[10];
+        
+        if (getterFired) {
+            addResult('primitives', 'Prototype getter', 'Fires on OOB access!', 'vuln');
+            findings.primitives.prototype_getter = true;
+        }
+        
+        delete Array.prototype[10];
+    } catch(e) {
+        log('Getter error: ' + e.message, 'error');
+    }
+    
+    log('Object tests complete', 'success');
+}
+
+// ========================================
+// PROXY EXPLOITATION TESTS
+// ========================================
+function runProxyTests() {
+    log('=== PROXY EXPLOITATION TESTS ===', 'exploit');
+    
+    // Test 1: Proxy length spoofing
+    log('Test 1: Proxy length spoofing...', 'info');
+    try {
+        var fakeArray = new Proxy({}, {
+            get: function(target, prop) {
+                if (prop === 'length') return 256;
+                if (prop >= 0 && prop < 256) return prop;
+                return target[prop];
+            }
+        });
+        
+        var sliced = Array.prototype.slice.call(fakeArray);
+        addResult('primitives', 'Proxy slice', 'Created array of length ' + sliced.length, sliced.length > 100 ? 'vuln' : 'safe');
+        
+        if (sliced.length === 256) {
+            findings.primitives.proxy_length_spoof = true;
+            
+            // Check if slots are initialized
+            var leaked = false;
+            for (var i = 10; i < 20; i++) {
+                if (sliced[i] !== i && sliced[i] !== undefined && sliced[i] !== 0) {
+                    leaked = true;
+                    addResult('primitives', 'Memory leak via Proxy', 'Index ' + i + ' = ' + sliced[i], 'critical');
+                    findings.vulnerabilities.push('Memory leak via Proxy slice');
+                    break;
+                }
+            }
+            if (!leaked) {
+                addResult('primitives', 'Proxy slots', 'Initialized to callback values', 'safe');
+            }
+        }
+    } catch(e) {
+        log('Proxy slice error: ' + e.message, 'error');
+    }
+    
+    // Test 2: Proxy with Array.from
+    log('Test 2: Proxy with Array.from...', 'info');
+    try {
+        var fakeIterable = new Proxy({}, {
+            get: function(target, prop) {
+                if (prop === Symbol.iterator) {
+                    return function() {
+                        var i = 0;
+                        return {
+                            next: function() {
+                                if (i < 256) return { value: i++, done: false };
+                                return { done: true };
+                            }
+                        };
+                    };
+                }
+                return target[prop];
+            }
+        });
+        
+        var fromArr = Array.from(fakeIterable);
+        addResult('primitives', 'Proxy Array.from', 'Length: ' + fromArr.length, fromArr.length > 100 ? 'vuln' : 'safe');
+    } catch(e) {
+        log('Array.from error: ' + e.message, 'error');
+    }
+    
+    log('Proxy tests complete', 'success');
+}
+
+// ========================================
+// AGGRESSIVE EXPLOITATION MODE
+// ========================================
+function runAggressiveTests() {
+    log('========== AGGRESSIVE MODE ==========', 'critical');
+    log('Running high-risk exploitation attempts...', 'warn');
+    
+    var crashes = 0;
+    var anomalies = 0;
+    
+    // Test 1: Massive GC pressure during operations
+    log('Test 1: GC pressure exploitation...', 'exploit');
+    try {
+        var gcArr = [1.1, 2.2, 3.3];
+        
+        for (var i = 0; i < 50; i++) {
+            gc();
+            
+            var proxy = new Proxy({}, {
+                get: function() {
+                    gc();
+                    return 1.1;
+                }
+            });
+            
+            Array.prototype.push.call(gcArr, proxy);
+        }
+        
+        addResult('results', 'GC pressure test', 'Survived 50 iterations', 'info');
+    } catch(e) {
+        crashes++;
+        addResult('results', 'GC pressure test', 'CRASHED: ' + e.message, 'critical');
+        findings.vulnerabilities.push('GC pressure crash: ' + e.message);
+    }
+    
+    // Test 2: Recursive defineProperty
+    log('Test 2: Recursive defineProperty...', 'exploit');
+    try {
+        var depth = 0;
+        var obj = {};
+        
+        Object.defineProperty(obj, 'x', {
+            get: function() {
+                if (depth++ < 100) {
+                    Object.defineProperty(obj, 'y', { value: depth });
+                }
+                return 1;
+            },
+            configurable: true
+        });
+        
+        var val = obj.x;
+        addResult('results', 'Recursive defineProperty', 'Depth reached: ' + depth, depth > 50 ? 'warn' : 'safe');
+    } catch(e) {
+        crashes++;
+        addResult('results', 'Recursive defineProperty', 'CRASHED: ' + e.message, 'critical');
+    }
+    
+    // Test 3: TypedArray with corrupted length
+    log('Test 3: TypedArray length corruption...', 'exploit');
+    try {
+        var buffer = new ArrayBuffer(64);
+        var view = new Uint32Array(buffer);
+        
+        Object.defineProperty(view, 'length', { value: 0x10000 });
+        
+        if (view.length === 0x10000) {
+            addResult('primitives', 'TypedArray length', 'Corrupted to ' + view.length + '!', 'critical');
+            
+            // Try OOB read
+            try {
+                var leak = view[1000];
+                addResult('primitives', 'TypedArray OOB', 'Read index 1000: ' + hex(leak), leak !== undefined ? 'critical' : 'safe');
+                
+                if (leak !== undefined && leak !== 0) {
+                    findings.vulnerabilities.push('TypedArray OOB read - CRITICAL!');
+                }
+            } catch(e2) {
+                addResult('primitives', 'TypedArray OOB', 'Blocked: ' + e2.message, 'safe');
+            }
+        }
+    } catch(e) {
+        log('TypedArray error: ' + e.message, 'error');
+    }
+    
+    log('========== AGGRESSIVE MODE COMPLETE ==========', 'critical');
+    log('Crashes: ' + crashes + ', Anomalies: ' + anomalies, crashes > 0 ? 'critical' : 'success');
+    
+    // Final report
+    fetch('/report', {
+        method: 'POST',
+        body: JSON.stringify({
+            type: 'ps4_aggressive_results',
+            crashes: crashes,
+            anomalies: anomalies,
+            vulnerabilities: findings.vulnerabilities,
+            primitives: findings.primitives,
+            timestamp: Date.now()
+        }),
+        mode: 'no-cors'
+    }).catch(function(){});
+}
+
+// Error handler
+window.onerror = function(msg, url, line) {
+    log('CRITICAL ERROR: ' + msg + ' (line ' + line + ')', 'critical');
+    findings.anomalies.push({ msg: msg, line: line });
+    return true;
+};
+
+// On load
+window.onload = function() {
+    log('PS4 13.04 Userland Hunt loaded', 'success');
+    log('Target: WebKit 605.1.15 (Safari 17.0 era)', 'info');
+    log('Click "Fingerprint Browser" to begin', 'info');
+};
+</script>
+</body>
+</html>
