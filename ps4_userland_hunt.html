@@ -674,6 +674,9 @@ function runAllTests() {
     document.getElementById('results').innerHTML = '';
     results = {};
     
+
+</body>
+</html>
     test01_BasicInfo();
     test02_JavaScriptCore();
     test03_TypedArrays();
@@ -694,9 +697,89 @@ function runAllTests() {
     log('✓ COMPLETE! Scroll down to copy the full report.');
 }
 
+function generateTextReport() {
+    var text = '';
+    text += '========================================\n';
+    text += 'PS4 BROWSER COMPLETE FINGERPRINT\n';
+    text += '========================================\n';
+    text += 'Generated: ' + new Date().toISOString() + '\n';
+    text += 'User Agent: ' + navigator.userAgent + '\n';
+    text += 'Platform: ' + navigator.platform + '\n\n';
+    
+    var sections = document.querySelectorAll('.section');
+    for (var i = 0; i < sections.length; i++) {
+        var section = sections[i];
+        var title = section.querySelector('.section-title');
+        if (!title) continue;
+        
+        text += '----------------------------------------\n';
+        text += title.textContent + '\n';
+        text += '----------------------------------------\n';
+        
+        var table = section.querySelector('table');
+        if (table) {
+            var rows = table.querySelectorAll('tr');
+            for (var j = 0; j < rows.length; j++) {
+                var cells = rows[j].querySelectorAll('td');
+                if (cells.length >= 3) {
+                    var name = cells[0].textContent;
+                    var value = cells[1].textContent;
+                    var status = cells[2].textContent;
+                    
+                    text += name + ': ' + value + ' ' + status + '\n';
+                }
+            }
+        }
+        
+        text += '\n';
+    }
+    
+    text += '========================================\n';
+    text += 'END OF REPORT\n';
+    text += '========================================\n';
+    
+    textReport = text;
+    document.getElementById('textReport').value = text;
+    
+    sendToServer();
+}
 
+function sendToServer() {
+    log('Sending report to server...');
+    
+    fetch('10.204.17.81:8888/report', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            type: 'ps4_fingerprint',
+            textReport: textReport,
+            results: results,
+            timestamp: Date.now()
+        }),
+        mode: 'no-cors'
+    })
+    .then(function(response) {
+        log('✓ Report sent to server!');
+    })
+    .catch(function(error) {
+        log('⚠ Could not send to server. Copy manually instead.');
+    });
+}
 
-
+function copyToClipboard() {
+    var textarea = document.getElementById('textReport');
+    textarea.select();
+    textarea.setSelectionRange(0, 99999);
+    
+    try {
+        document.execCommand('copy');
+        log('✓ Report copied to clipboard!');
+    } catch(err) {
+        log('⚠ Could not copy. Please select all text and copy manually.');
+    }
+}
 
 window.onerror = function(msg, url, line) {
     log('ERROR: ' + msg + ' (line ' + line + ')');
