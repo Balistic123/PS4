@@ -5,340 +5,288 @@
     <title>PS4 Fingerprint</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: monospace; background: #000; color: #0f0; padding: 15px; font-size: 12px; }
-        h1 { color: #0f0; font-size: 20px; margin-bottom: 15px; }
-        .btn { padding: 12px 20px; background: #0f0; border: none; color: #000; margin: 5px; cursor: pointer; font-size: 13px; font-weight: bold; }
-        .status { background: rgba(0,255,0,0.1); border: 1px solid #0f0; padding: 10px; margin: 10px 0; }
-        #results { margin: 15px 0; }
-        .section { background: #0a0a0a; border: 1px solid #0f0; margin: 10px 0; padding: 10px; }
-        .section-title { color: #0ff; font-size: 14px; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #0f0; padding-bottom: 4px; }
-        table { width: 100%; border-collapse: collapse; font-size: 11px; }
-        th { background: #1a1a1a; color: #0ff; padding: 6px; text-align: left; border: 1px solid #333; }
-        td { padding: 4px 6px; border: 1px solid #333; }
-        .yes { color: #0f0; font-weight: bold; }
-        .no { color: #f00; font-weight: bold; }
-        .warn { color: #ff0; font-weight: bold; }
-        #textReport { width: 100%; height: 400px; background: #000; color: #0f0; border: 1px solid #0f0; padding: 10px; font-family: monospace; font-size: 10px; }
+        body { font-family: monospace; background: #000; color: #0f0; padding: 15px; font-size: 13px; line-height: 1.5; }
+        h1 { color: #0f0; font-size: 22px; margin-bottom: 15px; text-align: center; border-bottom: 2px solid #0f0; padding-bottom: 10px; }
+        .btn { padding: 15px 25px; background: #0f0; border: none; color: #000; margin: 5px; cursor: pointer; font-size: 14px; font-weight: bold; width: 100%; max-width: 300px; }
+        .btn-container { text-align: center; margin-bottom: 20px; }
+        .status { background: rgba(0,255,0,0.1); border: 1px solid #0f0; padding: 15px; margin: 10px 0; text-align: center; font-size: 16px; font-weight: bold; }
+        .section { background: #0a0a0a; border: 2px solid #0f0; margin: 15px 0; padding: 15px; }
+        .section-title { color: #0ff; font-size: 18px; font-weight: bold; margin-bottom: 12px; border-bottom: 2px solid #0ff; padding-bottom: 8px; }
+        .item { padding: 8px 0; border-bottom: 1px solid #222; display: flex; justify-content: space-between; }
+        .item:last-child { border-bottom: none; }
+        .item-name { color: #fff; font-weight: bold; flex: 1; }
+        .item-value { color: #ccc; flex: 2; padding: 0 10px; }
+        .item-status { font-weight: bold; width: 60px; text-align: center; }
+        .yes { color: #0f0; }
+        .no { color: #f00; }
+        .warn { color: #ff0; }
     </style>
 </head>
 <body>
-    <h1>PS4 COMPLETE FINGERPRINT</h1>
+    <h1>🎮 PS4 BROWSER FINGERPRINT 🎮</h1>
     
-    <div>
-        <button class="btn" onclick="runAllTests()">RUN ALL TESTS</button>
-        <button class="btn" onclick="sendReport()">SEND TO SERVER</button>
-        <button class="btn" onclick="copyReport()">COPY REPORT</button>
+    <div class="btn-container">
+        <button class="btn" onclick="runAllTests()">▶ RUN ALL TESTS</button>
     </div>
     
-    <div class="status" id="status">Ready. Click "RUN ALL TESTS".</div>
+    <div class="status" id="status">Ready. Click "RUN ALL TESTS" to begin.</div>
     
     <div id="results"></div>
-    
-    <div class="section">
-        <div class="section-title">FULL TEXT REPORT</div>
-        <textarea id="textReport" readonly></textarea>
-    </div>
 
 <script>
-var results = {};
-var report = '';
-
 function log(msg) {
     document.getElementById('status').textContent = msg;
+    document.getElementById('status').scrollIntoView({ behavior: 'smooth' });
 }
 
 function addSection(title) {
-    var div = document.createElement('div');
-    div.className = 'section';
-    div.innerHTML = '<div class="section-title">' + title + '</div><table id="t_' + title.replace(/\W/g, '') + '"></table>';
-    document.getElementById('results').appendChild(div);
-    return 't_' + title.replace(/\W/g, '');
+    var section = document.createElement('div');
+    section.className = 'section';
+    section.innerHTML = '<div class="section-title">' + title + '</div><div id="s_' + title.replace(/\W/g, '') + '"></div>';
+    document.getElementById('results').appendChild(section);
+    return 's_' + title.replace(/\W/g, '');
 }
 
-function addRow(tid, name, value, status) {
-    var t = document.getElementById(tid);
-    if (!t) return;
-    var r = t.insertRow();
-    r.insertCell(0).textContent = name;
-    r.insertCell(1).textContent = value;
-    var c = r.insertCell(2);
-    c.textContent = status === 'yes' ? '✓' : status === 'no' ? '✗' : status === 'warn' ? '⚠' : '•';
-    c.className = status || '';
-    c.style.textAlign = 'center';
+function addItem(sectionId, name, value, status) {
+    var container = document.getElementById(sectionId);
+    if (!container) return;
     
-    // Store result
-    if (!results[title]) results[title] = {};
-    results[title][name] = { value: value, status: status };
+    var item = document.createElement('div');
+    item.className = 'item';
+    
+    var nameDiv = document.createElement('div');
+    nameDiv.className = 'item-name';
+    nameDiv.textContent = name;
+    
+    var valueDiv = document.createElement('div');
+    valueDiv.className = 'item-value';
+    valueDiv.textContent = value;
+    
+    var statusDiv = document.createElement('div');
+    statusDiv.className = 'item-status ' + (status || '');
+    statusDiv.textContent = status === 'yes' ? '✓ YES' : status === 'no' ? '✗ NO' : status === 'warn' ? '⚠ WARN' : '•';
+    
+    item.appendChild(nameDiv);
+    item.appendChild(valueDiv);
+    item.appendChild(statusDiv);
+    container.appendChild(item);
 }
 
 function runAllTests() {
-    log('Running tests...');
+    log('🔄 Running tests... Please wait...');
     document.getElementById('results').innerHTML = '';
-    results = {};
     
-    // Test 1: Basic Info
-    var t1 = addSection('01 Basic Info');
-    addRow(t1, 'User Agent', navigator.userAgent, '');
-    addRow(t1, 'Platform', navigator.platform, '');
-    var wk = navigator.userAgent.match(/WebKit\/([0-9.]+)/);
-    addRow(t1, 'WebKit', wk ? wk[1] : 'Unknown', 'warn');
-    var fw = navigator.userAgent.match(/PlayStation 4\/([0-9.]+)/);
-    addRow(t1, 'Firmware', fw ? fw[1] : 'Unknown', 'warn');
-    addRow(t1, 'CPU Cores', navigator.hardwareConcurrency || 'Unknown', 'warn');
-    
-    // Test 2: JS Core APIs
-    var t2 = addSection('02 JavaScript APIs');
-    addRow(t2, 'Promise', typeof Promise !== 'undefined' ? 'Yes' : 'No', typeof Promise !== 'undefined' ? 'yes' : 'no');
-    addRow(t2, 'Proxy', typeof Proxy !== 'undefined' ? 'Yes' : 'No', typeof Proxy !== 'undefined' ? 'yes' : 'no');
-    addRow(t2, 'Symbol', typeof Symbol !== 'undefined' ? 'Yes' : 'No', typeof Symbol !== 'undefined' ? 'yes' : 'no');
-    addRow(t2, 'Reflect', typeof Reflect !== 'undefined' ? 'Yes' : 'No', typeof Reflect !== 'undefined' ? 'yes' : 'no');
-    addRow(t2, 'Map', typeof Map !== 'undefined' ? 'Yes' : 'No', typeof Map !== 'undefined' ? 'yes' : 'no');
-    addRow(t2, 'Set', typeof Set !== 'undefined' ? 'Yes' : 'No', typeof Set !== 'undefined' ? 'yes' : 'no');
-    addRow(t2, 'WeakMap', typeof WeakMap !== 'undefined' ? 'Yes' : 'No', typeof WeakMap !== 'undefined' ? 'yes' : 'no');
-    addRow(t2, 'WeakSet', typeof WeakSet !== 'undefined' ? 'Yes' : 'No', typeof WeakSet !== 'undefined' ? 'yes' : 'no');
-    addRow(t2, 'WeakRef', typeof WeakRef !== 'undefined' ? 'Yes' : 'No', typeof WeakRef !== 'undefined' ? 'yes' : 'no');
-    addRow(t2, 'FinalizationRegistry', typeof FinalizationRegistry !== 'undefined' ? 'Yes' : 'No', typeof FinalizationRegistry !== 'undefined' ? 'yes' : 'no');
-    addRow(t2, 'BigInt', typeof BigInt !== 'undefined' ? 'Yes' : 'No', typeof BigInt !== 'undefined' ? 'yes' : 'no');
-    
-    // Test 3: TypedArrays
-    var t3 = addSection('03 TypedArrays');
-    addRow(t3, 'ArrayBuffer', typeof ArrayBuffer !== 'undefined' ? 'Yes' : 'No', typeof ArrayBuffer !== 'undefined' ? 'yes' : 'no');
-    addRow(t3, 'SharedArrayBuffer', typeof SharedArrayBuffer !== 'undefined' ? 'Yes' : 'No', typeof SharedArrayBuffer !== 'undefined' ? 'yes' : 'no');
-    addRow(t3, 'DataView', typeof DataView !== 'undefined' ? 'Yes' : 'No', typeof DataView !== 'undefined' ? 'yes' : 'no');
-    addRow(t3, 'Uint8Array', typeof Uint8Array !== 'undefined' ? 'Yes' : 'No', typeof Uint8Array !== 'undefined' ? 'yes' : 'no');
-    addRow(t3, 'Uint32Array', typeof Uint32Array !== 'undefined' ? 'Yes' : 'No', typeof Uint32Array !== 'undefined' ? 'yes' : 'no');
-    addRow(t3, 'Float64Array', typeof Float64Array !== 'undefined' ? 'Yes' : 'No', typeof Float64Array !== 'undefined' ? 'yes' : 'no');
-    addRow(t3, 'Atomics', typeof Atomics !== 'undefined' ? 'Yes' : 'No', typeof Atomics !== 'undefined' ? 'yes' : 'no');
-    
-    // Test 4: Web APIs
-    var t4 = addSection('04 Web APIs');
-    addRow(t4, 'fetch', typeof fetch !== 'undefined' ? 'Yes' : 'No', typeof fetch !== 'undefined' ? 'yes' : 'no');
-    addRow(t4, 'XMLHttpRequest', typeof XMLHttpRequest !== 'undefined' ? 'Yes' : 'No', typeof XMLHttpRequest !== 'undefined' ? 'yes' : 'no');
-    addRow(t4, 'WebSocket', typeof WebSocket !== 'undefined' ? 'Yes' : 'No', typeof WebSocket !== 'undefined' ? 'yes' : 'no');
-    addRow(t4, 'Worker', typeof Worker !== 'undefined' ? 'Yes' : 'No', typeof Worker !== 'undefined' ? 'yes' : 'no');
-    addRow(t4, 'ServiceWorker', 'serviceWorker' in navigator ? 'Yes' : 'No', 'serviceWorker' in navigator ? 'yes' : 'no');
-    
-    // Test 5: WebAssembly
-    var t5 = addSection('05 WebAssembly');
-    var wasmAvail = typeof WebAssembly !== 'undefined';
-    addRow(t5, 'WebAssembly', wasmAvail ? 'Yes' : 'No', wasmAvail ? 'yes' : 'no');
-    
-    if (wasmAvail) {
-        try {
-            var wasm = new Uint8Array([0,97,115,109,1,0,0,0,1,7,1,96,0,1,127,3,2,1,0,7,10,1,6,97,110,115,119,101,114,0,0,10,9,1,7,0,65,42,15,11]);
-            var mod = new WebAssembly.Module(wasm);
-            var inst = new WebAssembly.Instance(mod);
-            var res = inst.exports.answer();
-            addRow(t5, 'Compile & Execute', 'SUCCESS (returned ' + res + ')', 'yes');
-        } catch(e) {
-            addRow(t5, 'Compile & Execute', 'Failed: ' + e.message, 'no');
-        }
-    }
-    
-    // Test 6: Font APIs (CVE-2021-30858)
-    var t6 = addSection('06 Font APIs CVE-2021-30858');
-    addRow(t6, 'FontFace', typeof FontFace !== 'undefined' ? 'Yes' : 'No', typeof FontFace !== 'undefined' ? 'yes' : 'no');
-    addRow(t6, 'FontFaceSet', typeof FontFaceSet !== 'undefined' ? 'Yes' : 'No', typeof FontFaceSet !== 'undefined' ? 'yes' : 'no');
-    
-    if (typeof FontFace !== 'undefined' && typeof FontFaceSet !== 'undefined') {
-        try {
-            var ff = new FontFace("test", "");
-            var ffs = new FontFaceSet([ff]);
-            addRow(t6, 'CVE-2021-30858 Surface', 'PRESENT - EXPLOITABLE!', 'warn');
-        } catch(e) {
-            addRow(t6, 'CVE-2021-30858 Surface', 'Not exploitable: ' + e.message, 'no');
-        }
-    }
-    
-    // Test 7: Graphics
-    var t7 = addSection('07 Graphics');
-    var canvas = document.createElement('canvas');
-    var hasCanvas = !!canvas.getContext;
-    addRow(t7, 'Canvas', hasCanvas ? 'Yes' : 'No', hasCanvas ? 'yes' : 'no');
-    
-    if (hasCanvas) {
-        var ctx2d = canvas.getContext('2d');
-        addRow(t7, 'Canvas 2D', ctx2d ? 'Yes' : 'No', ctx2d ? 'yes' : 'no');
+    setTimeout(function() {
         
-        var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-        addRow(t7, 'WebGL', gl ? 'Yes' : 'No', gl ? 'yes' : 'no');
+        // ===== SECTION 1: BASIC INFO =====
+        var s1 = addSection('📱 01. BASIC INFORMATION');
+        addItem(s1, 'User Agent', navigator.userAgent, '');
+        addItem(s1, 'Platform', navigator.platform, '');
         
-        if (gl) {
-            try {
-                addRow(t7, 'WebGL Vendor', gl.getParameter(gl.VENDOR), 'warn');
-                addRow(t7, 'WebGL Renderer', gl.getParameter(gl.RENDERER), 'warn');
-                addRow(t7, 'WebGL Version', gl.getParameter(gl.VERSION), 'warn');
-            } catch(e) {}
-        }
+        var wk = navigator.userAgent.match(/WebKit\/([0-9.]+)/);
+        addItem(s1, 'WebKit Version', wk ? wk[1] : 'Unknown', 'warn');
         
-        var gl2 = canvas.getContext('webgl2');
-        addRow(t7, 'WebGL2', gl2 ? 'Yes' : 'No', gl2 ? 'yes' : 'no');
-    }
-    
-    addRow(t7, 'OffscreenCanvas', typeof OffscreenCanvas !== 'undefined' ? 'Yes' : 'No', typeof OffscreenCanvas !== 'undefined' ? 'yes' : 'no');
-    
-    // Test 8: Storage
-    var t8 = addSection('08 Storage');
-    try {
-        localStorage.setItem('test', '1');
-        localStorage.removeItem('test');
-        addRow(t8, 'localStorage', 'Works', 'yes');
-    } catch(e) {
-        addRow(t8, 'localStorage', 'Error: ' + e.message, 'no');
-    }
-    
-    try {
-        sessionStorage.setItem('test', '1');
-        sessionStorage.removeItem('test');
-        addRow(t8, 'sessionStorage', 'Works', 'yes');
-    } catch(e) {
-        addRow(t8, 'sessionStorage', 'Error', 'no');
-    }
-    
-    addRow(t8, 'IndexedDB', typeof indexedDB !== 'undefined' ? 'Yes' : 'No', typeof indexedDB !== 'undefined' ? 'yes' : 'no');
-    
-    // Test 9: Crypto
-    var t9 = addSection('09 Crypto');
-    addRow(t9, 'crypto', typeof crypto !== 'undefined' ? 'Yes' : 'No', typeof crypto !== 'undefined' ? 'yes' : 'no');
-    if (crypto) {
-        addRow(t9, 'crypto.getRandomValues', typeof crypto.getRandomValues !== 'undefined' ? 'Yes' : 'No', typeof crypto.getRandomValues !== 'undefined' ? 'yes' : 'no');
-        addRow(t9, 'crypto.subtle', typeof crypto.subtle !== 'undefined' ? 'Yes' : 'No', typeof crypto.subtle !== 'undefined' ? 'yes' : 'no');
-    }
-    
-    // Test 10: Security
-    var t10 = addSection('10 Security Features');
-    try {
-        eval('1+1');
-        addRow(t10, 'eval()', 'Allowed', 'warn');
-    } catch(e) {
-        addRow(t10, 'eval()', 'Blocked: ' + e.message, 'yes');
-    }
-    
-    try {
-        new Function('return 1')();
-        addRow(t10, 'Function constructor', 'Allowed', 'warn');
-    } catch(e) {
-        addRow(t10, 'Function constructor', 'Blocked: ' + e.message, 'yes');
-    }
-    
-    // Test 11: Performance
-    var t11 = addSection('11 Performance');
-    addRow(t11, 'performance', typeof performance !== 'undefined' ? 'Yes' : 'No', typeof performance !== 'undefined' ? 'yes' : 'no');
-    if (performance && performance.memory) {
-        addRow(t11, 'JS Heap Limit', (performance.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(2) + ' MB', 'warn');
-        addRow(t11, 'Used JS Heap', (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(2) + ' MB', 'warn');
-    }
-    
-    // Test 12: Media
-    var t12 = addSection('12 Media');
-    addRow(t12, 'Audio', typeof Audio !== 'undefined' ? 'Yes' : 'No', typeof Audio !== 'undefined' ? 'yes' : 'no');
-    addRow(t12, 'AudioContext', typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined' ? 'Yes' : 'No', typeof AudioContext !== 'undefined' ? 'yes' : 'no');
-    addRow(t12, 'RTCPeerConnection', typeof RTCPeerConnection !== 'undefined' ? 'Yes' : 'No', typeof RTCPeerConnection !== 'undefined' ? 'yes' : 'no');
-    
-    // Test 13: Misc
-    var t13 = addSection('13 Miscellaneous');
-    addRow(t13, 'Gamepad API', typeof navigator.getGamepads !== 'undefined' ? 'Yes' : 'No', typeof navigator.getGamepads !== 'undefined' ? 'yes' : 'no');
-    addRow(t13, 'Geolocation', typeof navigator.geolocation !== 'undefined' ? 'Yes' : 'No', typeof navigator.geolocation !== 'undefined' ? 'yes' : 'no');
-    addRow(t13, 'Notification', typeof Notification !== 'undefined' ? 'Yes' : 'No', typeof Notification !== 'undefined' ? 'yes' : 'no');
-    
-    generateReport();
-    log('✓ COMPLETE! Results below.');
-}
-
-function generateReport() {
-    var txt = '========================================\n';
-    txt += 'PS4 FINGERPRINT REPORT\n';
-    txt += '========================================\n';
-    txt += 'Generated: ' + new Date().toISOString() + '\n';
-    txt += 'User Agent: ' + navigator.userAgent + '\n';
-    txt += 'Platform: ' + navigator.platform + '\n\n';
-    
-    var sections = document.querySelectorAll('.section');
-    for (var i = 0; i < sections.length - 1; i++) {
-        var title = sections[i].querySelector('.section-title');
-        if (title) {
-            txt += '----------------------------------------\n';
-            txt += title.textContent + '\n';
-            txt += '----------------------------------------\n';
+        var safari = navigator.userAgent.match(/Version\/([0-9.]+)/);
+        addItem(s1, 'Safari Version', safari ? safari[1] : 'Unknown', 'warn');
+        
+        var fw = navigator.userAgent.match(/PlayStation 4\/([0-9.]+)/);
+        addItem(s1, 'PS4 Firmware', fw ? fw[1] : 'Unknown', 'warn');
+        
+        addItem(s1, 'Language', navigator.language, '');
+        addItem(s1, 'CPU Cores', navigator.hardwareConcurrency || 'Unknown', 'warn');
+        addItem(s1, 'Device Memory', navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'Unknown', 'warn');
+        addItem(s1, 'Screen Width', screen.width + 'px', '');
+        addItem(s1, 'Screen Height', screen.height + 'px', '');
+        addItem(s1, 'Color Depth', screen.colorDepth + ' bits', '');
+        
+        // ===== SECTION 2: JAVASCRIPT CORE =====
+        var s2 = addSection('⚙️ 02. JAVASCRIPT CORE');
+        addItem(s2, 'Promise', typeof Promise !== 'undefined' ? 'Available' : 'Not Available', typeof Promise !== 'undefined' ? 'yes' : 'no');
+        addItem(s2, 'Proxy', typeof Proxy !== 'undefined' ? 'Available' : 'Not Available', typeof Proxy !== 'undefined' ? 'yes' : 'no');
+        addItem(s2, 'Symbol', typeof Symbol !== 'undefined' ? 'Available' : 'Not Available', typeof Symbol !== 'undefined' ? 'yes' : 'no');
+        addItem(s2, 'Reflect', typeof Reflect !== 'undefined' ? 'Available' : 'Not Available', typeof Reflect !== 'undefined' ? 'yes' : 'no');
+        addItem(s2, 'Map', typeof Map !== 'undefined' ? 'Available' : 'Not Available', typeof Map !== 'undefined' ? 'yes' : 'no');
+        addItem(s2, 'Set', typeof Set !== 'undefined' ? 'Available' : 'Not Available', typeof Set !== 'undefined' ? 'yes' : 'no');
+        addItem(s2, 'WeakMap', typeof WeakMap !== 'undefined' ? 'Available' : 'Not Available', typeof WeakMap !== 'undefined' ? 'yes' : 'no');
+        addItem(s2, 'WeakSet', typeof WeakSet !== 'undefined' ? 'Available' : 'Not Available', typeof WeakSet !== 'undefined' ? 'yes' : 'no');
+        addItem(s2, 'WeakRef', typeof WeakRef !== 'undefined' ? 'Available' : 'Not Available', typeof WeakRef !== 'undefined' ? 'yes' : 'no');
+        addItem(s2, 'FinalizationRegistry', typeof FinalizationRegistry !== 'undefined' ? 'Available' : 'Not Available', typeof FinalizationRegistry !== 'undefined' ? 'yes' : 'no');
+        addItem(s2, 'BigInt', typeof BigInt !== 'undefined' ? 'Available' : 'Not Available', typeof BigInt !== 'undefined' ? 'yes' : 'no');
+        addItem(s2, 'Intl', typeof Intl !== 'undefined' ? 'Available' : 'Not Available', typeof Intl !== 'undefined' ? 'yes' : 'no');
+        
+        // ===== SECTION 3: TYPEDARRAYS =====
+        var s3 = addSection('🔢 03. TYPEDARRAYS & BINARY');
+        addItem(s3, 'ArrayBuffer', typeof ArrayBuffer !== 'undefined' ? 'Available' : 'Not Available', typeof ArrayBuffer !== 'undefined' ? 'yes' : 'no');
+        addItem(s3, 'SharedArrayBuffer', typeof SharedArrayBuffer !== 'undefined' ? 'Available' : 'Not Available', typeof SharedArrayBuffer !== 'undefined' ? 'yes' : 'no');
+        addItem(s3, 'DataView', typeof DataView !== 'undefined' ? 'Available' : 'Not Available', typeof DataView !== 'undefined' ? 'yes' : 'no');
+        addItem(s3, 'Uint8Array', typeof Uint8Array !== 'undefined' ? 'Available' : 'Not Available', typeof Uint8Array !== 'undefined' ? 'yes' : 'no');
+        addItem(s3, 'Uint32Array', typeof Uint32Array !== 'undefined' ? 'Available' : 'Not Available', typeof Uint32Array !== 'undefined' ? 'yes' : 'no');
+        addItem(s3, 'Float64Array', typeof Float64Array !== 'undefined' ? 'Available' : 'Not Available', typeof Float64Array !== 'undefined' ? 'yes' : 'no');
+        addItem(s3, 'BigInt64Array', typeof BigInt64Array !== 'undefined' ? 'Available' : 'Not Available', typeof BigInt64Array !== 'undefined' ? 'yes' : 'no');
+        addItem(s3, 'Atomics', typeof Atomics !== 'undefined' ? 'Available' : 'Not Available', typeof Atomics !== 'undefined' ? 'yes' : 'no');
+        
+        // ===== SECTION 4: WEB APIS =====
+        var s4 = addSection('🌐 04. WEB APIS');
+        addItem(s4, 'fetch', typeof fetch !== 'undefined' ? 'Available' : 'Not Available', typeof fetch !== 'undefined' ? 'yes' : 'no');
+        addItem(s4, 'XMLHttpRequest', typeof XMLHttpRequest !== 'undefined' ? 'Available' : 'Not Available', typeof XMLHttpRequest !== 'undefined' ? 'yes' : 'no');
+        addItem(s4, 'WebSocket', typeof WebSocket !== 'undefined' ? 'Available' : 'Not Available', typeof WebSocket !== 'undefined' ? 'yes' : 'no');
+        addItem(s4, 'Worker', typeof Worker !== 'undefined' ? 'Available' : 'Not Available', typeof Worker !== 'undefined' ? 'yes' : 'no');
+        addItem(s4, 'ServiceWorker', 'serviceWorker' in navigator ? 'Available' : 'Not Available', 'serviceWorker' in navigator ? 'yes' : 'no');
+        addItem(s4, 'Blob', typeof Blob !== 'undefined' ? 'Available' : 'Not Available', typeof Blob !== 'undefined' ? 'yes' : 'no');
+        addItem(s4, 'FileReader', typeof FileReader !== 'undefined' ? 'Available' : 'Not Available', typeof FileReader !== 'undefined' ? 'yes' : 'no');
+        
+        // ===== SECTION 5: WEBASSEMBLY =====
+        var s5 = addSection('⚙️ 05. WEBASSEMBLY');
+        var wasmAvail = typeof WebAssembly !== 'undefined';
+        addItem(s5, 'WebAssembly', wasmAvail ? 'Available' : 'NOT AVAILABLE', wasmAvail ? 'yes' : 'no');
+        
+        if (wasmAvail) {
+            addItem(s5, 'WebAssembly.Module', typeof WebAssembly.Module !== 'undefined' ? 'Available' : 'Not Available', typeof WebAssembly.Module !== 'undefined' ? 'yes' : 'no');
+            addItem(s5, 'WebAssembly.Instance', typeof WebAssembly.Instance !== 'undefined' ? 'Available' : 'Not Available', typeof WebAssembly.Instance !== 'undefined' ? 'yes' : 'no');
             
-            var table = sections[i].querySelector('table');
-            if (table) {
-                var rows = table.querySelectorAll('tr');
-                for (var j = 0; j < rows.length; j++) {
-                    var cells = rows[j].querySelectorAll('td');
-                    if (cells.length >= 3) {
-                        txt += cells[0].textContent + ': ' + cells[1].textContent + ' ' + cells[2].textContent + '\n';
-                    }
+            try {
+                var wasm = new Uint8Array([0,97,115,109,1,0,0,0,1,7,1,96,0,1,127,3,2,1,0,7,10,1,6,97,110,115,119,101,114,0,0,10,9,1,7,0,65,42,15,11]);
+                var mod = new WebAssembly.Module(wasm);
+                var inst = new WebAssembly.Instance(mod);
+                var res = inst.exports.answer();
+                addItem(s5, 'Compile & Execute Test', 'SUCCESS! Returned: ' + res, 'yes');
+            } catch(e) {
+                addItem(s5, 'Compile & Execute Test', 'FAILED: ' + e.message, 'no');
+            }
+        }
+        
+        // ===== SECTION 6: FONT APIS (CVE-2021-30858) =====
+        var s6 = addSection('🔤 06. FONT APIS (CVE-2021-30858)');
+        addItem(s6, 'FontFace', typeof FontFace !== 'undefined' ? 'Available' : 'Not Available', typeof FontFace !== 'undefined' ? 'yes' : 'no');
+        addItem(s6, 'FontFaceSet', typeof FontFaceSet !== 'undefined' ? 'Available' : 'Not Available', typeof FontFaceSet !== 'undefined' ? 'yes' : 'no');
+        addItem(s6, 'document.fonts', typeof document.fonts !== 'undefined' ? 'Available' : 'Not Available', typeof document.fonts !== 'undefined' ? 'yes' : 'no');
+        
+        if (typeof FontFace !== 'undefined' && typeof FontFaceSet !== 'undefined') {
+            try {
+                var ff = new FontFace("test", "");
+                var ffs = new FontFaceSet([ff]);
+                addItem(s6, 'CVE-2021-30858 Attack Surface', '⚠️ PRESENT - EXPLOITABLE!', 'warn');
+            } catch(e) {
+                addItem(s6, 'CVE-2021-30858 Attack Surface', 'Not exploitable: ' + e.message, 'no');
+            }
+        }
+        
+        // ===== SECTION 7: GRAPHICS =====
+        var s7 = addSection('🎨 07. GRAPHICS APIS');
+        var canvas = document.createElement('canvas');
+        var hasCanvas = !!canvas.getContext;
+        addItem(s7, 'Canvas', hasCanvas ? 'Available' : 'Not Available', hasCanvas ? 'yes' : 'no');
+        
+        if (hasCanvas) {
+            var ctx2d = canvas.getContext('2d');
+            addItem(s7, 'Canvas 2D', ctx2d ? 'Available' : 'Not Available', ctx2d ? 'yes' : 'no');
+            
+            var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            addItem(s7, 'WebGL', gl ? 'Available' : 'Not Available', gl ? 'yes' : 'no');
+            
+            if (gl) {
+                try {
+                    addItem(s7, 'WebGL Vendor', gl.getParameter(gl.VENDOR), 'warn');
+                    addItem(s7, 'WebGL Renderer', gl.getParameter(gl.RENDERER), 'warn');
+                    addItem(s7, 'WebGL Version', gl.getParameter(gl.VERSION), 'warn');
+                    addItem(s7, 'GLSL Version', gl.getParameter(gl.SHADING_LANGUAGE_VERSION), 'warn');
+                } catch(e) {
+                    addItem(s7, 'WebGL Info', 'Error: ' + e.message, 'no');
                 }
             }
-            txt += '\n';
+            
+            var gl2 = canvas.getContext('webgl2');
+            addItem(s7, 'WebGL 2', gl2 ? 'Available' : 'Not Available', gl2 ? 'yes' : 'no');
         }
-    }
-    
-    txt += '========================================\n';
-    txt += 'END OF REPORT\n';
-    txt += '========================================\n';
-    
-    report = txt;
-    document.getElementById('textReport').value = txt;
-    
-    // Auto-send
-    sendReport();
-}
-
-function sendReport() {
-    log('Sending to server...');
-    
-    try {
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', 'http://10.204.17.81:8888/report', true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
         
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                log('✓ Sent to server successfully!');
-            } else {
-                log('⚠ Server responded with status: ' + xhr.status);
-            }
-        };
+        addItem(s7, 'OffscreenCanvas', typeof OffscreenCanvas !== 'undefined' ? 'Available' : 'Not Available', typeof OffscreenCanvas !== 'undefined' ? 'yes' : 'no');
         
-        xhr.onerror = function() {
-            log('⚠ Connection failed. Is server running?');
-        };
+        // ===== SECTION 8: STORAGE =====
+        var s8 = addSection('💾 08. STORAGE APIS');
         
-        xhr.ontimeout = function() {
-            log('⚠ Connection timed out.');
-        };
+        try {
+            localStorage.setItem('test_fp', '1');
+            localStorage.removeItem('test_fp');
+            addItem(s8, 'localStorage', 'Works', 'yes');
+        } catch(e) {
+            addItem(s8, 'localStorage', 'Error: ' + e.message, 'no');
+        }
         
-        var data = JSON.stringify({
-            type: 'ps4_fingerprint',
-            textReport: report,
-            results: results,
-            timestamp: Date.now()
-        });
+        try {
+            sessionStorage.setItem('test_fp', '1');
+            sessionStorage.removeItem('test_fp');
+            addItem(s8, 'sessionStorage', 'Works', 'yes');
+        } catch(e) {
+            addItem(s8, 'sessionStorage', 'Error: ' + e.message, 'no');
+        }
         
-        xhr.send(data);
+        addItem(s8, 'IndexedDB', typeof indexedDB !== 'undefined' ? 'Available' : 'Not Available', typeof indexedDB !== 'undefined' ? 'yes' : 'no');
+        addItem(s8, 'Cache API', typeof caches !== 'undefined' ? 'Available' : 'Not Available', typeof caches !== 'undefined' ? 'yes' : 'no');
         
-    } catch(e) {
-        log('⚠ Error: ' + e.message);
-    }
-}
-
-function copyReport() {
-    var t = document.getElementById('textReport');
-    t.select();
-    t.setSelectionRange(0, 99999);
-    
-    try {
-        document.execCommand('copy');
-        log('✓ Report copied to clipboard!');
-    } catch(e) {
-        log('⚠ Could not copy. Select text manually.');
-    }
+        // ===== SECTION 9: CRYPTO =====
+        var s9 = addSection('🔐 09. CRYPTO APIS');
+        var hasCrypto = typeof crypto !== 'undefined';
+        addItem(s9, 'crypto', hasCrypto ? 'Available' : 'Not Available', hasCrypto ? 'yes' : 'no');
+        
+        if (hasCrypto) {
+            addItem(s9, 'crypto.getRandomValues', typeof crypto.getRandomValues !== 'undefined' ? 'Available' : 'Not Available', typeof crypto.getRandomValues !== 'undefined' ? 'yes' : 'no');
+            addItem(s9, 'crypto.subtle', typeof crypto.subtle !== 'undefined' ? 'Available' : 'Not Available', typeof crypto.subtle !== 'undefined' ? 'yes' : 'no');
+            addItem(s9, 'crypto.randomUUID', typeof crypto.randomUUID !== 'undefined' ? 'Available' : 'Not Available', typeof crypto.randomUUID !== 'undefined' ? 'yes' : 'no');
+        }
+        
+        // ===== SECTION 10: SECURITY =====
+        var s10 = addSection('🔒 10. SECURITY FEATURES');
+        
+        try {
+            eval('1+1');
+            addItem(s10, 'eval()', 'ALLOWED', 'warn');
+        } catch(e) {
+            addItem(s10, 'eval()', 'Blocked: ' + e.message, 'yes');
+        }
+        
+        try {
+            new Function('return 1')();
+            addItem(s10, 'Function constructor', 'ALLOWED', 'warn');
+        } catch(e) {
+            addItem(s10, 'Function constructor', 'Blocked: ' + e.message, 'yes');
+        }
+        
+        // ===== SECTION 11: PERFORMANCE =====
+        var s11 = addSection('⏱️ 11. PERFORMANCE & MEMORY');
+        addItem(s11, 'performance', typeof performance !== 'undefined' ? 'Available' : 'Not Available', typeof performance !== 'undefined' ? 'yes' : 'no');
+        addItem(s11, 'performance.now', typeof performance !== 'undefined' && performance.now ? 'Available' : 'Not Available', typeof performance !== 'undefined' && performance.now ? 'yes' : 'no');
+        
+        if (performance && performance.memory) {
+            addItem(s11, 'JS Heap Size Limit', (performance.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(2) + ' MB', 'warn');
+            addItem(s11, 'Total JS Heap Size', (performance.memory.totalJSHeapSize / 1024 / 1024).toFixed(2) + ' MB', 'warn');
+            addItem(s11, 'Used JS Heap Size', (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(2) + ' MB', 'warn');
+        } else {
+            addItem(s11, 'performance.memory', 'Not Available', 'no');
+        }
+        
+        // ===== SECTION 12: MEDIA =====
+        var s12 = addSection('🎵 12. MEDIA APIS');
+        addItem(s12, 'Audio', typeof Audio !== 'undefined' ? 'Available' : 'Not Available', typeof Audio !== 'undefined' ? 'yes' : 'no');
+        addItem(s12, 'Video', typeof HTMLVideoElement !== 'undefined' ? 'Available' : 'Not Available', typeof HTMLVideoElement !== 'undefined' ? 'yes' : 'no');
+        addItem(s12, 'AudioContext', typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined' ? 'Available' : 'Not Available', (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') ? 'yes' : 'no');
+        addItem(s12, 'MediaSource', typeof MediaSource !== 'undefined' ? 'Available' : 'Not Available', typeof MediaSource !== 'undefined' ? 'yes' : 'no');
+        addItem(s12, 'RTCPeerConnection', typeof RTCPeerConnection !== 'undefined' ? 'Available' : 'Not Available', typeof RTCPeerConnection !== 'undefined' ? 'yes' : 'no');
+        
+        // ===== SECTION 13: MISC =====
+        var s13 = addSection('🎮 13. MISCELLANEOUS');
+        addItem(s13, 'Gamepad API', typeof navigator.getGamepads !== 'undefined' ? 'Available' : 'Not Available', typeof navigator.getGamepads !== 'undefined' ? 'yes' : 'no');
+        addItem(s13, 'Geolocation', typeof navigator.geolocation !== 'undefined' ? 'Available' : 'Not Available', typeof navigator.geolocation !== 'undefined' ? 'yes' : 'no');
+        addItem(s13, 'Vibration', typeof navigator.vibrate !== 'undefined' ? 'Available' : 'Not Available', typeof navigator.vibrate !== 'undefined' ? 'yes' : 'no');
+        addItem(s13, 'Notification', typeof Notification !== 'undefined' ? 'Available' : 'Not Available', typeof Notification !== 'undefined' ? 'yes' : 'no');
+        addItem(s13, 'Clipboard API', typeof navigator.clipboard !== 'undefined' ? 'Available' : 'Not Available', typeof navigator.clipboard !== 'undefined' ? 'yes' : 'no');
+        
+        log('✅ ALL TESTS COMPLETE! Scroll down to see all results. Take screenshots!');
+        
+    }, 100);
 }
 
 window.onerror = function(msg, url, line) {
-    log('ERROR: ' + msg + ' (line ' + line + ')');
+    log('❌ ERROR: ' + msg + ' (line ' + line + ')');
     return true;
 };
 </script>
