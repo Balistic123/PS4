@@ -65,28 +65,40 @@ function addRow(tid, name, value, status) {
     c.textContent = status === 'yes' ? '✓' : status === 'no' ? '✗' : status === 'warn' ? '⚠' : '•';
     c.className = status || '';
     c.style.textAlign = 'center';
+    
+    // Store result
+    if (!results[title]) results[title] = {};
+    results[title][name] = { value: value, status: status };
 }
 
 function runAllTests() {
     log('Running tests...');
     document.getElementById('results').innerHTML = '';
+    results = {};
     
     // Test 1: Basic Info
     var t1 = addSection('01 Basic Info');
     addRow(t1, 'User Agent', navigator.userAgent, '');
+    addRow(t1, 'Platform', navigator.platform, '');
     var wk = navigator.userAgent.match(/WebKit\/([0-9.]+)/);
     addRow(t1, 'WebKit', wk ? wk[1] : 'Unknown', 'warn');
     var fw = navigator.userAgent.match(/PlayStation 4\/([0-9.]+)/);
     addRow(t1, 'Firmware', fw ? fw[1] : 'Unknown', 'warn');
+    addRow(t1, 'CPU Cores', navigator.hardwareConcurrency || 'Unknown', 'warn');
     
-    // Test 2: JS APIs
+    // Test 2: JS Core APIs
     var t2 = addSection('02 JavaScript APIs');
     addRow(t2, 'Promise', typeof Promise !== 'undefined' ? 'Yes' : 'No', typeof Promise !== 'undefined' ? 'yes' : 'no');
     addRow(t2, 'Proxy', typeof Proxy !== 'undefined' ? 'Yes' : 'No', typeof Proxy !== 'undefined' ? 'yes' : 'no');
     addRow(t2, 'Symbol', typeof Symbol !== 'undefined' ? 'Yes' : 'No', typeof Symbol !== 'undefined' ? 'yes' : 'no');
-    addRow(t2, 'BigInt', typeof BigInt !== 'undefined' ? 'Yes' : 'No', typeof BigInt !== 'undefined' ? 'yes' : 'no');
+    addRow(t2, 'Reflect', typeof Reflect !== 'undefined' ? 'Yes' : 'No', typeof Reflect !== 'undefined' ? 'yes' : 'no');
+    addRow(t2, 'Map', typeof Map !== 'undefined' ? 'Yes' : 'No', typeof Map !== 'undefined' ? 'yes' : 'no');
+    addRow(t2, 'Set', typeof Set !== 'undefined' ? 'Yes' : 'No', typeof Set !== 'undefined' ? 'yes' : 'no');
+    addRow(t2, 'WeakMap', typeof WeakMap !== 'undefined' ? 'Yes' : 'No', typeof WeakMap !== 'undefined' ? 'yes' : 'no');
+    addRow(t2, 'WeakSet', typeof WeakSet !== 'undefined' ? 'Yes' : 'No', typeof WeakSet !== 'undefined' ? 'yes' : 'no');
     addRow(t2, 'WeakRef', typeof WeakRef !== 'undefined' ? 'Yes' : 'No', typeof WeakRef !== 'undefined' ? 'yes' : 'no');
     addRow(t2, 'FinalizationRegistry', typeof FinalizationRegistry !== 'undefined' ? 'Yes' : 'No', typeof FinalizationRegistry !== 'undefined' ? 'yes' : 'no');
+    addRow(t2, 'BigInt', typeof BigInt !== 'undefined' ? 'Yes' : 'No', typeof BigInt !== 'undefined' ? 'yes' : 'no');
     
     // Test 3: TypedArrays
     var t3 = addSection('03 TypedArrays');
@@ -94,12 +106,14 @@ function runAllTests() {
     addRow(t3, 'SharedArrayBuffer', typeof SharedArrayBuffer !== 'undefined' ? 'Yes' : 'No', typeof SharedArrayBuffer !== 'undefined' ? 'yes' : 'no');
     addRow(t3, 'DataView', typeof DataView !== 'undefined' ? 'Yes' : 'No', typeof DataView !== 'undefined' ? 'yes' : 'no');
     addRow(t3, 'Uint8Array', typeof Uint8Array !== 'undefined' ? 'Yes' : 'No', typeof Uint8Array !== 'undefined' ? 'yes' : 'no');
+    addRow(t3, 'Uint32Array', typeof Uint32Array !== 'undefined' ? 'Yes' : 'No', typeof Uint32Array !== 'undefined' ? 'yes' : 'no');
     addRow(t3, 'Float64Array', typeof Float64Array !== 'undefined' ? 'Yes' : 'No', typeof Float64Array !== 'undefined' ? 'yes' : 'no');
     addRow(t3, 'Atomics', typeof Atomics !== 'undefined' ? 'Yes' : 'No', typeof Atomics !== 'undefined' ? 'yes' : 'no');
     
     // Test 4: Web APIs
     var t4 = addSection('04 Web APIs');
     addRow(t4, 'fetch', typeof fetch !== 'undefined' ? 'Yes' : 'No', typeof fetch !== 'undefined' ? 'yes' : 'no');
+    addRow(t4, 'XMLHttpRequest', typeof XMLHttpRequest !== 'undefined' ? 'Yes' : 'No', typeof XMLHttpRequest !== 'undefined' ? 'yes' : 'no');
     addRow(t4, 'WebSocket', typeof WebSocket !== 'undefined' ? 'Yes' : 'No', typeof WebSocket !== 'undefined' ? 'yes' : 'no');
     addRow(t4, 'Worker', typeof Worker !== 'undefined' ? 'Yes' : 'No', typeof Worker !== 'undefined' ? 'yes' : 'no');
     addRow(t4, 'ServiceWorker', 'serviceWorker' in navigator ? 'Yes' : 'No', 'serviceWorker' in navigator ? 'yes' : 'no');
@@ -130,9 +144,9 @@ function runAllTests() {
         try {
             var ff = new FontFace("test", "");
             var ffs = new FontFaceSet([ff]);
-            addRow(t6, 'CVE-2021-30858 Surface', 'PRESENT!', 'warn');
+            addRow(t6, 'CVE-2021-30858 Surface', 'PRESENT - EXPLOITABLE!', 'warn');
         } catch(e) {
-            addRow(t6, 'CVE-2021-30858 Surface', 'Not exploitable', 'no');
+            addRow(t6, 'CVE-2021-30858 Surface', 'Not exploitable: ' + e.message, 'no');
         }
     }
     
@@ -143,13 +157,25 @@ function runAllTests() {
     addRow(t7, 'Canvas', hasCanvas ? 'Yes' : 'No', hasCanvas ? 'yes' : 'no');
     
     if (hasCanvas) {
+        var ctx2d = canvas.getContext('2d');
+        addRow(t7, 'Canvas 2D', ctx2d ? 'Yes' : 'No', ctx2d ? 'yes' : 'no');
+        
         var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
         addRow(t7, 'WebGL', gl ? 'Yes' : 'No', gl ? 'yes' : 'no');
+        
         if (gl) {
-            addRow(t7, 'WebGL Vendor', gl.getParameter(gl.VENDOR), 'warn');
-            addRow(t7, 'WebGL Renderer', gl.getParameter(gl.RENDERER), 'warn');
+            try {
+                addRow(t7, 'WebGL Vendor', gl.getParameter(gl.VENDOR), 'warn');
+                addRow(t7, 'WebGL Renderer', gl.getParameter(gl.RENDERER), 'warn');
+                addRow(t7, 'WebGL Version', gl.getParameter(gl.VERSION), 'warn');
+            } catch(e) {}
         }
+        
+        var gl2 = canvas.getContext('webgl2');
+        addRow(t7, 'WebGL2', gl2 ? 'Yes' : 'No', gl2 ? 'yes' : 'no');
     }
+    
+    addRow(t7, 'OffscreenCanvas', typeof OffscreenCanvas !== 'undefined' ? 'Yes' : 'No', typeof OffscreenCanvas !== 'undefined' ? 'yes' : 'no');
     
     // Test 8: Storage
     var t8 = addSection('08 Storage');
@@ -158,46 +184,82 @@ function runAllTests() {
         localStorage.removeItem('test');
         addRow(t8, 'localStorage', 'Works', 'yes');
     } catch(e) {
-        addRow(t8, 'localStorage', 'Error', 'no');
+        addRow(t8, 'localStorage', 'Error: ' + e.message, 'no');
     }
+    
+    try {
+        sessionStorage.setItem('test', '1');
+        sessionStorage.removeItem('test');
+        addRow(t8, 'sessionStorage', 'Works', 'yes');
+    } catch(e) {
+        addRow(t8, 'sessionStorage', 'Error', 'no');
+    }
+    
     addRow(t8, 'IndexedDB', typeof indexedDB !== 'undefined' ? 'Yes' : 'No', typeof indexedDB !== 'undefined' ? 'yes' : 'no');
     
     // Test 9: Crypto
     var t9 = addSection('09 Crypto');
     addRow(t9, 'crypto', typeof crypto !== 'undefined' ? 'Yes' : 'No', typeof crypto !== 'undefined' ? 'yes' : 'no');
-    addRow(t9, 'crypto.subtle', crypto && crypto.subtle ? 'Yes' : 'No', crypto && crypto.subtle ? 'yes' : 'no');
+    if (crypto) {
+        addRow(t9, 'crypto.getRandomValues', typeof crypto.getRandomValues !== 'undefined' ? 'Yes' : 'No', typeof crypto.getRandomValues !== 'undefined' ? 'yes' : 'no');
+        addRow(t9, 'crypto.subtle', typeof crypto.subtle !== 'undefined' ? 'Yes' : 'No', typeof crypto.subtle !== 'undefined' ? 'yes' : 'no');
+    }
     
     // Test 10: Security
-    var t10 = addSection('10 Security');
+    var t10 = addSection('10 Security Features');
     try {
         eval('1+1');
         addRow(t10, 'eval()', 'Allowed', 'warn');
     } catch(e) {
-        addRow(t10, 'eval()', 'Blocked', 'yes');
+        addRow(t10, 'eval()', 'Blocked: ' + e.message, 'yes');
     }
+    
     try {
         new Function('return 1')();
-        addRow(t10, 'Function()', 'Allowed', 'warn');
+        addRow(t10, 'Function constructor', 'Allowed', 'warn');
     } catch(e) {
-        addRow(t10, 'Function()', 'Blocked', 'yes');
+        addRow(t10, 'Function constructor', 'Blocked: ' + e.message, 'yes');
     }
+    
+    // Test 11: Performance
+    var t11 = addSection('11 Performance');
+    addRow(t11, 'performance', typeof performance !== 'undefined' ? 'Yes' : 'No', typeof performance !== 'undefined' ? 'yes' : 'no');
+    if (performance && performance.memory) {
+        addRow(t11, 'JS Heap Limit', (performance.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(2) + ' MB', 'warn');
+        addRow(t11, 'Used JS Heap', (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(2) + ' MB', 'warn');
+    }
+    
+    // Test 12: Media
+    var t12 = addSection('12 Media');
+    addRow(t12, 'Audio', typeof Audio !== 'undefined' ? 'Yes' : 'No', typeof Audio !== 'undefined' ? 'yes' : 'no');
+    addRow(t12, 'AudioContext', typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined' ? 'Yes' : 'No', typeof AudioContext !== 'undefined' ? 'yes' : 'no');
+    addRow(t12, 'RTCPeerConnection', typeof RTCPeerConnection !== 'undefined' ? 'Yes' : 'No', typeof RTCPeerConnection !== 'undefined' ? 'yes' : 'no');
+    
+    // Test 13: Misc
+    var t13 = addSection('13 Miscellaneous');
+    addRow(t13, 'Gamepad API', typeof navigator.getGamepads !== 'undefined' ? 'Yes' : 'No', typeof navigator.getGamepads !== 'undefined' ? 'yes' : 'no');
+    addRow(t13, 'Geolocation', typeof navigator.geolocation !== 'undefined' ? 'Yes' : 'No', typeof navigator.geolocation !== 'undefined' ? 'yes' : 'no');
+    addRow(t13, 'Notification', typeof Notification !== 'undefined' ? 'Yes' : 'No', typeof Notification !== 'undefined' ? 'yes' : 'no');
     
     generateReport();
     log('✓ COMPLETE! Results below.');
 }
 
 function generateReport() {
-    var txt = 'PS4 FINGERPRINT REPORT\n';
-    txt += '======================\n';
+    var txt = '========================================\n';
+    txt += 'PS4 FINGERPRINT REPORT\n';
+    txt += '========================================\n';
     txt += 'Generated: ' + new Date().toISOString() + '\n';
-    txt += 'UA: ' + navigator.userAgent + '\n\n';
+    txt += 'User Agent: ' + navigator.userAgent + '\n';
+    txt += 'Platform: ' + navigator.platform + '\n\n';
     
     var sections = document.querySelectorAll('.section');
-    for (var i = 0; i < sections.length; i++) {
+    for (var i = 0; i < sections.length - 1; i++) {
         var title = sections[i].querySelector('.section-title');
         if (title) {
+            txt += '----------------------------------------\n';
             txt += title.textContent + '\n';
-            txt += '---\n';
+            txt += '----------------------------------------\n';
             
             var table = sections[i].querySelector('table');
             if (table) {
@@ -213,6 +275,10 @@ function generateReport() {
         }
     }
     
+    txt += '========================================\n';
+    txt += 'END OF REPORT\n';
+    txt += '========================================\n';
+    
     report = txt;
     document.getElementById('textReport').value = txt;
     
@@ -223,36 +289,58 @@ function generateReport() {
 function sendReport() {
     log('Sending to server...');
     
-    fetch('http://10.204.17.81:8080/report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+    try {
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', 'http://10.204.17.81:8888/report', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                log('✓ Sent to server successfully!');
+            } else {
+                log('⚠ Server responded with status: ' + xhr.status);
+            }
+        };
+        
+        xhr.onerror = function() {
+            log('⚠ Connection failed. Is server running?');
+        };
+        
+        xhr.ontimeout = function() {
+            log('⚠ Connection timed out.');
+        };
+        
+        var data = JSON.stringify({
             type: 'ps4_fingerprint',
             textReport: report,
+            results: results,
             timestamp: Date.now()
-        }),
-        mode: 'no-cors'
-    })
-    .then(function() {
-        log('✓ Sent to server!');
-    })
-    .catch(function() {
-        log('⚠ Server not available. Copy manually.');
-    });
+        });
+        
+        xhr.send(data);
+        
+    } catch(e) {
+        log('⚠ Error: ' + e.message);
+    }
 }
 
 function copyReport() {
     var t = document.getElementById('textReport');
     t.select();
+    t.setSelectionRange(0, 99999);
+    
     try {
         document.execCommand('copy');
-        log('✓ Copied!');
+        log('✓ Report copied to clipboard!');
     } catch(e) {
-        log('⚠ Could not copy.');
+        log('⚠ Could not copy. Select text manually.');
     }
 }
 
-window.onerror = function(msg) { log('ERROR: ' + msg); return true; };
+window.onerror = function(msg, url, line) {
+    log('ERROR: ' + msg + ' (line ' + line + ')');
+    return true;
+};
 </script>
 </body>
 </html>
