@@ -2,785 +2,257 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PS4 Complete Fingerprint</title>
+    <title>PS4 Fingerprint</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Courier New', monospace; 
-            background: #000; 
-            color: #0f0; 
-            padding: 10px; 
-            font-size: 11px; 
-        }
-        h1 { 
-            color: #0f0; 
-            font-size: 18px; 
-            margin-bottom: 10px; 
-            text-shadow: 0 0 10px #0f0;
-        }
-        .btn { 
-            padding: 10px 20px; 
-            background: #0f0; 
-            border: none; 
-            color: #000; 
-            margin: 5px; 
-            cursor: pointer; 
-            font-size: 12px; 
-            font-weight: bold;
-        }
-        .btn:hover { background: #0c0; }
-        
-        .section {
-            background: #0a0a0a;
-            border: 1px solid #0f0;
-            margin: 10px 0;
-            padding: 10px;
-        }
-        .section-title {
-            color: #0ff;
-            font-size: 14px;
-            font-weight: bold;
-            margin-bottom: 8px;
-            border-bottom: 1px solid #0f0;
-            padding-bottom: 4px;
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 10px;
-        }
-        th {
-            background: #1a1a1a;
-            color: #0ff;
-            padding: 6px;
-            text-align: left;
-            border: 1px solid #333;
-        }
-        td {
-            padding: 4px 6px;
-            border: 1px solid #333;
-        }
-        tr:nth-child(even) { background: rgba(0,255,0,0.03); }
-        
+        body { font-family: monospace; background: #000; color: #0f0; padding: 15px; font-size: 12px; }
+        h1 { color: #0f0; font-size: 20px; margin-bottom: 15px; }
+        .btn { padding: 12px 20px; background: #0f0; border: none; color: #000; margin: 5px; cursor: pointer; font-size: 13px; font-weight: bold; }
+        .status { background: rgba(0,255,0,0.1); border: 1px solid #0f0; padding: 10px; margin: 10px 0; }
+        #results { margin: 15px 0; }
+        .section { background: #0a0a0a; border: 1px solid #0f0; margin: 10px 0; padding: 10px; }
+        .section-title { color: #0ff; font-size: 14px; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #0f0; padding-bottom: 4px; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        th { background: #1a1a1a; color: #0ff; padding: 6px; text-align: left; border: 1px solid #333; }
+        td { padding: 4px 6px; border: 1px solid #333; }
         .yes { color: #0f0; font-weight: bold; }
         .no { color: #f00; font-weight: bold; }
         .warn { color: #ff0; font-weight: bold; }
-        .info { color: #0ff; }
-        
-        .textbox {
-            width: 100%;
-            height: 400px;
-            background: #000;
-            color: #0f0;
-            border: 1px solid #0f0;
-            padding: 10px;
-            font-family: 'Courier New', monospace;
-            font-size: 10px;
-            resize: vertical;
-            margin-top: 10px;
-        }
-        
-        .progress {
-            background: #1a1a1a;
-            border: 1px solid #0f0;
-            padding: 10px;
-            margin: 10px 0;
-            color: #0ff;
-        }
+        #textReport { width: 100%; height: 400px; background: #000; color: #0f0; border: 1px solid #0f0; padding: 10px; font-family: monospace; font-size: 10px; }
     </style>
 </head>
 <body>
-
+    <h1>PS4 COMPLETE FINGERPRINT</h1>
+    
+    <div>
+        <button class="btn" onclick="runAllTests()">RUN ALL TESTS</button>
+        <button class="btn" onclick="sendReport()">SEND TO SERVER</button>
+        <button class="btn" onclick="copyReport()">COPY REPORT</button>
+    </div>
+    
+    <div class="status" id="status">Ready. Click "RUN ALL TESTS".</div>
     
     <div id="results"></div>
     
     <div class="section">
-        <div class="section-title">📋 FULL TEXT REPORT (Select All & Copy)</div>
-        <textarea class="textbox" id="textReport" readonly></textarea>
+        <div class="section-title">FULL TEXT REPORT</div>
+        <textarea id="textReport" readonly></textarea>
     </div>
 
 <script>
-'use strict';
-
 var results = {};
-var textReport = '';
+var report = '';
 
 function log(msg) {
-    document.getElementById('progress').textContent = msg;
+    document.getElementById('status').textContent = msg;
 }
 
 function addSection(title) {
     var div = document.createElement('div');
     div.className = 'section';
-    div.innerHTML = '<div class="section-title">' + title + '</div><table id="table_' + title.replace(/[^a-z0-9]/gi, '_') + '"></table>';
+    div.innerHTML = '<div class="section-title">' + title + '</div><table id="t_' + title.replace(/\W/g, '') + '"></table>';
     document.getElementById('results').appendChild(div);
-    return 'table_' + title.replace(/[^a-z0-9]/gi, '_');
+    return 't_' + title.replace(/\W/g, '');
 }
 
-function addRow(tableId, name, value, status) {
-    var table = document.getElementById(tableId);
-    if (!table) return;
-    
-    var row = table.insertRow();
-    var cell1 = row.insertCell(0);
-    var cell2 = row.insertCell(1);
-    var cell3 = row.insertCell(2);
-    
-    cell1.textContent = name;
-    cell1.style.width = '40%';
-    
-    cell2.textContent = value;
-    cell2.style.width = '45%';
-    
-    cell3.textContent = status === 'yes' ? '✓' : status === 'no' ? '✗' : status === 'warn' ? '⚠' : '•';
-    cell3.className = status || 'info';
-    cell3.style.width = '15%';
-    cell3.style.textAlign = 'center';
-    
-    // Store in results
-    if (!results[tableId]) results[tableId] = {};
-    results[tableId][name] = { value: value, status: status };
+function addRow(tid, name, value, status) {
+    var t = document.getElementById(tid);
+    if (!t) return;
+    var r = t.insertRow();
+    r.insertCell(0).textContent = name;
+    r.insertCell(1).textContent = value;
+    var c = r.insertCell(2);
+    c.textContent = status === 'yes' ? '✓' : status === 'no' ? '✗' : status === 'warn' ? '⚠' : '•';
+    c.className = status || '';
+    c.style.textAlign = 'center';
 }
 
-// ============================================
-// TEST FUNCTIONS
-// ============================================
-
-function test01_BasicInfo() {
-    log('Testing: Basic Information...');
-    var t = addSection('01. Basic Information');
+function runAllTests() {
+    log('Running tests...');
+    document.getElementById('results').innerHTML = '';
     
-    addRow(t, 'User Agent', navigator.userAgent, 'info');
-    addRow(t, 'Platform', navigator.platform, 'info');
-    addRow(t, 'Language', navigator.language, 'info');
-    addRow(t, 'Languages', (navigator.languages || []).join(', ') || 'N/A', 'info');
-    addRow(t, 'CPU Cores', navigator.hardwareConcurrency || 'Unknown', 'warn');
-    addRow(t, 'Device Memory (GB)', navigator.deviceMemory || 'Unknown', 'warn');
-    addRow(t, 'Max Touch Points', navigator.maxTouchPoints || 0, 'info');
-    addRow(t, 'Online Status', navigator.onLine ? 'Online' : 'Offline', navigator.onLine ? 'yes' : 'no');
-    addRow(t, 'Cookies Enabled', navigator.cookieEnabled ? 'Yes' : 'No', navigator.cookieEnabled ? 'yes' : 'no');
-    addRow(t, 'Do Not Track', navigator.doNotTrack || 'Not Set', 'info');
+    // Test 1: Basic Info
+    var t1 = addSection('01 Basic Info');
+    addRow(t1, 'User Agent', navigator.userAgent, '');
+    var wk = navigator.userAgent.match(/WebKit\/([0-9.]+)/);
+    addRow(t1, 'WebKit', wk ? wk[1] : 'Unknown', 'warn');
+    var fw = navigator.userAgent.match(/PlayStation 4\/([0-9.]+)/);
+    addRow(t1, 'Firmware', fw ? fw[1] : 'Unknown', 'warn');
     
-    // Parse versions
-    var ua = navigator.userAgent;
-    var wk = ua.match(/AppleWebKit\/([0-9.]+)/);
-    var safari = ua.match(/Version\/([0-9.]+)/);
-    var fw = ua.match(/PlayStation 4\/([0-9.]+)/);
+    // Test 2: JS APIs
+    var t2 = addSection('02 JavaScript APIs');
+    addRow(t2, 'Promise', typeof Promise !== 'undefined' ? 'Yes' : 'No', typeof Promise !== 'undefined' ? 'yes' : 'no');
+    addRow(t2, 'Proxy', typeof Proxy !== 'undefined' ? 'Yes' : 'No', typeof Proxy !== 'undefined' ? 'yes' : 'no');
+    addRow(t2, 'Symbol', typeof Symbol !== 'undefined' ? 'Yes' : 'No', typeof Symbol !== 'undefined' ? 'yes' : 'no');
+    addRow(t2, 'BigInt', typeof BigInt !== 'undefined' ? 'Yes' : 'No', typeof BigInt !== 'undefined' ? 'yes' : 'no');
+    addRow(t2, 'WeakRef', typeof WeakRef !== 'undefined' ? 'Yes' : 'No', typeof WeakRef !== 'undefined' ? 'yes' : 'no');
+    addRow(t2, 'FinalizationRegistry', typeof FinalizationRegistry !== 'undefined' ? 'Yes' : 'No', typeof FinalizationRegistry !== 'undefined' ? 'yes' : 'no');
     
-    addRow(t, 'WebKit Version', wk ? wk[1] : 'Unknown', 'warn');
-    addRow(t, 'Safari Version', safari ? safari[1] : 'Unknown', 'warn');
-    addRow(t, 'PS4 Firmware', fw ? fw[1] : 'Unknown', 'warn');
+    // Test 3: TypedArrays
+    var t3 = addSection('03 TypedArrays');
+    addRow(t3, 'ArrayBuffer', typeof ArrayBuffer !== 'undefined' ? 'Yes' : 'No', typeof ArrayBuffer !== 'undefined' ? 'yes' : 'no');
+    addRow(t3, 'SharedArrayBuffer', typeof SharedArrayBuffer !== 'undefined' ? 'Yes' : 'No', typeof SharedArrayBuffer !== 'undefined' ? 'yes' : 'no');
+    addRow(t3, 'DataView', typeof DataView !== 'undefined' ? 'Yes' : 'No', typeof DataView !== 'undefined' ? 'yes' : 'no');
+    addRow(t3, 'Uint8Array', typeof Uint8Array !== 'undefined' ? 'Yes' : 'No', typeof Uint8Array !== 'undefined' ? 'yes' : 'no');
+    addRow(t3, 'Float64Array', typeof Float64Array !== 'undefined' ? 'Yes' : 'No', typeof Float64Array !== 'undefined' ? 'yes' : 'no');
+    addRow(t3, 'Atomics', typeof Atomics !== 'undefined' ? 'Yes' : 'No', typeof Atomics !== 'undefined' ? 'yes' : 'no');
     
-    addRow(t, 'Screen Width', screen.width, 'info');
-    addRow(t, 'Screen Height', screen.height, 'info');
-    addRow(t, 'Screen Color Depth', screen.colorDepth, 'info');
-    addRow(t, 'Pixel Ratio', window.devicePixelRatio || 1, 'info');
-    addRow(t, 'Viewport Width', window.innerWidth, 'info');
-    addRow(t, 'Viewport Height', window.innerHeight, 'info');
-}
-
-function test02_JavaScriptCore() {
-    log('Testing: JavaScript Core Features...');
-    var t = addSection('02. JavaScript Core');
+    // Test 4: Web APIs
+    var t4 = addSection('04 Web APIs');
+    addRow(t4, 'fetch', typeof fetch !== 'undefined' ? 'Yes' : 'No', typeof fetch !== 'undefined' ? 'yes' : 'no');
+    addRow(t4, 'WebSocket', typeof WebSocket !== 'undefined' ? 'Yes' : 'No', typeof WebSocket !== 'undefined' ? 'yes' : 'no');
+    addRow(t4, 'Worker', typeof Worker !== 'undefined' ? 'Yes' : 'No', typeof Worker !== 'undefined' ? 'yes' : 'no');
+    addRow(t4, 'ServiceWorker', 'serviceWorker' in navigator ? 'Yes' : 'No', 'serviceWorker' in navigator ? 'yes' : 'no');
     
-    var tests = {
-        'ES6 Classes': function() { try { eval('class X {}'); return true; } catch(e) { return false; } },
-        'Arrow Functions': function() { try { eval('() => {}'); return true; } catch(e) { return false; } },
-        'Template Literals': function() { try { eval('`test`'); return true; } catch(e) { return false; } },
-        'Destructuring': function() { try { eval('const [a] = [1]'); return true; } catch(e) { return false; } },
-        'Spread Operator': function() { try { eval('[...a]'); return true; } catch(e) { return false; } },
-        'Rest Parameters': function() { try { eval('function x(...a){}'); return true; } catch(e) { return false; } },
-        'Default Parameters': function() { try { eval('function x(a=1){}'); return true; } catch(e) { return false; } },
-        'for...of Loop': function() { try { eval('for(let x of []){}'); return true; } catch(e) { return false; } },
-        'let/const': function() { try { eval('let x=1; const y=2;'); return true; } catch(e) { return false; } },
-        'Symbol': function() { return typeof Symbol !== 'undefined'; },
-        'Promise': function() { return typeof Promise !== 'undefined'; },
-        'Proxy': function() { return typeof Proxy !== 'undefined'; },
-        'Reflect': function() { return typeof Reflect !== 'undefined'; },
-        'Map': function() { return typeof Map !== 'undefined'; },
-        'Set': function() { return typeof Set !== 'undefined'; },
-        'WeakMap': function() { return typeof WeakMap !== 'undefined'; },
-        'WeakSet': function() { return typeof WeakSet !== 'undefined'; },
-        'WeakRef': function() { return typeof WeakRef !== 'undefined'; },
-        'FinalizationRegistry': function() { return typeof FinalizationRegistry !== 'undefined'; },
-        'BigInt': function() { return typeof BigInt !== 'undefined'; },
-        'Intl': function() { return typeof Intl !== 'undefined'; },
-        'async/await': function() { return (async function(){}).constructor !== undefined; },
-        'Generators': function() { try { eval('function* x(){}'); return true; } catch(e) { return false; } },
-        'Object.assign': function() { return typeof Object.assign !== 'undefined'; },
-        'Object.entries': function() { return typeof Object.entries !== 'undefined'; },
-        'Object.values': function() { return typeof Object.values !== 'undefined'; },
-        'Object.getOwnPropertyDescriptors': function() { return typeof Object.getOwnPropertyDescriptors !== 'undefined'; },
-        'Array.from': function() { return typeof Array.from !== 'undefined'; },
-        'Array.of': function() { return typeof Array.of !== 'undefined'; },
-        'Array.prototype.includes': function() { return typeof Array.prototype.includes !== 'undefined'; },
-        'Array.prototype.find': function() { return typeof Array.prototype.find !== 'undefined'; },
-        'Array.prototype.findIndex': function() { return typeof Array.prototype.findIndex !== 'undefined'; },
-        'Array.prototype.flat': function() { return typeof Array.prototype.flat !== 'undefined'; },
-        'Array.prototype.flatMap': function() { return typeof Array.prototype.flatMap !== 'undefined'; },
-        'Array.prototype.at': function() { return typeof Array.prototype.at !== 'undefined'; },
-        'String.prototype.includes': function() { return typeof String.prototype.includes !== 'undefined'; },
-        'String.prototype.startsWith': function() { return typeof String.prototype.startsWith !== 'undefined'; },
-        'String.prototype.endsWith': function() { return typeof String.prototype.endsWith !== 'undefined'; },
-        'String.prototype.repeat': function() { return typeof String.prototype.repeat !== 'undefined'; },
-        'String.prototype.padStart': function() { return typeof String.prototype.padStart !== 'undefined'; },
-        'String.prototype.padEnd': function() { return typeof String.prototype.padEnd !== 'undefined'; },
-        'String.prototype.trimStart': function() { return typeof String.prototype.trimStart !== 'undefined'; },
-        'String.prototype.trimEnd': function() { return typeof String.prototype.trimEnd !== 'undefined'; },
-        'String.prototype.matchAll': function() { return typeof String.prototype.matchAll !== 'undefined'; },
-        'String.prototype.replaceAll': function() { return typeof String.prototype.replaceAll !== 'undefined'; },
-    };
-    
-    for (var name in tests) {
-        var result = tests[name]();
-        addRow(t, name, result ? 'Available' : 'Not Available', result ? 'yes' : 'no');
-    }
-}
-
-function test03_TypedArrays() {
-    log('Testing: TypedArrays & Binary Data...');
-    var t = addSection('03. TypedArrays & Binary Data');
-    
-    var types = [
-        'ArrayBuffer',
-        'SharedArrayBuffer',
-        'DataView',
-        'Int8Array',
-        'Uint8Array',
-        'Uint8ClampedArray',
-        'Int16Array',
-        'Uint16Array',
-        'Int32Array',
-        'Uint32Array',
-        'Float32Array',
-        'Float64Array',
-        'BigInt64Array',
-        'BigUint64Array',
-        'Atomics'
-    ];
-    
-    types.forEach(function(type) {
-        var available = typeof window[type] !== 'undefined';
-        addRow(t, type, available ? 'Available' : 'Not Available', available ? 'yes' : 'no');
-    });
-    
-    // Test buffer operations
-    if (typeof ArrayBuffer !== 'undefined') {
-        try {
-            var buf = new ArrayBuffer(16);
-            addRow(t, 'ArrayBuffer Creation', 'Success (' + buf.byteLength + ' bytes)', 'yes');
-            
-            var view = new Uint8Array(buf);
-            addRow(t, 'Uint8Array View', 'Success (' + view.length + ' elements)', 'yes');
-            
-            view[0] = 255;
-            addRow(t, 'Array Write', 'Success (wrote 255)', 'yes');
-            
-            var read = view[0];
-            addRow(t, 'Array Read', 'Success (read ' + read + ')', read === 255 ? 'yes' : 'warn');
-            
-        } catch(e) {
-            addRow(t, 'ArrayBuffer Test', 'Error: ' + e.message, 'no');
-        }
-    }
-}
-
-function test04_WebAPIs() {
-    log('Testing: Web APIs...');
-    var t = addSection('04. Web APIs');
-    
-    var apis = {
-        'fetch': typeof fetch !== 'undefined',
-        'XMLHttpRequest': typeof XMLHttpRequest !== 'undefined',
-        'WebSocket': typeof WebSocket !== 'undefined',
-        'EventSource': typeof EventSource !== 'undefined',
-        'Worker': typeof Worker !== 'undefined',
-        'SharedWorker': typeof SharedWorker !== 'undefined',
-        'ServiceWorker': 'serviceWorker' in navigator,
-        'Broadcast Channel': typeof BroadcastChannel !== 'undefined',
-        'MessageChannel': typeof MessageChannel !== 'undefined',
-        'Blob': typeof Blob !== 'undefined',
-        'File': typeof File !== 'undefined',
-        'FileReader': typeof FileReader !== 'undefined',
-        'FormData': typeof FormData !== 'undefined',
-        'URL': typeof URL !== 'undefined',
-        'URLSearchParams': typeof URLSearchParams !== 'undefined',
-        'TextEncoder': typeof TextEncoder !== 'undefined',
-        'TextDecoder': typeof TextDecoder !== 'undefined',
-        'atob': typeof atob !== 'undefined',
-        'btoa': typeof btoa !== 'undefined',
-        'setTimeout': typeof setTimeout !== 'undefined',
-        'setInterval': typeof setInterval !== 'undefined',
-        'requestAnimationFrame': typeof requestAnimationFrame !== 'undefined',
-        'requestIdleCallback': typeof requestIdleCallback !== 'undefined',
-        'queueMicrotask': typeof queueMicrotask !== 'undefined',
-    };
-    
-    for (var api in apis) {
-        addRow(t, api, apis[api] ? 'Available' : 'Not Available', apis[api] ? 'yes' : 'no');
-    }
-}
-
-function test05_Storage() {
-    log('Testing: Storage APIs...');
-    var t = addSection('05. Storage APIs');
-    
-    // localStorage
-    try {
-        var testKey = 'fingerprint_test_' + Date.now();
-        localStorage.setItem(testKey, 'test');
-        var retrieved = localStorage.getItem(testKey);
-        localStorage.removeItem(testKey);
-        addRow(t, 'localStorage', 'Available (works)', 'yes');
-        
-        // Test size
-        var bigData = 'X'.repeat(1024 * 1024); // 1MB
-        try {
-            localStorage.setItem(testKey, bigData);
-            localStorage.removeItem(testKey);
-            addRow(t, 'localStorage Limit', 'At least 1MB', 'warn');
-        } catch(e) {
-            addRow(t, 'localStorage Limit', 'Less than 1MB', 'info');
-        }
-    } catch(e) {
-        addRow(t, 'localStorage', 'Error: ' + e.message, 'no');
-    }
-    
-    // sessionStorage
-    try {
-        sessionStorage.setItem('test', '1');
-        sessionStorage.removeItem('test');
-        addRow(t, 'sessionStorage', 'Available (works)', 'yes');
-    } catch(e) {
-        addRow(t, 'sessionStorage', 'Error: ' + e.message, 'no');
-    }
-    
-    // IndexedDB
-    var idbAvail = typeof indexedDB !== 'undefined';
-    addRow(t, 'IndexedDB', idbAvail ? 'Available' : 'Not Available', idbAvail ? 'yes' : 'no');
-    
-    // Cache API
-    var cacheAvail = typeof caches !== 'undefined';
-    addRow(t, 'Cache API', cacheAvail ? 'Available' : 'Not Available', cacheAvail ? 'yes' : 'no');
-}
-
-function test06_DOM() {
-    log('Testing: DOM APIs...');
-    var t = addSection('06. DOM APIs');
-    
-    var domAPIs = {
-        'document.createElement': typeof document.createElement !== 'undefined',
-        'document.createElementNS': typeof document.createElementNS !== 'undefined',
-        'document.createTextNode': typeof document.createTextNode !== 'undefined',
-        'document.createDocumentFragment': typeof document.createDocumentFragment !== 'undefined',
-        'document.createRange': typeof document.createRange !== 'undefined',
-        'document.querySelector': typeof document.querySelector !== 'undefined',
-        'document.querySelectorAll': typeof document.querySelectorAll !== 'undefined',
-        'Element.classList': document.body && typeof document.body.classList !== 'undefined',
-        'Element.matches': document.body && typeof document.body.matches !== 'undefined',
-        'Element.closest': document.body && typeof document.body.closest !== 'undefined',
-        'MutationObserver': typeof MutationObserver !== 'undefined',
-        'IntersectionObserver': typeof IntersectionObserver !== 'undefined',
-        'ResizeObserver': typeof ResizeObserver !== 'undefined',
-        'PerformanceObserver': typeof PerformanceObserver !== 'undefined',
-        'DOMParser': typeof DOMParser !== 'undefined',
-        'XMLSerializer': typeof XMLSerializer !== 'undefined',
-        'CustomEvent': typeof CustomEvent !== 'undefined',
-        'CustomElements': typeof customElements !== 'undefined',
-        'ShadowRoot': typeof ShadowRoot !== 'undefined',
-        'Template': 'content' in document.createElement('template'),
-    };
-    
-    for (var api in domAPIs) {
-        addRow(t, api, domAPIs[api] ? 'Available' : 'Not Available', domAPIs[api] ? 'yes' : 'no');
-    }
-}
-
-function test07_Graphics() {
-    log('Testing: Graphics APIs...');
-    var t = addSection('07. Graphics APIs (Canvas, WebGL)');
-    
-    // Canvas
-    var canvas = document.createElement('canvas');
-    var canvasAvail = !!canvas.getContext;
-    addRow(t, 'Canvas', canvasAvail ? 'Available' : 'Not Available', canvasAvail ? 'yes' : 'no');
-    
-    if (canvasAvail) {
-        // 2D
-        var ctx2d = canvas.getContext('2d');
-        addRow(t, 'Canvas 2D', ctx2d ? 'Available' : 'Not Available', ctx2d ? 'yes' : 'no');
-        
-        // WebGL
-        var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-        addRow(t, 'WebGL', gl ? 'Available' : 'Not Available', gl ? 'yes' : 'no');
-        
-        if (gl) {
-            try {
-                addRow(t, 'WebGL Vendor', gl.getParameter(gl.VENDOR), 'warn');
-                addRow(t, 'WebGL Renderer', gl.getParameter(gl.RENDERER), 'warn');
-                addRow(t, 'WebGL Version', gl.getParameter(gl.VERSION), 'warn');
-                addRow(t, 'GLSL Version', gl.getParameter(gl.SHADING_LANGUAGE_VERSION), 'warn');
-                addRow(t, 'Max Texture Size', gl.getParameter(gl.MAX_TEXTURE_SIZE), 'info');
-                addRow(t, 'Max Vertex Attributes', gl.getParameter(gl.MAX_VERTEX_ATTRIBS), 'info');
-                addRow(t, 'Max Varying Vectors', gl.getParameter(gl.MAX_VARYING_VECTORS), 'info');
-                addRow(t, 'Max Fragment Uniforms', gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS), 'info');
-                addRow(t, 'Max Vertex Uniforms', gl.getParameter(gl.MAX_VERTEX_UNIFORM_VECTORS), 'info');
-            } catch(e) {
-                addRow(t, 'WebGL Info', 'Error reading: ' + e.message, 'no');
-            }
-        }
-        
-        // WebGL2
-        var gl2 = canvas.getContext('webgl2');
-        addRow(t, 'WebGL 2', gl2 ? 'Available' : 'Not Available', gl2 ? 'yes' : 'no');
-    }
-    
-    // Other graphics APIs
-    addRow(t, 'OffscreenCanvas', typeof OffscreenCanvas !== 'undefined' ? 'Available' : 'Not Available', typeof OffscreenCanvas !== 'undefined' ? 'yes' : 'no');
-    addRow(t, 'ImageBitmap', typeof createImageBitmap !== 'undefined' ? 'Available' : 'Not Available', typeof createImageBitmap !== 'undefined' ? 'yes' : 'no');
-    addRow(t, 'Path2D', typeof Path2D !== 'undefined' ? 'Available' : 'Not Available', typeof Path2D !== 'undefined' ? 'yes' : 'no');
-}
-
-function test08_Crypto() {
-    log('Testing: Crypto APIs...');
-    var t = addSection('08. Crypto & Security');
-    
-    var cryptoAvail = typeof crypto !== 'undefined';
-    addRow(t, 'crypto', cryptoAvail ? 'Available' : 'Not Available', cryptoAvail ? 'yes' : 'no');
-    
-    if (cryptoAvail) {
-        addRow(t, 'crypto.getRandomValues', typeof crypto.getRandomValues !== 'undefined' ? 'Available' : 'Not Available', typeof crypto.getRandomValues !== 'undefined' ? 'yes' : 'no');
-        addRow(t, 'crypto.randomUUID', typeof crypto.randomUUID !== 'undefined' ? 'Available' : 'Not Available', typeof crypto.randomUUID !== 'undefined' ? 'yes' : 'no');
-        addRow(t, 'crypto.subtle', typeof crypto.subtle !== 'undefined' ? 'Available' : 'Not Available', typeof crypto.subtle !== 'undefined' ? 'yes' : 'no');
-        
-        if (crypto.subtle) {
-            var methods = ['encrypt', 'decrypt', 'sign', 'verify', 'digest', 'generateKey', 'deriveKey', 'deriveBits', 'importKey', 'exportKey', 'wrapKey', 'unwrapKey'];
-            methods.forEach(function(m) {
-                addRow(t, 'subtle.' + m, typeof crypto.subtle[m] !== 'undefined' ? 'Available' : 'Not Available', typeof crypto.subtle[m] !== 'undefined' ? 'yes' : 'no');
-            });
-        }
-    }
-    
-    // Security features
-    try {
-        eval('1+1');
-        addRow(t, 'eval()', 'Allowed', 'warn');
-    } catch(e) {
-        addRow(t, 'eval()', 'Blocked: ' + e.message, 'yes');
-    }
-    
-    try {
-        new Function('return 1')();
-        addRow(t, 'Function constructor', 'Allowed', 'warn');
-    } catch(e) {
-        addRow(t, 'Function constructor', 'Blocked: ' + e.message, 'yes');
-    }
-}
-
-function test09_JIT() {
-    log('Testing: JIT Compiler...');
-    var t = addSection('09. JIT Compiler Detection');
-    
-    // Test 1: Large function
-    try {
-        var bigCode = 'var x = 0; ' + 'x++; '.repeat(10000) + 'return x;';
-        var bigFunc = new Function(bigCode);
-        var result = bigFunc();
-        addRow(t, 'Large Function (10K ops)', 'Created & executed (result: ' + result + ')', result === 10000 ? 'yes' : 'warn');
-    } catch(e) {
-        addRow(t, 'Large Function', 'Error: ' + e.message, e.message.toLowerCase().includes('jit') ? 'warn' : 'no');
-    }
-    
-    // Test 2: Hot loop timing
-    if (typeof performance !== 'undefined' && performance.now) {
-        var start = performance.now();
-        var sum = 0;
-        for (var i = 0; i < 1000000; i++) {
-            sum += i;
-        }
-        var time = performance.now() - start;
-        addRow(t, 'Hot Loop (1M iterations)', time.toFixed(2) + ' ms', time < 50 ? 'warn' : 'info');
-        addRow(t, 'JIT Likely', time < 50 ? 'Yes (very fast)' : 'No (slow, interpreted)', time < 50 ? 'warn' : 'no');
-    }
-    
-    // Test 3: Repeated function calls
-    if (typeof performance !== 'undefined' && performance.now) {
-        function testFunc(x) {
-            return x * 2 + 1;
-        }
-        
-        var start2 = performance.now();
-        for (var j = 0; j < 100000; j++) {
-            testFunc(j);
-        }
-        var time2 = performance.now() - start2;
-        addRow(t, 'Function Calls (100K)', time2.toFixed(2) + ' ms', 'info');
-    }
-    
-    addRow(t, 'JIT Status Estimate', 'Likely DISABLED (PS4 has no JIT)', 'no');
-}
-
-function test10_WebAssembly() {
-    log('Testing: WebAssembly...');
-    var t = addSection('10. WebAssembly');
-    
+    // Test 5: WebAssembly
+    var t5 = addSection('05 WebAssembly');
     var wasmAvail = typeof WebAssembly !== 'undefined';
-    addRow(t, 'WebAssembly', wasmAvail ? 'Available' : 'NOT AVAILABLE', wasmAvail ? 'yes' : 'no');
+    addRow(t5, 'WebAssembly', wasmAvail ? 'Yes' : 'No', wasmAvail ? 'yes' : 'no');
     
     if (wasmAvail) {
-        var apis = ['compile', 'instantiate', 'validate', 'Module', 'Instance', 'Memory', 'Table', 'CompileError', 'LinkError', 'RuntimeError'];
-        apis.forEach(function(api) {
-            addRow(t, 'WebAssembly.' + api, typeof WebAssembly[api] !== 'undefined' ? 'Available' : 'Not Available', typeof WebAssembly[api] !== 'undefined' ? 'yes' : 'no');
-        });
-        
-        // Try to compile simple WASM
         try {
-            var wasmBytes = new Uint8Array([0,97,115,109,1,0,0,0,1,7,1,96,0,1,127,3,2,1,0,7,10,1,6,97,110,115,119,101,114,0,0,10,9,1,7,0,65,42,15,11]);
-            var module = new WebAssembly.Module(wasmBytes);
-            var instance = new WebAssembly.Instance(module);
-            var result = instance.exports.answer();
-            addRow(t, 'Compile & Execute', 'SUCCESS (returned ' + result + ')', 'yes');
+            var wasm = new Uint8Array([0,97,115,109,1,0,0,0,1,7,1,96,0,1,127,3,2,1,0,7,10,1,6,97,110,115,119,101,114,0,0,10,9,1,7,0,65,42,15,11]);
+            var mod = new WebAssembly.Module(wasm);
+            var inst = new WebAssembly.Instance(mod);
+            var res = inst.exports.answer();
+            addRow(t5, 'Compile & Execute', 'SUCCESS (returned ' + res + ')', 'yes');
         } catch(e) {
-            addRow(t, 'Compile & Execute', 'Failed: ' + e.message, 'no');
+            addRow(t5, 'Compile & Execute', 'Failed: ' + e.message, 'no');
         }
     }
-}
-
-function test11_Fonts() {
-    log('Testing: Font APIs...');
-    var t = addSection('11. Font APIs (CVE-2021-30858 Surface)');
     
-    addRow(t, 'FontFace', typeof FontFace !== 'undefined' ? 'Available' : 'Not Available', typeof FontFace !== 'undefined' ? 'yes' : 'no');
-    addRow(t, 'FontFaceSet', typeof FontFaceSet !== 'undefined' ? 'Available' : 'Not Available', typeof FontFaceSet !== 'undefined' ? 'yes' : 'no');
-    addRow(t, 'document.fonts', typeof document.fonts !== 'undefined' ? 'Available' : 'Not Available', typeof document.fonts !== 'undefined' ? 'yes' : 'no');
+    // Test 6: Font APIs (CVE-2021-30858)
+    var t6 = addSection('06 Font APIs CVE-2021-30858');
+    addRow(t6, 'FontFace', typeof FontFace !== 'undefined' ? 'Yes' : 'No', typeof FontFace !== 'undefined' ? 'yes' : 'no');
+    addRow(t6, 'FontFaceSet', typeof FontFaceSet !== 'undefined' ? 'Yes' : 'No', typeof FontFaceSet !== 'undefined' ? 'yes' : 'no');
     
-    // CVE-2021-30858 surface test
     if (typeof FontFace !== 'undefined' && typeof FontFaceSet !== 'undefined') {
         try {
             var ff = new FontFace("test", "");
             var ffs = new FontFaceSet([ff]);
-            addRow(t, 'FontFaceSet Constructor', 'Works', 'warn');
-            addRow(t, 'CVE-2021-30858 Attack Surface', 'PRESENT (exploitable!)', 'warn');
+            addRow(t6, 'CVE-2021-30858 Surface', 'PRESENT!', 'warn');
         } catch(e) {
-            addRow(t, 'FontFaceSet Constructor', 'Error: ' + e.message, 'no');
-            addRow(t, 'CVE-2021-30858 Attack Surface', 'Not exploitable this way', 'yes');
-        }
-        
-        // Prototype mutation test
-        try {
-            var ff2 = new FontFace("test2", "");
-            ff2.__defineGetter__("prototype", function() { return {}; });
-            addRow(t, 'Prototype Mutation (__defineGetter__)', 'ALLOWED (type confusion!)', 'warn');
-        } catch(e) {
-            addRow(t, 'Prototype Mutation', 'Blocked: ' + e.message, 'yes');
+            addRow(t6, 'CVE-2021-30858 Surface', 'Not exploitable', 'no');
         }
     }
-}
-
-function test12_Performance() {
-    log('Testing: Performance APIs...');
-    var t = addSection('12. Performance & Memory');
     
-    var perfAvail = typeof performance !== 'undefined';
-    addRow(t, 'performance', perfAvail ? 'Available' : 'Not Available', perfAvail ? 'yes' : 'no');
+    // Test 7: Graphics
+    var t7 = addSection('07 Graphics');
+    var canvas = document.createElement('canvas');
+    var hasCanvas = !!canvas.getContext;
+    addRow(t7, 'Canvas', hasCanvas ? 'Yes' : 'No', hasCanvas ? 'yes' : 'no');
     
-    if (perfAvail) {
-        addRow(t, 'performance.now', typeof performance.now !== 'undefined' ? 'Available' : 'Not Available', typeof performance.now !== 'undefined' ? 'yes' : 'no');
-        addRow(t, 'performance.mark', typeof performance.mark !== 'undefined' ? 'Available' : 'Not Available', typeof performance.mark !== 'undefined' ? 'yes' : 'no');
-        addRow(t, 'performance.measure', typeof performance.measure !== 'undefined' ? 'Available' : 'Not Available', typeof performance.measure !== 'undefined' ? 'yes' : 'no');
-        addRow(t, 'performance.timing', typeof performance.timing !== 'undefined' ? 'Available' : 'Not Available', typeof performance.timing !== 'undefined' ? 'yes' : 'no');
-        addRow(t, 'performance.navigation', typeof performance.navigation !== 'undefined' ? 'Available' : 'Not Available', typeof performance.navigation !== 'undefined' ? 'yes' : 'no');
-        
-        if (performance.memory) {
-            addRow(t, 'JS Heap Limit', (performance.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(2) + ' MB', 'warn');
-            addRow(t, 'Total JS Heap', (performance.memory.totalJSHeapSize / 1024 / 1024).toFixed(2) + ' MB', 'warn');
-            addRow(t, 'Used JS Heap', (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(2) + ' MB', 'warn');
-        } else {
-            addRow(t, 'performance.memory', 'Not Available', 'no');
+    if (hasCanvas) {
+        var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        addRow(t7, 'WebGL', gl ? 'Yes' : 'No', gl ? 'yes' : 'no');
+        if (gl) {
+            addRow(t7, 'WebGL Vendor', gl.getParameter(gl.VENDOR), 'warn');
+            addRow(t7, 'WebGL Renderer', gl.getParameter(gl.RENDERER), 'warn');
         }
     }
-}
-
-function test13_Media() {
-    log('Testing: Media APIs...');
-    var t = addSection('13. Media APIs');
     
-    var mediaAPIs = {
-        'Audio': typeof Audio !== 'undefined',
-        'Video': typeof HTMLVideoElement !== 'undefined',
-        'MediaSource': typeof MediaSource !== 'undefined',
-        'MediaRecorder': typeof MediaRecorder !== 'undefined',
-        'MediaStream': typeof MediaStream !== 'undefined',
-        'RTCPeerConnection': typeof RTCPeerConnection !== 'undefined',
-        'RTCDataChannel': typeof RTCDataChannel !== 'undefined',
-        'WebRTC': typeof RTCPeerConnection !== 'undefined',
-        'getUserMedia': navigator.getUserMedia || (navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
-        'AudioContext': typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined',
-    };
-    
-    for (var api in mediaAPIs) {
-        var avail = !!mediaAPIs[api];
-        addRow(t, api, avail ? 'Available' : 'Not Available', avail ? 'yes' : 'no');
+    // Test 8: Storage
+    var t8 = addSection('08 Storage');
+    try {
+        localStorage.setItem('test', '1');
+        localStorage.removeItem('test');
+        addRow(t8, 'localStorage', 'Works', 'yes');
+    } catch(e) {
+        addRow(t8, 'localStorage', 'Error', 'no');
     }
+    addRow(t8, 'IndexedDB', typeof indexedDB !== 'undefined' ? 'Yes' : 'No', typeof indexedDB !== 'undefined' ? 'yes' : 'no');
+    
+    // Test 9: Crypto
+    var t9 = addSection('09 Crypto');
+    addRow(t9, 'crypto', typeof crypto !== 'undefined' ? 'Yes' : 'No', typeof crypto !== 'undefined' ? 'yes' : 'no');
+    addRow(t9, 'crypto.subtle', crypto && crypto.subtle ? 'Yes' : 'No', crypto && crypto.subtle ? 'yes' : 'no');
+    
+    // Test 10: Security
+    var t10 = addSection('10 Security');
+    try {
+        eval('1+1');
+        addRow(t10, 'eval()', 'Allowed', 'warn');
+    } catch(e) {
+        addRow(t10, 'eval()', 'Blocked', 'yes');
+    }
+    try {
+        new Function('return 1')();
+        addRow(t10, 'Function()', 'Allowed', 'warn');
+    } catch(e) {
+        addRow(t10, 'Function()', 'Blocked', 'yes');
+    }
+    
+    generateReport();
+    log('✓ COMPLETE! Results below.');
 }
 
-function test14_Misc() {
-    log('Testing: Miscellaneous Features...');
-    var t = addSection('14. Miscellaneous');
-    
-    // Gamepad API
-    addRow(t, 'Gamepad API', typeof navigator.getGamepads !== 'undefined' ? 'Available' : 'Not Available', typeof navigator.getGamepads !== 'undefined' ? 'yes' : 'no');
-    
-    // Vibration
-    addRow(t, 'Vibration API', typeof navigator.vibrate !== 'undefined' ? 'Available' : 'Not Available', typeof navigator.vibrate !== 'undefined' ? 'yes' : 'no');
-    
-    // Battery
-    addRow(t, 'Battery API', typeof navigator.getBattery !== 'undefined' ? 'Available' : 'Not Available', typeof navigator.getBattery !== 'undefined' ? 'yes' : 'no');
-    
-    // Geolocation
-    addRow(t, 'Geolocation', typeof navigator.geolocation !== 'undefined' ? 'Available' : 'Not Available', typeof navigator.geolocation !== 'undefined' ? 'yes' : 'no');
-    
-    // Notification
-    addRow(t, 'Notifications', typeof Notification !== 'undefined' ? 'Available' : 'Not Available', typeof Notification !== 'undefined' ? 'yes' : 'no');
-    
-    // Clipboard
-    addRow(t, 'Clipboard API', typeof navigator.clipboard !== 'undefined' ? 'Available' : 'Not Available', typeof navigator.clipboard !== 'undefined' ? 'yes' : 'no');
-    
-    // Pointer Lock
-    addRow(t, 'Pointer Lock', typeof document.body.requestPointerLock !== 'undefined' ? 'Available' : 'Not Available', typeof document.body.requestPointerLock !== 'undefined' ? 'yes' : 'no');
-    
-    // Fullscreen
-    addRow(t, 'Fullscreen API', typeof document.documentElement.requestFullscreen !== 'undefined' ? 'Available' : 'Not Available', typeof document.documentElement.requestFullscreen !== 'undefined' ? 'yes' : 'no');
-    
-    // Screen Orientation
-    addRow(t, 'Screen Orientation', typeof screen.orientation !== 'undefined' ? 'Available' : 'Not Available', typeof screen.orientation !== 'undefined' ? 'yes' : 'no');
-    
-    // Wake Lock
-    addRow(t, 'Wake Lock', typeof navigator.wakeLock !== 'undefined' ? 'Available' : 'Not Available', typeof navigator.wakeLock !== 'undefined' ? 'yes' : 'no');
-}
-
-// ============================================
-// RUN ALL TESTS
-// ============================================
-
-function runAllTests() {
-    log('Starting complete fingerprint...');
-    document.getElementById('results').innerHTML = '';
-    results = {};
-    
-
-</body>
-</html>
-    test01_BasicInfo();
-    test02_JavaScriptCore();
-    test03_TypedArrays();
-    test04_WebAPIs();
-    test05_Storage();
-    test06_DOM();
-    test07_Graphics();
-    test08_Crypto();
-    test09_JIT();
-    test10_WebAssembly();
-    test11_Fonts();
-    test12_Performance();
-    test13_Media();
-    test14_Misc();
-    
-    generateTextReport();
-    
-    log('✓ COMPLETE! Scroll down to copy the full report.');
-}
-
-function generateTextReport() {
-    var text = '';
-    text += '========================================\n';
-    text += 'PS4 BROWSER COMPLETE FINGERPRINT\n';
-    text += '========================================\n';
-    text += 'Generated: ' + new Date().toISOString() + '\n';
-    text += 'User Agent: ' + navigator.userAgent + '\n';
-    text += 'Platform: ' + navigator.platform + '\n\n';
+function generateReport() {
+    var txt = 'PS4 FINGERPRINT REPORT\n';
+    txt += '======================\n';
+    txt += 'Generated: ' + new Date().toISOString() + '\n';
+    txt += 'UA: ' + navigator.userAgent + '\n\n';
     
     var sections = document.querySelectorAll('.section');
     for (var i = 0; i < sections.length; i++) {
-        var section = sections[i];
-        var title = section.querySelector('.section-title');
-        if (!title) continue;
-        
-        text += '----------------------------------------\n';
-        text += title.textContent + '\n';
-        text += '----------------------------------------\n';
-        
-        var table = section.querySelector('table');
-        if (table) {
-            var rows = table.querySelectorAll('tr');
-            for (var j = 0; j < rows.length; j++) {
-                var cells = rows[j].querySelectorAll('td');
-                if (cells.length >= 3) {
-                    var name = cells[0].textContent;
-                    var value = cells[1].textContent;
-                    var status = cells[2].textContent;
-                    
-                    text += name + ': ' + value + ' ' + status + '\n';
+        var title = sections[i].querySelector('.section-title');
+        if (title) {
+            txt += title.textContent + '\n';
+            txt += '---\n';
+            
+            var table = sections[i].querySelector('table');
+            if (table) {
+                var rows = table.querySelectorAll('tr');
+                for (var j = 0; j < rows.length; j++) {
+                    var cells = rows[j].querySelectorAll('td');
+                    if (cells.length >= 3) {
+                        txt += cells[0].textContent + ': ' + cells[1].textContent + ' ' + cells[2].textContent + '\n';
+                    }
                 }
             }
+            txt += '\n';
         }
-        
-        text += '\n';
     }
     
-    text += '========================================\n';
-    text += 'END OF REPORT\n';
-    text += '========================================\n';
+    report = txt;
+    document.getElementById('textReport').value = txt;
     
-    textReport = text;
-    document.getElementById('textReport').value = text;
-    
-    sendToServer();
+    // Auto-send
+    sendReport();
 }
 
-function sendToServer() {
-    log('Sending report to server...');
+function sendReport() {
+    log('Sending to server...');
     
     fetch('http://10.204.17.81:8888/report', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             type: 'ps4_fingerprint',
-            textReport: textReport,
-            results: results,
+            textReport: report,
             timestamp: Date.now()
         }),
         mode: 'no-cors'
     })
-    .then(function(response) {
-        log('✓ Report sent to server!');
+    .then(function() {
+        log('✓ Sent to server!');
     })
-    .catch(function(error) {
-        log('⚠ Could not send to server. Copy manually instead.');
+    .catch(function() {
+        log('⚠ Server not available. Copy manually.');
     });
 }
 
-function copyToClipboard() {
-    var textarea = document.getElementById('textReport');
-    textarea.select();
-    textarea.setSelectionRange(0, 99999);
-    
+function copyReport() {
+    var t = document.getElementById('textReport');
+    t.select();
     try {
         document.execCommand('copy');
-        log('✓ Report copied to clipboard!');
-    } catch(err) {
-        log('⚠ Could not copy. Please select all text and copy manually.');
+        log('✓ Copied!');
+    } catch(e) {
+        log('⚠ Could not copy.');
     }
 }
 
-window.onerror = function(msg, url, line) {
-    log('ERROR: ' + msg + ' (line ' + line + ')');
-    return true;
-};
+window.onerror = function(msg) { log('ERROR: ' + msg); return true; };
 </script>
 </body>
 </html>
