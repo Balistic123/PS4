@@ -3,724 +3,776 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PS4 13.04 - 0day Userland Hunt</title>
+    <title>PS4 Complete Fingerprint</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
             font-family: 'Courier New', monospace; 
-            background: #000815; 
-            color: #00ff00; 
+            background: #000; 
+            color: #0f0; 
             padding: 10px; 
             font-size: 11px; 
         }
         h1 { 
-            color: #00a8ff; 
-            font-size: 16px; 
+            color: #0f0; 
+            font-size: 18px; 
             margin-bottom: 10px; 
-            text-shadow: 0 0 10px #00a8ff;
-            border-bottom: 2px solid #00a8ff;
-            padding-bottom: 5px;
+            text-shadow: 0 0 10px #0f0;
         }
-        .header-info {
-            background: rgba(0,168,255,0.1);
-            border: 1px solid #00a8ff;
-            padding: 8px;
-            margin-bottom: 10px;
-            border-radius: 4px;
-            font-size: 10px;
-        }
-        .btn-group { margin-bottom: 10px; }
         .btn { 
-            padding: 8px 12px; 
-            background: #00a8ff; 
+            padding: 10px 20px; 
+            background: #0f0; 
             border: none; 
             color: #000; 
-            margin: 2px; 
+            margin: 5px; 
             cursor: pointer; 
-            font-size: 10px; 
+            font-size: 12px; 
             font-weight: bold;
-            border-radius: 3px;
         }
-        .btn:hover { background: #0084cc; }
-        .btn.danger { background: #e74c3c; }
-        .btn.danger:hover { background: #c0392b; }
+        .btn:hover { background: #0c0; }
         
-        .grid { 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 8px; 
-            margin-bottom: 8px; 
+        .section {
+            background: #0a0a0a;
+            border: 1px solid #0f0;
+            margin: 10px 0;
+            padding: 10px;
         }
-        .panel { 
-            background: #0a0a15; 
-            border: 1px solid #1e3a5f; 
-            border-radius: 4px; 
+        .section-title {
+            color: #0ff;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #0f0;
+            padding-bottom: 4px;
         }
-        .panel-head { 
-            padding: 6px 10px; 
-            background: #162447; 
-            border-bottom: 1px solid #1e3a5f; 
-            font-weight: bold; 
-            color: #00a8ff;
-            font-size: 11px;
-        }
-        .panel-body { 
-            padding: 8px; 
-            max-height: 200px; 
-            overflow-y: auto; 
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
             font-size: 10px;
-            line-height: 1.4;
         }
+        th {
+            background: #1a1a1a;
+            color: #0ff;
+            padding: 6px;
+            text-align: left;
+            border: 1px solid #333;
+        }
+        td {
+            padding: 4px 6px;
+            border: 1px solid #333;
+        }
+        tr:nth-child(even) { background: rgba(0,255,0,0.03); }
         
-        .console { 
-            background: #000; 
-            border: 1px solid #1e3a5f; 
-            height: 300px; 
-            overflow-y: auto; 
-            padding: 8px; 
+        .yes { color: #0f0; font-weight: bold; }
+        .no { color: #f00; font-weight: bold; }
+        .warn { color: #ff0; font-weight: bold; }
+        .info { color: #0ff; }
+        
+        .textbox {
+            width: 100%;
+            height: 400px;
+            background: #000;
+            color: #0f0;
+            border: 1px solid #0f0;
+            padding: 10px;
             font-family: 'Courier New', monospace;
-        }
-        .log { margin: 1px 0; }
-        .log.info { color: #00a8ff; }
-        .log.success { color: #2ecc71; }
-        .log.warn { color: #f39c12; }
-        .log.error { color: #e74c3c; }
-        .log.critical { 
-            color: #ff6b6b; 
-            font-weight: bold; 
-            background: rgba(255,107,107,0.1);
-            padding: 2px 4px;
-        }
-        .log.exploit { 
-            color: #9b59b6; 
-            font-weight: bold; 
-        }
-        
-        .result { 
-            padding: 4px 6px; 
-            margin: 3px 0; 
-            border-radius: 3px; 
             font-size: 10px;
-            border-left: 3px solid;
-        }
-        .result.vuln { 
-            background: rgba(231,76,60,0.15); 
-            border-left-color: #e74c3c; 
-            color: #ff6b6b;
-        }
-        .result.safe { 
-            background: rgba(46,204,113,0.1); 
-            border-left-color: #2ecc71; 
-            color: #2ecc71;
-        }
-        .result.info { 
-            background: rgba(0,168,255,0.1); 
-            border-left-color: #00a8ff; 
-            color: #00a8ff;
+            resize: vertical;
+            margin-top: 10px;
         }
         
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #0a0a15; }
-        ::-webkit-scrollbar-thumb { background: #1e3a5f; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #2e5a8f; }
+        .progress {
+            background: #1a1a1a;
+            border: 1px solid #0f0;
+            padding: 10px;
+            margin: 10px 0;
+            color: #0ff;
+        }
     </style>
 </head>
 <body>
-    <h1>🎮 PS4 13.04 - WebKit 605.1.15 Userland 0day Hunt</h1>
+    <h1>🎮 PS4 COMPLETE BROWSER FINGERPRINT</h1>
     
-    <div class="header-info">
-        <strong>Mission:</strong> Find exploitable WebKit bugs for userland code execution<br>
-        <strong>Target:</strong> PS4 FW 13.04 | WebKit 605.1.15 (Safari 17.0 era, ~late 2023)<br>
-        <strong>Goal:</strong> addrof() + fakeobj() primitives → arbitrary R/W → ROP chain<br>
-        <strong>Note:</strong> JIT is DISABLED on PS4 - must use ROP, not JIT spraying
+    <div>
+        <button class="btn" onclick="runAllTests()">▶ RUN ALL TESTS</button>
+        <button class="btn" onclick="copyToClipboard()">📋 COPY ALL RESULTS</button>
+        <button class="btn" onclick="downloadReport()">💾 DOWNLOAD REPORT</button>
     </div>
     
-    <div class="btn-group">
-        <button class="btn" onclick="fingerprint()">🔍 Fingerprint Browser</button>
-        <button class="btn" onclick="runBasicTests()">🧪 Basic Tests</button>
-        <button class="btn" onclick="runArrayTests()">📊 Array Bugs</button>
-        <button class="btn" onclick="runObjectTests()">🎯 Object Bugs</button>
-        <button class="btn" onclick="runProxyTests()">🪞 Proxy Bugs</button>
-        <button class="btn danger" onclick="runAggressiveTests()">⚡ Aggressive Mode</button>
-    </div>
+    <div class="progress" id="progress">Ready. Click "RUN ALL TESTS" to begin.</div>
     
-    <div class="grid">
-        <div class="panel">
-            <div class="panel-head">🔬 Browser Fingerprint</div>
-            <div class="panel-body" id="fingerprint"></div>
-        </div>
-        <div class="panel">
-            <div class="panel-head">⚠️ Vulnerabilities Found</div>
-            <div class="panel-body" id="vulns"></div>
-        </div>
-    </div>
+    <div id="results"></div>
     
-    <div class="grid">
-        <div class="panel">
-            <div class="panel-head">💾 Memory Primitives</div>
-            <div class="panel-body" id="primitives"></div>
-        </div>
-        <div class="panel">
-            <div class="panel-head">🎲 Test Results</div>
-            <div class="panel-body" id="results"></div>
-        </div>
+    <div class="section">
+        <div class="section-title">📋 FULL TEXT REPORT (Select All & Copy)</div>
+        <textarea class="textbox" id="textReport" readonly></textarea>
     </div>
-    
-    <div class="console" id="console"></div>
 
 <script>
 'use strict';
 
-// Global state
-var con = document.getElementById('console');
-var fingerEl = document.getElementById('fingerprint');
-var vulnsEl = document.getElementById('vulns');
-var primEl = document.getElementById('primitives');
-var resultsEl = document.getElementById('results');
+var results = {};
+var textReport = '';
 
-var findings = {
-    browser: {},
-    vulnerabilities: [],
-    primitives: {},
-    anomalies: []
-};
+function log(msg) {
+    document.getElementById('progress').textContent = msg;
+}
 
-// Type conversion helpers
-var convBuf = new ArrayBuffer(8);
-var convF64 = new Float64Array(convBuf);
-var convU32 = new Uint32Array(convBuf);
-function i2f(lo, hi) { convU32[0] = lo >>> 0; convU32[1] = hi >>> 0; return convF64[0]; }
-function f2i(f) { convF64[0] = f; return { lo: convU32[0], hi: convU32[1] }; }
-function hex(n) { return '0x' + (n >>> 0).toString(16).padStart(8, '0'); }
-function hex64(lo, hi) { return hex(hi) + hex(lo).substr(2); }
-
-// Logging
-function log(msg, level) {
+function addSection(title) {
     var div = document.createElement('div');
-    div.className = 'log ' + (level || 'info');
-    var time = new Date().toISOString().substr(11, 12);
-    div.textContent = '[' + time + '] ' + msg;
-    con.appendChild(div);
-    con.scrollTop = con.scrollHeight;
-    
-    // Send to server
-    try {
-        fetch('/report', { 
-            method: 'POST', 
-            body: JSON.stringify({msg:msg,level:level,ts:Date.now()}), 
-            mode: 'no-cors' 
-        }).catch(function(){});
-    } catch(e) {}
+    div.className = 'section';
+    div.innerHTML = '<div class="section-title">' + title + '</div><table id="table_' + title.replace(/[^a-z0-9]/gi, '_') + '"></table>';
+    document.getElementById('results').appendChild(div);
+    return 'table_' + title.replace(/[^a-z0-9]/gi, '_');
 }
 
-function addResult(container, title, detail, type) {
-    var el = document.getElementById(container);
-    if (!el) return;
-    var div = document.createElement('div');
-    div.className = 'result ' + (type || 'info');
-    div.innerHTML = '<strong>' + title + ':</strong> ' + detail;
-    el.appendChild(div);
+function addRow(tableId, name, value, status) {
+    var table = document.getElementById(tableId);
+    if (!table) return;
+    
+    var row = table.insertRow();
+    var cell1 = row.insertCell(0);
+    var cell2 = row.insertCell(1);
+    var cell3 = row.insertCell(2);
+    
+    cell1.textContent = name;
+    cell1.style.width = '40%';
+    
+    cell2.textContent = value;
+    cell2.style.width = '45%';
+    
+    cell3.textContent = status === 'yes' ? '✓' : status === 'no' ? '✗' : status === 'warn' ? '⚠' : '•';
+    cell3.className = status || 'info';
+    cell3.style.width = '15%';
+    cell3.style.textAlign = 'center';
+    
+    // Store in results
+    if (!results[tableId]) results[tableId] = {};
+    results[tableId][name] = { value: value, status: status };
 }
 
-// GC helpers
-function gc() {
-    var junk = [];
-    for (var i = 0; i < 100; i++) {
-        junk.push(new ArrayBuffer(10000));
-        junk.push(new Array(1000));
-    }
-    junk = null;
-}
+// ============================================
+// TEST FUNCTIONS
+// ============================================
 
-// ========================================
-// BROWSER FINGERPRINTING
-// ========================================
-function fingerprint() {
-    log('=== FINGERPRINTING PS4 BROWSER ===', 'exploit');
+function test01_BasicInfo() {
+    log('Testing: Basic Information...');
+    var t = addSection('01. Basic Information');
     
-    fingerEl.innerHTML = '';
+    addRow(t, 'User Agent', navigator.userAgent, 'info');
+    addRow(t, 'Platform', navigator.platform, 'info');
+    addRow(t, 'Language', navigator.language, 'info');
+    addRow(t, 'Languages', (navigator.languages || []).join(', ') || 'N/A', 'info');
+    addRow(t, 'CPU Cores', navigator.hardwareConcurrency || 'Unknown', 'warn');
+    addRow(t, 'Device Memory (GB)', navigator.deviceMemory || 'Unknown', 'warn');
+    addRow(t, 'Max Touch Points', navigator.maxTouchPoints || 0, 'info');
+    addRow(t, 'Online Status', navigator.onLine ? 'Online' : 'Offline', navigator.onLine ? 'yes' : 'no');
+    addRow(t, 'Cookies Enabled', navigator.cookieEnabled ? 'Yes' : 'No', navigator.cookieEnabled ? 'yes' : 'no');
+    addRow(t, 'Do Not Track', navigator.doNotTrack || 'Not Set', 'info');
     
+    // Parse versions
     var ua = navigator.userAgent;
-    log('UA: ' + ua, 'info');
+    var wk = ua.match(/AppleWebKit\/([0-9.]+)/);
+    var safari = ua.match(/Version\/([0-9.]+)/);
+    var fw = ua.match(/PlayStation 4\/([0-9.]+)/);
     
-    // Parse WebKit version
-    var wkMatch = ua.match(/AppleWebKit\/([0-9.]+)/);
-    var wkVer = wkMatch ? wkMatch[1] : 'unknown';
+    addRow(t, 'WebKit Version', wk ? wk[1] : 'Unknown', 'warn');
+    addRow(t, 'Safari Version', safari ? safari[1] : 'Unknown', 'warn');
+    addRow(t, 'PS4 Firmware', fw ? fw[1] : 'Unknown', 'warn');
     
-    // Parse Safari version
-    var safariMatch = ua.match(/Version\/([0-9.]+)/);
-    var safariVer = safariMatch ? safariMatch[1] : 'unknown';
+    addRow(t, 'Screen Width', screen.width, 'info');
+    addRow(t, 'Screen Height', screen.height, 'info');
+    addRow(t, 'Screen Color Depth', screen.colorDepth, 'info');
+    addRow(t, 'Pixel Ratio', window.devicePixelRatio || 1, 'info');
+    addRow(t, 'Viewport Width', window.innerWidth, 'info');
+    addRow(t, 'Viewport Height', window.innerHeight, 'info');
+}
+
+function test02_JavaScriptCore() {
+    log('Testing: JavaScript Core Features...');
+    var t = addSection('02. JavaScript Core');
     
-    // Parse FW version
-    var fwMatch = ua.match(/PlayStation 4\/([0-9.]+)/);
-    var fwVer = fwMatch ? fwMatch[1] : 'unknown';
-    
-    findings.browser = {
-        userAgent: ua,
-        webkitVersion: wkVer,
-        safariVersion: safariVer,
-        firmwareVersion: fwVer,
-        platform: navigator.platform,
-        language: navigator.language,
-        hardwareConcurrency: navigator.hardwareConcurrency,
-        deviceMemory: navigator.deviceMemory,
-        maxTouchPoints: navigator.maxTouchPoints
+    var tests = {
+        'ES6 Classes': function() { try { eval('class X {}'); return true; } catch(e) { return false; } },
+        'Arrow Functions': function() { try { eval('() => {}'); return true; } catch(e) { return false; } },
+        'Template Literals': function() { try { eval('`test`'); return true; } catch(e) { return false; } },
+        'Destructuring': function() { try { eval('const [a] = [1]'); return true; } catch(e) { return false; } },
+        'Spread Operator': function() { try { eval('[...a]'); return true; } catch(e) { return false; } },
+        'Rest Parameters': function() { try { eval('function x(...a){}'); return true; } catch(e) { return false; } },
+        'Default Parameters': function() { try { eval('function x(a=1){}'); return true; } catch(e) { return false; } },
+        'for...of Loop': function() { try { eval('for(let x of []){}'); return true; } catch(e) { return false; } },
+        'let/const': function() { try { eval('let x=1; const y=2;'); return true; } catch(e) { return false; } },
+        'Symbol': function() { return typeof Symbol !== 'undefined'; },
+        'Promise': function() { return typeof Promise !== 'undefined'; },
+        'Proxy': function() { return typeof Proxy !== 'undefined'; },
+        'Reflect': function() { return typeof Reflect !== 'undefined'; },
+        'Map': function() { return typeof Map !== 'undefined'; },
+        'Set': function() { return typeof Set !== 'undefined'; },
+        'WeakMap': function() { return typeof WeakMap !== 'undefined'; },
+        'WeakSet': function() { return typeof WeakSet !== 'undefined'; },
+        'WeakRef': function() { return typeof WeakRef !== 'undefined'; },
+        'FinalizationRegistry': function() { return typeof FinalizationRegistry !== 'undefined'; },
+        'BigInt': function() { return typeof BigInt !== 'undefined'; },
+        'Intl': function() { return typeof Intl !== 'undefined'; },
+        'async/await': function() { return (async function(){}).constructor !== undefined; },
+        'Generators': function() { try { eval('function* x(){}'); return true; } catch(e) { return false; } },
+        'Object.assign': function() { return typeof Object.assign !== 'undefined'; },
+        'Object.entries': function() { return typeof Object.entries !== 'undefined'; },
+        'Object.values': function() { return typeof Object.values !== 'undefined'; },
+        'Object.getOwnPropertyDescriptors': function() { return typeof Object.getOwnPropertyDescriptors !== 'undefined'; },
+        'Array.from': function() { return typeof Array.from !== 'undefined'; },
+        'Array.of': function() { return typeof Array.of !== 'undefined'; },
+        'Array.prototype.includes': function() { return typeof Array.prototype.includes !== 'undefined'; },
+        'Array.prototype.find': function() { return typeof Array.prototype.find !== 'undefined'; },
+        'Array.prototype.findIndex': function() { return typeof Array.prototype.findIndex !== 'undefined'; },
+        'Array.prototype.flat': function() { return typeof Array.prototype.flat !== 'undefined'; },
+        'Array.prototype.flatMap': function() { return typeof Array.prototype.flatMap !== 'undefined'; },
+        'Array.prototype.at': function() { return typeof Array.prototype.at !== 'undefined'; },
+        'String.prototype.includes': function() { return typeof String.prototype.includes !== 'undefined'; },
+        'String.prototype.startsWith': function() { return typeof String.prototype.startsWith !== 'undefined'; },
+        'String.prototype.endsWith': function() { return typeof String.prototype.endsWith !== 'undefined'; },
+        'String.prototype.repeat': function() { return typeof String.prototype.repeat !== 'undefined'; },
+        'String.prototype.padStart': function() { return typeof String.prototype.padStart !== 'undefined'; },
+        'String.prototype.padEnd': function() { return typeof String.prototype.padEnd !== 'undefined'; },
+        'String.prototype.trimStart': function() { return typeof String.prototype.trimStart !== 'undefined'; },
+        'String.prototype.trimEnd': function() { return typeof String.prototype.trimEnd !== 'undefined'; },
+        'String.prototype.matchAll': function() { return typeof String.prototype.matchAll !== 'undefined'; },
+        'String.prototype.replaceAll': function() { return typeof String.prototype.replaceAll !== 'undefined'; },
     };
     
-    addResult('fingerprint', 'WebKit', wkVer, 'info');
-    addResult('fingerprint', 'Safari Version', safariVer, 'info');
-    addResult('fingerprint', 'PS4 Firmware', fwVer, 'info');
-    addResult('fingerprint', 'Platform', navigator.platform, 'info');
-    addResult('fingerprint', 'CPU Cores', navigator.hardwareConcurrency || 'unknown', 'info');
+    for (var name in tests) {
+        var result = tests[name]();
+        addRow(t, name, result ? 'Available' : 'Not Available', result ? 'yes' : 'no');
+    }
+}
+
+function test03_TypedArrays() {
+    log('Testing: TypedArrays & Binary Data...');
+    var t = addSection('03. TypedArrays & Binary Data');
     
-    // Test available APIs
+    var types = [
+        'ArrayBuffer',
+        'SharedArrayBuffer',
+        'DataView',
+        'Int8Array',
+        'Uint8Array',
+        'Uint8ClampedArray',
+        'Int16Array',
+        'Uint16Array',
+        'Int32Array',
+        'Uint32Array',
+        'Float32Array',
+        'Float64Array',
+        'BigInt64Array',
+        'BigUint64Array',
+        'Atomics'
+    ];
+    
+    types.forEach(function(type) {
+        var available = typeof window[type] !== 'undefined';
+        addRow(t, type, available ? 'Available' : 'Not Available', available ? 'yes' : 'no');
+    });
+    
+    // Test buffer operations
+    if (typeof ArrayBuffer !== 'undefined') {
+        try {
+            var buf = new ArrayBuffer(16);
+            addRow(t, 'ArrayBuffer Creation', 'Success (' + buf.byteLength + ' bytes)', 'yes');
+            
+            var view = new Uint8Array(buf);
+            addRow(t, 'Uint8Array View', 'Success (' + view.length + ' elements)', 'yes');
+            
+            view[0] = 255;
+            addRow(t, 'Array Write', 'Success (wrote 255)', 'yes');
+            
+            var read = view[0];
+            addRow(t, 'Array Read', 'Success (read ' + read + ')', read === 255 ? 'yes' : 'warn');
+            
+        } catch(e) {
+            addRow(t, 'ArrayBuffer Test', 'Error: ' + e.message, 'no');
+        }
+    }
+}
+
+function test04_WebAPIs() {
+    log('Testing: Web APIs...');
+    var t = addSection('04. Web APIs');
+    
     var apis = {
-        'WebAssembly': typeof WebAssembly !== 'undefined',
-        'SharedArrayBuffer': typeof SharedArrayBuffer !== 'undefined',
-        'Atomics': typeof Atomics !== 'undefined',
-        'BigInt': typeof BigInt !== 'undefined',
-        'Symbol': typeof Symbol !== 'undefined',
-        'Proxy': typeof Proxy !== 'undefined',
-        'Reflect': typeof Reflect !== 'undefined',
-        'WeakRef': typeof WeakRef !== 'undefined',
-        'FinalizationRegistry': typeof FinalizationRegistry !== 'undefined',
-        'Promise': typeof Promise !== 'undefined',
-        'async/await': (async function(){}).constructor !== undefined
+        'fetch': typeof fetch !== 'undefined',
+        'XMLHttpRequest': typeof XMLHttpRequest !== 'undefined',
+        'WebSocket': typeof WebSocket !== 'undefined',
+        'EventSource': typeof EventSource !== 'undefined',
+        'Worker': typeof Worker !== 'undefined',
+        'SharedWorker': typeof SharedWorker !== 'undefined',
+        'ServiceWorker': 'serviceWorker' in navigator,
+        'Broadcast Channel': typeof BroadcastChannel !== 'undefined',
+        'MessageChannel': typeof MessageChannel !== 'undefined',
+        'Blob': typeof Blob !== 'undefined',
+        'File': typeof File !== 'undefined',
+        'FileReader': typeof FileReader !== 'undefined',
+        'FormData': typeof FormData !== 'undefined',
+        'URL': typeof URL !== 'undefined',
+        'URLSearchParams': typeof URLSearchParams !== 'undefined',
+        'TextEncoder': typeof TextEncoder !== 'undefined',
+        'TextDecoder': typeof TextDecoder !== 'undefined',
+        'atob': typeof atob !== 'undefined',
+        'btoa': typeof btoa !== 'undefined',
+        'setTimeout': typeof setTimeout !== 'undefined',
+        'setInterval': typeof setInterval !== 'undefined',
+        'requestAnimationFrame': typeof requestAnimationFrame !== 'undefined',
+        'requestIdleCallback': typeof requestIdleCallback !== 'undefined',
+        'queueMicrotask': typeof queueMicrotask !== 'undefined',
     };
     
     for (var api in apis) {
-        findings.browser[api] = apis[api];
-        addResult('fingerprint', api, apis[api] ? '✅ Available' : '❌ Disabled', apis[api] ? 'info' : 'safe');
+        addRow(t, api, apis[api] ? 'Available' : 'Not Available', apis[api] ? 'yes' : 'no');
     }
-    
-    log('Fingerprinting complete', 'success');
-    
-    // Report
-    fetch('/report', {
-        method: 'POST',
-        body: JSON.stringify({
-            type: 'ps4_fingerprint',
-            data: findings.browser,
-            timestamp: Date.now()
-        }),
-        mode: 'no-cors'
-    }).catch(function(){});
 }
 
-// ========================================
-// BASIC WEBKIT TESTS
-// ========================================
-function runBasicTests() {
-    log('=== BASIC WEBKIT TESTS ===', 'exploit');
+function test05_Storage() {
+    log('Testing: Storage APIs...');
+    var t = addSection('05. Storage APIs');
     
-    // Test 1: Array.at() NaN coercion
-    log('Testing Array.at(NaN)...', 'info');
+    // localStorage
     try {
-        var arr = [1, 2, 3];
-        var result = arr.at(NaN);
-        if (result === 1) {
-            addResult('results', 'Array.at(NaN)', 'Returns index 0 (quirk)', 'info');
+        var testKey = 'fingerprint_test_' + Date.now();
+        localStorage.setItem(testKey, 'test');
+        var retrieved = localStorage.getItem(testKey);
+        localStorage.removeItem(testKey);
+        addRow(t, 'localStorage', 'Available (works)', 'yes');
+        
+        // Test size
+        var bigData = 'X'.repeat(1024 * 1024); // 1MB
+        try {
+            localStorage.setItem(testKey, bigData);
+            localStorage.removeItem(testKey);
+            addRow(t, 'localStorage Limit', 'At least 1MB', 'warn');
+        } catch(e) {
+            addRow(t, 'localStorage Limit', 'Less than 1MB', 'info');
         }
     } catch(e) {
-        log('Array.at error: ' + e.message, 'error');
+        addRow(t, 'localStorage', 'Error: ' + e.message, 'no');
     }
     
-    // Test 2: Negative array indices
-    log('Testing negative array length...', 'info');
+    // sessionStorage
     try {
-        var badArr = [];
-        badArr.length = -1;
-        addResult('results', 'Negative length', 'Allowed! length=' + badArr.length, 'vuln');
-        findings.vulnerabilities.push('Negative array length accepted');
+        sessionStorage.setItem('test', '1');
+        sessionStorage.removeItem('test');
+        addRow(t, 'sessionStorage', 'Available (works)', 'yes');
     } catch(e) {
-        addResult('results', 'Negative length', 'Blocked: ' + e.message, 'safe');
+        addRow(t, 'sessionStorage', 'Error: ' + e.message, 'no');
     }
     
-    // Test 3: Large array length
-    log('Testing large array allocation...', 'info');
-    try {
-        var huge = new Array(0xFFFFFFFF);
-        addResult('results', 'Max array length', 'Allocated 4GB array!', 'warn');
-    } catch(e) {
-        addResult('results', 'Max array length', 'Blocked: ' + e.message, 'safe');
-    }
+    // IndexedDB
+    var idbAvail = typeof indexedDB !== 'undefined';
+    addRow(t, 'IndexedDB', idbAvail ? 'Available' : 'Not Available', idbAvail ? 'yes' : 'no');
     
-    // Test 4: Object.defineProperty data→accessor transition
-    log('Testing defineProperty transitions...', 'info');
-    try {
-        var obj = { x: 1 };
-        Object.defineProperty(obj, 'x', {
-            get: function() { return 42; },
-            configurable: true
-        });
-        if (obj.x === 42) {
-            addResult('results', 'defineProperty transition', 'data→accessor works', 'info');
-        }
-    } catch(e) {
-        log('defineProperty error: ' + e.message, 'error');
-    }
-    
-    log('Basic tests complete', 'success');
+    // Cache API
+    var cacheAvail = typeof caches !== 'undefined';
+    addRow(t, 'Cache API', cacheAvail ? 'Available' : 'Not Available', cacheAvail ? 'yes' : 'no');
 }
 
-// ========================================
-// ARRAY EXPLOITATION TESTS
-// ========================================
-function runArrayTests() {
-    log('=== ARRAY EXPLOITATION TESTS ===', 'exploit');
+function test06_DOM() {
+    log('Testing: DOM APIs...');
+    var t = addSection('06. DOM APIs');
     
-    // Test 1: Array length corruption via defineProperty
-    log('Test 1: Length corruption via defineProperty...', 'info');
-    try {
-        var arr1 = [1.1, 2.2, 3.3, 4.4];
-        Object.defineProperty(arr1, 'length', { value: 0x1000 });
-        
-        if (arr1.length === 0x1000) {
-            addResult('primitives', 'Length corruption', 'SUCCESS! length=' + arr1.length, 'vuln');
-            
-            // Test OOB read
-            var oob = arr1[100];
-            if (oob !== undefined) {
-                addResult('primitives', 'OOB read', 'Read index 100: ' + oob, 'vuln');
-                findings.vulnerabilities.push('Array OOB read possible');
-            } else {
-                addResult('primitives', 'OOB read', 'Returns undefined (bounds checked)', 'safe');
-            }
-            
-            // Test OOB write
-            arr1[100] = 13.37;
-            if (arr1[100] === 13.37) {
-                addResult('primitives', 'OOB write', 'Write succeeded!', 'critical');
-                findings.primitives.oob_write = true;
-                findings.vulnerabilities.push('Array OOB write - CRITICAL');
-            } else {
-                addResult('primitives', 'OOB write', 'Write blocked or went to sparse storage', 'safe');
-            }
-        }
-    } catch(e) {
-        log('Length corruption error: ' + e.message, 'error');
+    var domAPIs = {
+        'document.createElement': typeof document.createElement !== 'undefined',
+        'document.createElementNS': typeof document.createElementNS !== 'undefined',
+        'document.createTextNode': typeof document.createTextNode !== 'undefined',
+        'document.createDocumentFragment': typeof document.createDocumentFragment !== 'undefined',
+        'document.createRange': typeof document.createRange !== 'undefined',
+        'document.querySelector': typeof document.querySelector !== 'undefined',
+        'document.querySelectorAll': typeof document.querySelectorAll !== 'undefined',
+        'Element.classList': document.body && typeof document.body.classList !== 'undefined',
+        'Element.matches': document.body && typeof document.body.matches !== 'undefined',
+        'Element.closest': document.body && typeof document.body.closest !== 'undefined',
+        'MutationObserver': typeof MutationObserver !== 'undefined',
+        'IntersectionObserver': typeof IntersectionObserver !== 'undefined',
+        'ResizeObserver': typeof ResizeObserver !== 'undefined',
+        'PerformanceObserver': typeof PerformanceObserver !== 'undefined',
+        'DOMParser': typeof DOMParser !== 'undefined',
+        'XMLSerializer': typeof XMLSerializer !== 'undefined',
+        'CustomEvent': typeof CustomEvent !== 'undefined',
+        'CustomElements': typeof customElements !== 'undefined',
+        'ShadowRoot': typeof ShadowRoot !== 'undefined',
+        'Template': 'content' in document.createElement('template'),
+    };
+    
+    for (var api in domAPIs) {
+        addRow(t, api, domAPIs[api] ? 'Available' : 'Not Available', domAPIs[api] ? 'yes' : 'no');
     }
-    
-    // Test 2: Array Species constructor
-    log('Test 2: Array Species exploitation...', 'info');
-    try {
-        var SpeciesArray = [];
-        SpeciesArray.constructor = {
-            get [Symbol.species]() {
-                return function() {
-                    var arr = [];
-                    arr.length = 0xFFFFFFFF;
-                    return arr;
-                };
-            }
-        };
-        
-        var mapped = SpeciesArray.map(function(x) { return x; });
-        addResult('primitives', 'Species length', 'Mapped length: ' + mapped.length, mapped.length > 100 ? 'vuln' : 'safe');
-        
-        if (mapped.length === 0xFFFFFFFF) {
-            findings.primitives.species_confusion = true;
-            findings.vulnerabilities.push('Species length confusion');
-        }
-    } catch(e) {
-        log('Species error: ' + e.message, 'error');
-    }
-    
-    // Test 3: Sort-time resize
-    log('Test 3: Array resize during sort...', 'info');
-    try {
-        var resizeArr = [1, 2, 3];
-        var resized = false;
-        
-        resizeArr.sort(function(a, b) {
-            if (!resized) {
-                resizeArr.length = 100;
-                resized = true;
-            }
-            return a - b;
-        });
-        
-        if (resizeArr.length === 100) {
-            addResult('primitives', 'Sort-time resize', 'Array grew to ' + resizeArr.length, 'vuln');
-            
-            // Check if new slots are initialized
-            var uninit = false;
-            for (var i = 10; i < 20; i++) {
-                if (resizeArr[i] !== undefined && resizeArr[i] !== 0) {
-                    uninit = true;
-                    addResult('primitives', 'Uninitialized memory', 'Found at index ' + i + ': ' + resizeArr[i], 'critical');
-                    findings.vulnerabilities.push('Uninitialized array slots - CRITICAL');
-                    break;
-                }
-            }
-            if (!uninit) {
-                addResult('primitives', 'Memory initialization', 'New slots are zero-initialized', 'safe');
-            }
-        }
-    } catch(e) {
-        log('Sort resize error: ' + e.message, 'error');
-    }
-    
-    log('Array tests complete', 'success');
 }
 
-// ========================================
-// OBJECT EXPLOITATION TESTS
-// ========================================
-function runObjectTests() {
-    log('=== OBJECT EXPLOITATION TESTS ===', 'exploit');
+function test07_Graphics() {
+    log('Testing: Graphics APIs...');
+    var t = addSection('07. Graphics APIs (Canvas, WebGL)');
     
-    // Test 1: Prototype pollution
-    log('Test 1: __proto__ pollution...', 'info');
-    try {
-        var polluted = {};
-        polluted.__proto__.polluted = true;
-        
-        var test = {};
-        if (test.polluted === true) {
-            addResult('vulns', 'Prototype pollution', 'VULNERABLE!', 'critical');
-            findings.vulnerabilities.push('Prototype pollution via __proto__');
-        } else {
-            addResult('vulns', 'Prototype pollution', 'Protected', 'safe');
-        }
-        
-        delete Object.prototype.polluted;
-    } catch(e) {
-        log('Proto pollution error: ' + e.message, 'error');
-    }
+    // Canvas
+    var canvas = document.createElement('canvas');
+    var canvasAvail = !!canvas.getContext;
+    addRow(t, 'Canvas', canvasAvail ? 'Available' : 'Not Available', canvasAvail ? 'yes' : 'no');
     
-    // Test 2: valueOf side effects
-    log('Test 2: valueOf side effects...', 'info');
-    try {
-        var victim = [1.1, 2.2, 3.3];
-        var evil = {
-            valueOf: function() {
-                victim[1] = {};  // Type confusion attempt
-                return 1;
-            }
-        };
+    if (canvasAvail) {
+        // 2D
+        var ctx2d = canvas.getContext('2d');
+        addRow(t, 'Canvas 2D', ctx2d ? 'Available' : 'Not Available', ctx2d ? 'yes' : 'no');
         
-        victim[0] = evil;
-        var sum = victim[0] + victim[1];
+        // WebGL
+        var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        addRow(t, 'WebGL', gl ? 'Available' : 'Not Available', gl ? 'yes' : 'no');
         
-        if (typeof victim[1] === 'object') {
-            addResult('primitives', 'valueOf type confusion', 'Possible! victim[1] is now object', 'vuln');
-        }
-    } catch(e) {
-        log('valueOf error: ' + e.message, 'error');
-    }
-    
-    // Test 3: Getter/setter during operations
-    log('Test 3: Prototype getter exploitation...', 'info');
-    try {
-        var getterFired = false;
-        var protoArr = [1, 2, 3];
-        
-        Array.prototype.__defineGetter__(10, function() {
-            getterFired = true;
-            return 'GETTER_FIRED';
-        });
-        
-        var val = protoArr[10];
-        
-        if (getterFired) {
-            addResult('primitives', 'Prototype getter', 'Fires on OOB access!', 'vuln');
-            findings.primitives.prototype_getter = true;
-        }
-        
-        delete Array.prototype[10];
-    } catch(e) {
-        log('Getter error: ' + e.message, 'error');
-    }
-    
-    log('Object tests complete', 'success');
-}
-
-// ========================================
-// PROXY EXPLOITATION TESTS
-// ========================================
-function runProxyTests() {
-    log('=== PROXY EXPLOITATION TESTS ===', 'exploit');
-    
-    // Test 1: Proxy length spoofing
-    log('Test 1: Proxy length spoofing...', 'info');
-    try {
-        var fakeArray = new Proxy({}, {
-            get: function(target, prop) {
-                if (prop === 'length') return 256;
-                if (prop >= 0 && prop < 256) return prop;
-                return target[prop];
-            }
-        });
-        
-        var sliced = Array.prototype.slice.call(fakeArray);
-        addResult('primitives', 'Proxy slice', 'Created array of length ' + sliced.length, sliced.length > 100 ? 'vuln' : 'safe');
-        
-        if (sliced.length === 256) {
-            findings.primitives.proxy_length_spoof = true;
-            
-            // Check if slots are initialized
-            var leaked = false;
-            for (var i = 10; i < 20; i++) {
-                if (sliced[i] !== i && sliced[i] !== undefined && sliced[i] !== 0) {
-                    leaked = true;
-                    addResult('primitives', 'Memory leak via Proxy', 'Index ' + i + ' = ' + sliced[i], 'critical');
-                    findings.vulnerabilities.push('Memory leak via Proxy slice');
-                    break;
-                }
-            }
-            if (!leaked) {
-                addResult('primitives', 'Proxy slots', 'Initialized to callback values', 'safe');
-            }
-        }
-    } catch(e) {
-        log('Proxy slice error: ' + e.message, 'error');
-    }
-    
-    // Test 2: Proxy with Array.from
-    log('Test 2: Proxy with Array.from...', 'info');
-    try {
-        var fakeIterable = new Proxy({}, {
-            get: function(target, prop) {
-                if (prop === Symbol.iterator) {
-                    return function() {
-                        var i = 0;
-                        return {
-                            next: function() {
-                                if (i < 256) return { value: i++, done: false };
-                                return { done: true };
-                            }
-                        };
-                    };
-                }
-                return target[prop];
-            }
-        });
-        
-        var fromArr = Array.from(fakeIterable);
-        addResult('primitives', 'Proxy Array.from', 'Length: ' + fromArr.length, fromArr.length > 100 ? 'vuln' : 'safe');
-    } catch(e) {
-        log('Array.from error: ' + e.message, 'error');
-    }
-    
-    log('Proxy tests complete', 'success');
-}
-
-// ========================================
-// AGGRESSIVE EXPLOITATION MODE
-// ========================================
-function runAggressiveTests() {
-    log('========== AGGRESSIVE MODE ==========', 'critical');
-    log('Running high-risk exploitation attempts...', 'warn');
-    
-    var crashes = 0;
-    var anomalies = 0;
-    
-    // Test 1: Massive GC pressure during operations
-    log('Test 1: GC pressure exploitation...', 'exploit');
-    try {
-        var gcArr = [1.1, 2.2, 3.3];
-        
-        for (var i = 0; i < 50; i++) {
-            gc();
-            
-            var proxy = new Proxy({}, {
-                get: function() {
-                    gc();
-                    return 1.1;
-                }
-            });
-            
-            Array.prototype.push.call(gcArr, proxy);
-        }
-        
-        addResult('results', 'GC pressure test', 'Survived 50 iterations', 'info');
-    } catch(e) {
-        crashes++;
-        addResult('results', 'GC pressure test', 'CRASHED: ' + e.message, 'critical');
-        findings.vulnerabilities.push('GC pressure crash: ' + e.message);
-    }
-    
-    // Test 2: Recursive defineProperty
-    log('Test 2: Recursive defineProperty...', 'exploit');
-    try {
-        var depth = 0;
-        var obj = {};
-        
-        Object.defineProperty(obj, 'x', {
-            get: function() {
-                if (depth++ < 100) {
-                    Object.defineProperty(obj, 'y', { value: depth });
-                }
-                return 1;
-            },
-            configurable: true
-        });
-        
-        var val = obj.x;
-        addResult('results', 'Recursive defineProperty', 'Depth reached: ' + depth, depth > 50 ? 'warn' : 'safe');
-    } catch(e) {
-        crashes++;
-        addResult('results', 'Recursive defineProperty', 'CRASHED: ' + e.message, 'critical');
-    }
-    
-    // Test 3: TypedArray with corrupted length
-    log('Test 3: TypedArray length corruption...', 'exploit');
-    try {
-        var buffer = new ArrayBuffer(64);
-        var view = new Uint32Array(buffer);
-        
-        Object.defineProperty(view, 'length', { value: 0x10000 });
-        
-        if (view.length === 0x10000) {
-            addResult('primitives', 'TypedArray length', 'Corrupted to ' + view.length + '!', 'critical');
-            
-            // Try OOB read
+        if (gl) {
             try {
-                var leak = view[1000];
-                addResult('primitives', 'TypedArray OOB', 'Read index 1000: ' + hex(leak), leak !== undefined ? 'critical' : 'safe');
-                
-                if (leak !== undefined && leak !== 0) {
-                    findings.vulnerabilities.push('TypedArray OOB read - CRITICAL!');
-                }
-            } catch(e2) {
-                addResult('primitives', 'TypedArray OOB', 'Blocked: ' + e2.message, 'safe');
+                addRow(t, 'WebGL Vendor', gl.getParameter(gl.VENDOR), 'warn');
+                addRow(t, 'WebGL Renderer', gl.getParameter(gl.RENDERER), 'warn');
+                addRow(t, 'WebGL Version', gl.getParameter(gl.VERSION), 'warn');
+                addRow(t, 'GLSL Version', gl.getParameter(gl.SHADING_LANGUAGE_VERSION), 'warn');
+                addRow(t, 'Max Texture Size', gl.getParameter(gl.MAX_TEXTURE_SIZE), 'info');
+                addRow(t, 'Max Vertex Attributes', gl.getParameter(gl.MAX_VERTEX_ATTRIBS), 'info');
+                addRow(t, 'Max Varying Vectors', gl.getParameter(gl.MAX_VARYING_VECTORS), 'info');
+                addRow(t, 'Max Fragment Uniforms', gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS), 'info');
+                addRow(t, 'Max Vertex Uniforms', gl.getParameter(gl.MAX_VERTEX_UNIFORM_VECTORS), 'info');
+            } catch(e) {
+                addRow(t, 'WebGL Info', 'Error reading: ' + e.message, 'no');
             }
         }
-    } catch(e) {
-        log('TypedArray error: ' + e.message, 'error');
+        
+        // WebGL2
+        var gl2 = canvas.getContext('webgl2');
+        addRow(t, 'WebGL 2', gl2 ? 'Available' : 'Not Available', gl2 ? 'yes' : 'no');
     }
     
-    log('========== AGGRESSIVE MODE COMPLETE ==========', 'critical');
-    log('Crashes: ' + crashes + ', Anomalies: ' + anomalies, crashes > 0 ? 'critical' : 'success');
-    
-    // Final report
-    fetch('/report', {
-        method: 'POST',
-        body: JSON.stringify({
-            type: 'ps4_aggressive_results',
-            crashes: crashes,
-            anomalies: anomalies,
-            vulnerabilities: findings.vulnerabilities,
-            primitives: findings.primitives,
-            timestamp: Date.now()
-        }),
-        mode: 'no-cors'
-    }).catch(function(){});
+    // Other graphics APIs
+    addRow(t, 'OffscreenCanvas', typeof OffscreenCanvas !== 'undefined' ? 'Available' : 'Not Available', typeof OffscreenCanvas !== 'undefined' ? 'yes' : 'no');
+    addRow(t, 'ImageBitmap', typeof createImageBitmap !== 'undefined' ? 'Available' : 'Not Available', typeof createImageBitmap !== 'undefined' ? 'yes' : 'no');
+    addRow(t, 'Path2D', typeof Path2D !== 'undefined' ? 'Available' : 'Not Available', typeof Path2D !== 'undefined' ? 'yes' : 'no');
 }
 
-// Error handler
-window.onerror = function(msg, url, line) {
-    log('CRITICAL ERROR: ' + msg + ' (line ' + line + ')', 'critical');
-    findings.anomalies.push({ msg: msg, line: line });
-    return true;
-};
+function test08_Crypto() {
+    log('Testing: Crypto APIs...');
+    var t = addSection('08. Crypto & Security');
+    
+    var cryptoAvail = typeof crypto !== 'undefined';
+    addRow(t, 'crypto', cryptoAvail ? 'Available' : 'Not Available', cryptoAvail ? 'yes' : 'no');
+    
+    if (cryptoAvail) {
+        addRow(t, 'crypto.getRandomValues', typeof crypto.getRandomValues !== 'undefined' ? 'Available' : 'Not Available', typeof crypto.getRandomValues !== 'undefined' ? 'yes' : 'no');
+        addRow(t, 'crypto.randomUUID', typeof crypto.randomUUID !== 'undefined' ? 'Available' : 'Not Available', typeof crypto.randomUUID !== 'undefined' ? 'yes' : 'no');
+        addRow(t, 'crypto.subtle', typeof crypto.subtle !== 'undefined' ? 'Available' : 'Not Available', typeof crypto.subtle !== 'undefined' ? 'yes' : 'no');
+        
+        if (crypto.subtle) {
+            var methods = ['encrypt', 'decrypt', 'sign', 'verify', 'digest', 'generateKey', 'deriveKey', 'deriveBits', 'importKey', 'exportKey', 'wrapKey', 'unwrapKey'];
+            methods.forEach(function(m) {
+                addRow(t, 'subtle.' + m, typeof crypto.subtle[m] !== 'undefined' ? 'Available' : 'Not Available', typeof crypto.subtle[m] !== 'undefined' ? 'yes' : 'no');
+            });
+        }
+    }
+    
+    // Security features
+    try {
+        eval('1+1');
+        addRow(t, 'eval()', 'Allowed', 'warn');
+    } catch(e) {
+        addRow(t, 'eval()', 'Blocked: ' + e.message, 'yes');
+    }
+    
+    try {
+        new Function('return 1')();
+        addRow(t, 'Function constructor', 'Allowed', 'warn');
+    } catch(e) {
+        addRow(t, 'Function constructor', 'Blocked: ' + e.message, 'yes');
+    }
+}
 
-// On load
-window.onload = function() {
-    log('PS4 13.04 Userland Hunt loaded', 'success');
-    log('Target: WebKit 605.1.15 (Safari 17.0 era)', 'info');
-    log('Click "Fingerprint Browser" to begin', 'info');
+function test09_JIT() {
+    log('Testing: JIT Compiler...');
+    var t = addSection('09. JIT Compiler Detection');
+    
+    // Test 1: Large function
+    try {
+        var bigCode = 'var x = 0; ' + 'x++; '.repeat(10000) + 'return x;';
+        var bigFunc = new Function(bigCode);
+        var result = bigFunc();
+        addRow(t, 'Large Function (10K ops)', 'Created & executed (result: ' + result + ')', result === 10000 ? 'yes' : 'warn');
+    } catch(e) {
+        addRow(t, 'Large Function', 'Error: ' + e.message, e.message.toLowerCase().includes('jit') ? 'warn' : 'no');
+    }
+    
+    // Test 2: Hot loop timing
+    if (typeof performance !== 'undefined' && performance.now) {
+        var start = performance.now();
+        var sum = 0;
+        for (var i = 0; i < 1000000; i++) {
+            sum += i;
+        }
+        var time = performance.now() - start;
+        addRow(t, 'Hot Loop (1M iterations)', time.toFixed(2) + ' ms', time < 50 ? 'warn' : 'info');
+        addRow(t, 'JIT Likely', time < 50 ? 'Yes (very fast)' : 'No (slow, interpreted)', time < 50 ? 'warn' : 'no');
+    }
+    
+    // Test 3: Repeated function calls
+    if (typeof performance !== 'undefined' && performance.now) {
+        function testFunc(x) {
+            return x * 2 + 1;
+        }
+        
+        var start2 = performance.now();
+        for (var j = 0; j < 100000; j++) {
+            testFunc(j);
+        }
+        var time2 = performance.now() - start2;
+        addRow(t, 'Function Calls (100K)', time2.toFixed(2) + ' ms', 'info');
+    }
+    
+    addRow(t, 'JIT Status Estimate', 'Likely DISABLED (PS4 has no JIT)', 'no');
+}
+
+function test10_WebAssembly() {
+    log('Testing: WebAssembly...');
+    var t = addSection('10. WebAssembly');
+    
+    var wasmAvail = typeof WebAssembly !== 'undefined';
+    addRow(t, 'WebAssembly', wasmAvail ? 'Available' : 'NOT AVAILABLE', wasmAvail ? 'yes' : 'no');
+    
+    if (wasmAvail) {
+        var apis = ['compile', 'instantiate', 'validate', 'Module', 'Instance', 'Memory', 'Table', 'CompileError', 'LinkError', 'RuntimeError'];
+        apis.forEach(function(api) {
+            addRow(t, 'WebAssembly.' + api, typeof WebAssembly[api] !== 'undefined' ? 'Available' : 'Not Available', typeof WebAssembly[api] !== 'undefined' ? 'yes' : 'no');
+        });
+        
+        // Try to compile simple WASM
+        try {
+            var wasmBytes = new Uint8Array([0,97,115,109,1,0,0,0,1,7,1,96,0,1,127,3,2,1,0,7,10,1,6,97,110,115,119,101,114,0,0,10,9,1,7,0,65,42,15,11]);
+            var module = new WebAssembly.Module(wasmBytes);
+            var instance = new WebAssembly.Instance(module);
+            var result = instance.exports.answer();
+            addRow(t, 'Compile & Execute', 'SUCCESS (returned ' + result + ')', 'yes');
+        } catch(e) {
+            addRow(t, 'Compile & Execute', 'Failed: ' + e.message, 'no');
+        }
+    }
+}
+
+function test11_Fonts() {
+    log('Testing: Font APIs...');
+    var t = addSection('11. Font APIs (CVE-2021-30858 Surface)');
+    
+    addRow(t, 'FontFace', typeof FontFace !== 'undefined' ? 'Available' : 'Not Available', typeof FontFace !== 'undefined' ? 'yes' : 'no');
+    addRow(t, 'FontFaceSet', typeof FontFaceSet !== 'undefined' ? 'Available' : 'Not Available', typeof FontFaceSet !== 'undefined' ? 'yes' : 'no');
+    addRow(t, 'document.fonts', typeof document.fonts !== 'undefined' ? 'Available' : 'Not Available', typeof document.fonts !== 'undefined' ? 'yes' : 'no');
+    
+    // CVE-2021-30858 surface test
+    if (typeof FontFace !== 'undefined' && typeof FontFaceSet !== 'undefined') {
+        try {
+            var ff = new FontFace("test", "");
+            var ffs = new FontFaceSet([ff]);
+            addRow(t, 'FontFaceSet Constructor', 'Works', 'warn');
+            addRow(t, 'CVE-2021-30858 Attack Surface', 'PRESENT (exploitable!)', 'warn');
+        } catch(e) {
+            addRow(t, 'FontFaceSet Constructor', 'Error: ' + e.message, 'no');
+            addRow(t, 'CVE-2021-30858 Attack Surface', 'Not exploitable this way', 'yes');
+        }
+        
+        // Prototype mutation test
+        try {
+            var ff2 = new FontFace("test2", "");
+            ff2.__defineGetter__("prototype", function() { return {}; });
+            addRow(t, 'Prototype Mutation (__defineGetter__)', 'ALLOWED (type confusion!)', 'warn');
+        } catch(e) {
+            addRow(t, 'Prototype Mutation', 'Blocked: ' + e.message, 'yes');
+        }
+    }
+}
+
+function test12_Performance() {
+    log('Testing: Performance APIs...');
+    var t = addSection('12. Performance & Memory');
+    
+    var perfAvail = typeof performance !== 'undefined';
+    addRow(t, 'performance', perfAvail ? 'Available' : 'Not Available', perfAvail ? 'yes' : 'no');
+    
+    if (perfAvail) {
+        addRow(t, 'performance.now', typeof performance.now !== 'undefined' ? 'Available' : 'Not Available', typeof performance.now !== 'undefined' ? 'yes' : 'no');
+        addRow(t, 'performance.mark', typeof performance.mark !== 'undefined' ? 'Available' : 'Not Available', typeof performance.mark !== 'undefined' ? 'yes' : 'no');
+        addRow(t, 'performance.measure', typeof performance.measure !== 'undefined' ? 'Available' : 'Not Available', typeof performance.measure !== 'undefined' ? 'yes' : 'no');
+        addRow(t, 'performance.timing', typeof performance.timing !== 'undefined' ? 'Available' : 'Not Available', typeof performance.timing !== 'undefined' ? 'yes' : 'no');
+        addRow(t, 'performance.navigation', typeof performance.navigation !== 'undefined' ? 'Available' : 'Not Available', typeof performance.navigation !== 'undefined' ? 'yes' : 'no');
+        
+        if (performance.memory) {
+            addRow(t, 'JS Heap Limit', (performance.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(2) + ' MB', 'warn');
+            addRow(t, 'Total JS Heap', (performance.memory.totalJSHeapSize / 1024 / 1024).toFixed(2) + ' MB', 'warn');
+            addRow(t, 'Used JS Heap', (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(2) + ' MB', 'warn');
+        } else {
+            addRow(t, 'performance.memory', 'Not Available', 'no');
+        }
+    }
+}
+
+function test13_Media() {
+    log('Testing: Media APIs...');
+    var t = addSection('13. Media APIs');
+    
+    var mediaAPIs = {
+        'Audio': typeof Audio !== 'undefined',
+        'Video': typeof HTMLVideoElement !== 'undefined',
+        'MediaSource': typeof MediaSource !== 'undefined',
+        'MediaRecorder': typeof MediaRecorder !== 'undefined',
+        'MediaStream': typeof MediaStream !== 'undefined',
+        'RTCPeerConnection': typeof RTCPeerConnection !== 'undefined',
+        'RTCDataChannel': typeof RTCDataChannel !== 'undefined',
+        'WebRTC': typeof RTCPeerConnection !== 'undefined',
+        'getUserMedia': navigator.getUserMedia || (navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+        'AudioContext': typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined',
+    };
+    
+    for (var api in mediaAPIs) {
+        var avail = !!mediaAPIs[api];
+        addRow(t, api, avail ? 'Available' : 'Not Available', avail ? 'yes' : 'no');
+    }
+}
+
+function test14_Misc() {
+    log('Testing: Miscellaneous Features...');
+    var t = addSection('14. Miscellaneous');
+    
+    // Gamepad API
+    addRow(t, 'Gamepad API', typeof navigator.getGamepads !== 'undefined' ? 'Available' : 'Not Available', typeof navigator.getGamepads !== 'undefined' ? 'yes' : 'no');
+    
+    // Vibration
+    addRow(t, 'Vibration API', typeof navigator.vibrate !== 'undefined' ? 'Available' : 'Not Available', typeof navigator.vibrate !== 'undefined' ? 'yes' : 'no');
+    
+    // Battery
+    addRow(t, 'Battery API', typeof navigator.getBattery !== 'undefined' ? 'Available' : 'Not Available', typeof navigator.getBattery !== 'undefined' ? 'yes' : 'no');
+    
+    // Geolocation
+    addRow(t, 'Geolocation', typeof navigator.geolocation !== 'undefined' ? 'Available' : 'Not Available', typeof navigator.geolocation !== 'undefined' ? 'yes' : 'no');
+    
+    // Notification
+    addRow(t, 'Notifications', typeof Notification !== 'undefined' ? 'Available' : 'Not Available', typeof Notification !== 'undefined' ? 'yes' : 'no');
+    
+    // Clipboard
+    addRow(t, 'Clipboard API', typeof navigator.clipboard !== 'undefined' ? 'Available' : 'Not Available', typeof navigator.clipboard !== 'undefined' ? 'yes' : 'no');
+    
+    // Pointer Lock
+    addRow(t, 'Pointer Lock', typeof document.body.requestPointerLock !== 'undefined' ? 'Available' : 'Not Available', typeof document.body.requestPointerLock !== 'undefined' ? 'yes' : 'no');
+    
+    // Fullscreen
+    addRow(t, 'Fullscreen API', typeof document.documentElement.requestFullscreen !== 'undefined' ? 'Available' : 'Not Available', typeof document.documentElement.requestFullscreen !== 'undefined' ? 'yes' : 'no');
+    
+    // Screen Orientation
+    addRow(t, 'Screen Orientation', typeof screen.orientation !== 'undefined' ? 'Available' : 'Not Available', typeof screen.orientation !== 'undefined' ? 'yes' : 'no');
+    
+    // Wake Lock
+    addRow(t, 'Wake Lock', typeof navigator.wakeLock !== 'undefined' ? 'Available' : 'Not Available', typeof navigator.wakeLock !== 'undefined' ? 'yes' : 'no');
+}
+
+// ============================================
+// RUN ALL TESTS
+// ============================================
+
+function runAllTests() {
+    log('Starting complete fingerprint...');
+    document.getElementById('results').innerHTML = '';
+    results = {};
+    
+    test01_BasicInfo();
+    test02_JavaScriptCore();
+    test03_TypedArrays();
+    test04_WebAPIs();
+    test05_Storage();
+    test06_DOM();
+    test07_Graphics();
+    test08_Crypto();
+    test09_JIT();
+    test10_WebAssembly();
+    test11_Fonts();
+    test12_Performance();
+    test13_Media();
+    test14_Misc();
+    
+    generateTextReport();
+    
+    log('✓ COMPLETE! Scroll down to copy the full report.');
+}
+
+function generateTextReport() {
+    var text = '';
+    text += '========================================\n';
+    text += 'PS4 BROWSER COMPLETE FINGERPRINT\n';
+    text += '========================================\n';
+    text += 'Generated: ' + new Date().toISOString() + '\n';
+    text += 'User Agent: ' + navigator.userAgent + '\n';
+    text += 'Platform: ' + navigator.platform + '\n\n';
+    
+    // Get all sections in order
+    var sections = document.querySelectorAll('.section');
+    for (var i = 0; i < sections.length; i++) {
+        var section = sections[i];
+        var title = section.querySelector('.section-title');
+        if (!title) continue;
+        
+        text += '----------------------------------------\n';
+        text += title.textContent + '\n';
+        text += '----------------------------------------\n';
+        
+        var table = section.querySelector('table');
+        if (table) {
+            var rows = table.querySelectorAll('tr');
+            for (var j = 0; j < rows.length; j++) {
+                var cells = rows[j].querySelectorAll('td');
+                if (cells.length >= 3) {
+                    var name = cells[0].textContent;
+                    var value = cells[1].textContent;
+                    var status = cells[2].textContent;
+                    
+                    text += name + ': ' + value + ' ' + status + '\n';
+                }
+            }
+        }
+        
+        text += '\n';
+    }
+    
+    text += '========================================\n';
+    text += 'END OF REPORT\n';
+    text += '========================================\n';
+    
+    textReport = text;
+    document.getElementById('textReport').value = text;
+}
+
+function copyToClipboard() {
+    var textarea = document.getElementById('textReport');
+    textarea.select();
+    textarea.setSelectionRange(0, 99999);
+    
+    try {
+        document.execCommand('copy');
+        log('✓ Report copied to clipboard!');
+    } catch(err) {
+        log('⚠ Could not copy. Please select all text and copy manually.');
+    }
+}
+
+function downloadReport() {
+    var blob = new Blob([textReport], { type: 'text/plain' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'ps4_fingerprint_' + Date.now() + '.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    log('✓ Report downloaded!');
+}
+
+window.onerror = function(msg, url, line) {
+    log('ERROR: ' + msg + ' (line ' + line + ')');
+    return true;
 };
 </script>
 </body>
