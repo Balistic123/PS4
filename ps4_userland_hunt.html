@@ -2,494 +2,279 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>FontFaceSet Advanced Tests</title>
+    <title>FontFaceSet Raw Data Test</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: monospace; background: #000; color: #0f0; padding: 15px; font-size: 13px; }
-        h1 { color: #f00; font-size: 22px; margin-bottom: 15px; text-align: center; border-bottom: 3px solid #f00; padding-bottom: 10px; }
-        .btn { padding: 12px 25px; background: #f00; border: none; color: #fff; margin: 5px; cursor: pointer; font-size: 14px; font-weight: bold; width: 100%; max-width: 350px; }
-        .btn-container { text-align: center; margin-bottom: 15px; }
-        .section { background: #1a0000; border: 2px solid #f00; margin: 12px 0; padding: 15px; }
-        .title { color: #ff0; font-size: 16px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #ff0; padding-bottom: 5px; }
-        .log { padding: 4px 0; font-size: 12px; }
-        .success { color: #0f0; font-weight: bold; }
-        .fail { color: #f00; font-weight: bold; }
-        .warn { color: #ff0; font-weight: bold; }
-        .info { color: #0ff; }
-        .critical { color: #f0f; font-weight: bold; background: rgba(255,0,255,0.1); padding: 5px; }
+        body { font-family: monospace; background: #000; color: #0f0; padding: 20px; font-size: 14px; line-height: 1.6; }
+        h1 { color: #0ff; font-size: 24px; margin-bottom: 20px; text-align: center; }
+        .btn { padding: 15px 30px; background: #0ff; border: none; color: #000; margin: 10px auto; cursor: pointer; font-size: 16px; font-weight: bold; display: block; width: 300px; }
+        .output { background: #111; border: 2px solid #0ff; padding: 20px; margin: 20px 0; }
+        .test { margin: 20px 0; padding: 15px; background: #0a0a0a; border-left: 4px solid #0ff; }
+        .test-title { color: #ff0; font-size: 18px; font-weight: bold; margin-bottom: 10px; }
+        .data { color: #0f0; padding: 5px 0; }
+        .label { color: #888; display: inline-block; width: 250px; }
+        .value { color: #fff; font-weight: bold; }
+        pre { background: #000; color: #0f0; padding: 10px; margin: 10px 0; overflow-x: auto; border: 1px solid #333; }
     </style>
 </head>
 <body>
-    <h1>🔥 FontFaceSet Advanced Exploitation Tests 🔥</h1>
-    
-    <div class="btn-container">
-        <button class="btn" onclick="test1()">Test 1: Prototype Confusion</button>
-        <button class="btn" onclick="test2()">Test 2: Property Manipulation</button>
-        <button class="btn" onclick="test3()">Test 3: Iterator Corruption</button>
-        <button class="btn" onclick="test4()">Test 4: defineProperty Attack</button>
-        <button class="btn" onclick="test5()">Test 5: Recursive Operations</button>
-        <button class="btn" onclick="runAll()">▶ RUN ALL TESTS</button>
-    </div>
-    
-    <div class="section">
-        <div class="title">📋 Test Results</div>
-        <div id="log"></div>
-    </div>
+    <h1>FontFaceSet Raw Data Test - No Interpretation</h1>
+    <button class="btn" onclick="runTests()">RUN RAW DATA TESTS</button>
+    <div class="output" id="output"></div>
 
 <script>
-var testResults = [];
-
-function log(msg, type) {
-    var div = document.createElement('div');
-    div.className = 'log ' + (type || '');
-    div.textContent = msg;
-    document.getElementById('log').appendChild(div);
+function out(html) {
+    document.getElementById('output').innerHTML += html;
 }
 
-function separator() {
-    log('═'.repeat(70), 'info');
-}
-
-function clearLog() {
-    document.getElementById('log').innerHTML = '';
-    testResults = [];
-}
-
-// ============================================
-// TEST 1: PROTOTYPE CONFUSION (June 2024 Bug)
-// ============================================
-function test1() {
-    clearLog();
-    separator();
-    log('TEST 1: FontFaceSet Prototype Confusion', 'warn');
-    log('Based on June 2024 vulnerability (makes unconfigurable properties configurable)', 'info');
-    separator();
-    log('', '');
+function runTests() {
+    document.getElementById('output').innerHTML = '';
+    
+    out('<div class="test-title">RAW DATA OUTPUT - NO INTERPRETATION</div>');
+    out('<div style="color: #888; margin-bottom: 20px;">PS4 Firmware 13.04 | WebKit 605.1.15</div>');
+    
+    // ============================================
+    // TEST 1: Prototype Confusion
+    // ============================================
+    out('<div class="test">');
+    out('<div class="test-title">TEST 1: PROTOTYPE CONFUSION (Raw Data)</div>');
     
     try {
-        log('[1.1] Creating FontFace with prototype manipulation...', 'info');
+        // Create FontFace
+        var ff1 = new FontFace("test1", "");
+        out('<div class="data"><span class="label">FontFace created:</span> <span class="value">' + (ff1 ? 'true' : 'false') + '</span></div>');
         
-        // Inherit from Function to get prototype property
-        function MyFontFace() {
-            return Reflect.construct(FontFace, ["test", ""], new.target);
-        }
-        MyFontFace.prototype = Object.create(Function.prototype);
+        // Check if prototype property exists
+        out('<div class="data"><span class="label">ff1.prototype exists:</span> <span class="value">' + (ff1.prototype !== undefined) + '</span></div>');
+        out('<div class="data"><span class="label">ff1.prototype value:</span> <span class="value">' + ff1.prototype + '</span></div>');
+        out('<div class="data"><span class="label">typeof ff1.prototype:</span> <span class="value">' + typeof ff1.prototype + '</span></div>');
         
-        try {
-            var ff = new MyFontFace();
-            log('✓ Created custom FontFace', 'success');
-            
-            // Try to make prototype configurable
-            log('[1.2] Attempting to make prototype configurable...', 'info');
-            
-            try {
-                Object.defineProperty(ff, 'prototype', {
-                    configurable: true,
-                    value: {}
-                });
-                log('⚠️ CRITICAL: prototype became configurable!', 'critical');
-                testResults.push('Test 1: VULNERABLE - Prototype confusion possible');
-                
-            } catch(e) {
-                log('✗ defineProperty blocked: ' + e.message, 'fail');
-                testResults.push('Test 1: SAFE - Prototype protected');
-            }
-            
-        } catch(e) {
-            log('✗ Custom FontFace creation failed: ' + e.message, 'fail');
+        // Get property descriptor BEFORE modification
+        var desc1 = Object.getOwnPropertyDescriptor(ff1, 'prototype');
+        out('<div class="data"><span class="label">Has own property "prototype":</span> <span class="value">' + (desc1 !== undefined) + '</span></div>');
+        if (desc1) {
+            out('<div class="data"><span class="label">descriptor.configurable (before):</span> <span class="value">' + desc1.configurable + '</span></div>');
+            out('<div class="data"><span class="label">descriptor.writable (before):</span> <span class="value">' + desc1.writable + '</span></div>');
+            out('<div class="data"><span class="label">descriptor.enumerable (before):</span> <span class="value">' + desc1.enumerable + '</span></div>');
         }
         
-        // Alternative approach using __defineGetter__
-        log('', '');
-        log('[1.3] Testing __defineGetter__ on prototype...', 'info');
+        out('<div style="height: 10px;"></div>');
+        
+        // Try to use defineProperty
+        var definePropertyWorked = false;
+        var definePropertyError = null;
         
         try {
-            var ff2 = new FontFace("test2", "");
-            ff2.__defineGetter__('prototype', function() {
-                log('⚠️ CRITICAL: Getter called on prototype!', 'critical');
-                return {};
+            Object.defineProperty(ff1, 'prototype', {
+                configurable: true,
+                value: { exploited: true }
             });
-            
-            var proto = ff2.prototype;
-            log('Prototype access returned: ' + typeof proto, 'warn');
-            
-            if (typeof proto !== 'undefined') {
-                log('⚠️ WARNING: Prototype getter works!', 'warn');
-            }
-            
+            definePropertyWorked = true;
         } catch(e) {
-            log('✗ Getter blocked: ' + e.message, 'fail');
+            definePropertyError = e.message;
         }
         
-    } catch(e) {
-        log('✗ Test 1 failed: ' + e.message, 'fail');
-    }
-    
-    separator();
-}
-
-// ============================================
-// TEST 2: PROPERTY MANIPULATION
-// ============================================
-function test2() {
-    clearLog();
-    separator();
-    log('TEST 2: FontFace Property Manipulation', 'warn');
-    log('Testing type confusion via property modification', 'info');
-    separator();
-    log('', '');
-    
-    try {
-        var ff = new FontFace("exploit", "");
-        var ffs = new FontFaceSet([ff]);
-        
-        log('[2.1] Testing family property mutation...', 'info');
-        
-        // Store original family
-        var origFamily = ff.family;
-        log('Original family: ' + origFamily, 'info');
-        
-        // Try different family values
-        var testValues = [
-            { val: null, desc: 'null' },
-            { val: undefined, desc: 'undefined' },
-            { val: {}, desc: 'object' },
-            { val: [], desc: 'array' },
-            { val: function(){}, desc: 'function' },
-            { val: Symbol('test'), desc: 'symbol' }
-        ];
-        
-        for (var i = 0; i < testValues.length; i++) {
-            try {
-                ff.family = testValues[i].val;
-                log('✓ Set family to ' + testValues[i].desc + ': ' + ff.family, 'success');
-                
-                // Check if FontFaceSet is still valid
-                var size = ffs.size;
-                var has = ffs.has(ff);
-                
-                if (!has && size > 0) {
-                    log('⚠️ CRITICAL: FontFaceSet inconsistent state!', 'critical');
-                    log('Size: ' + size + ', has(ff): ' + has, 'warn');
-                    testResults.push('Test 2: VULNERABLE - Inconsistent state detected');
-                }
-                
-            } catch(e) {
-                log('✗ ' + testValues[i].desc + ' rejected: ' + e.message, 'fail');
-            }
+        out('<div class="data"><span class="label">defineProperty executed:</span> <span class="value">' + definePropertyWorked + '</span></div>');
+        if (definePropertyError) {
+            out('<div class="data"><span class="label">defineProperty error:</span> <span class="value">' + definePropertyError + '</span></div>');
         }
         
-        log('', '');
-        log('[2.2] Testing descriptor property mutation...', 'info');
+        // Get property descriptor AFTER modification
+        var desc2 = Object.getOwnPropertyDescriptor(ff1, 'prototype');
+        if (desc2) {
+            out('<div class="data"><span class="label">descriptor.configurable (after):</span> <span class="value">' + desc2.configurable + '</span></div>');
+            out('<div class="data"><span class="label">descriptor.value (after):</span> <span class="value">' + JSON.stringify(desc2.value) + '</span></div>');
+        }
+        
+        out('<div style="height: 10px;"></div>');
+        
+        // Try __defineGetter__
+        var getterCalled = false;
+        var getterError = null;
         
         try {
-            // Try to corrupt descriptor
-            ff.descriptor = "corrupted";
-            log('Set descriptor to: ' + ff.descriptor, 'warn');
-        } catch(e) {
-            log('✗ Descriptor mutation blocked: ' + e.message, 'fail');
-        }
-        
-    } catch(e) {
-        log('✗ Test 2 failed: ' + e.message, 'fail');
-    }
-    
-    separator();
-}
-
-// ============================================
-// TEST 3: ITERATOR CORRUPTION
-// ============================================
-function test3() {
-    clearLog();
-    separator();
-    log('TEST 3: FontFaceSet Iterator Corruption', 'warn');
-    log('Testing iterator manipulation during iteration', 'info');
-    separator();
-    log('', '');
-    
-    try {
-        var fonts = [];
-        for (var i = 0; i < 10; i++) {
-            fonts.push(new FontFace("font" + i, ""));
-        }
-        
-        var ffs = new FontFaceSet(fonts);
-        log('Created FontFaceSet with ' + ffs.size + ' fonts', 'info');
-        log('', '');
-        
-        log('[3.1] Modifying set during iteration...', 'info');
-        
-        var iterCount = 0;
-        var deleted = false;
-        
-        try {
-            ffs.forEach(function(font, key, set) {
-                iterCount++;
-                log('Iteration ' + iterCount + ': ' + font.family, 'info');
-                
-                // Try to delete during iteration
-                if (iterCount === 5 && !deleted) {
-                    log('Deleting fonts during iteration...', 'warn');
-                    
-                    // Delete current font
-                    var delResult = set.delete(font);
-                    log('delete(current) returned: ' + delResult, delResult ? 'warn' : 'info');
-                    
-                    // Try to delete another font
-                    if (fonts[7]) {
-                        var delResult2 = set.delete(fonts[7]);
-                        log('delete(fonts[7]) returned: ' + delResult2, delResult2 ? 'warn' : 'info');
-                    }
-                    
-                    // Try to add new font
-                    var newFont = new FontFace("injected", "");
-                    set.add(newFont);
-                    log('Added new font during iteration', 'warn');
-                    
-                    deleted = true;
-                }
+            ff1.__defineGetter__('prototype', function() {
+                getterCalled = true;
+                return { fromGetter: true };
             });
-            
-            log('', '');
-            log('Total iterations: ' + iterCount, 'info');
-            log('Final set size: ' + ffs.size, 'info');
-            
-            if (iterCount !== ffs.size && iterCount !== fonts.length) {
-                log('⚠️ WARNING: Iteration count mismatch!', 'warn');
-                testResults.push('Test 3: INTERESTING - Iterator behavior anomaly');
-            }
-            
         } catch(e) {
-            log('✗ Iterator error: ' + e.message, 'fail');
-            log('This might indicate corruption!', 'warn');
-            testResults.push('Test 3: VULNERABLE - Iterator crashed');
+            getterError = e.message;
         }
+        
+        out('<div class="data"><span class="label">__defineGetter__ executed:</span> <span class="value">' + (getterError === null) + '</span></div>');
+        if (getterError) {
+            out('<div class="data"><span class="label">__defineGetter__ error:</span> <span class="value">' + getterError + '</span></div>');
+        }
+        
+        // Try to access prototype to trigger getter
+        var protoAfterGetter = ff1.prototype;
+        out('<div class="data"><span class="label">Getter was called:</span> <span class="value">' + getterCalled + '</span></div>');
+        out('<div class="data"><span class="label">prototype after getter:</span> <span class="value">' + JSON.stringify(protoAfterGetter) + '</span></div>');
         
     } catch(e) {
-        log('✗ Test 3 failed: ' + e.message, 'fail');
+        out('<div class="data" style="color: #f00;">TEST 1 ERROR: ' + e.message + '</div>');
     }
     
-    separator();
-}
-
-// ============================================
-// TEST 4: defineProperty ATTACK
-// ============================================
-function test4() {
-    clearLog();
-    separator();
-    log('TEST 4: Object.defineProperty on FontFace', 'warn');
-    log('Testing property descriptor manipulation', 'info');
-    separator();
-    log('', '');
+    out('</div>');
+    
+    // ============================================
+    // TEST 2: Property Redefinition with Getter
+    // ============================================
+    out('<div class="test">');
+    out('<div class="test-title">TEST 2: PROPERTY REDEFINITION (Raw Data)</div>');
     
     try {
-        var ff = new FontFace("test", "");
-        var ffs = new FontFaceSet([ff]);
+        var ff2 = new FontFace("test2", "");
         
-        log('[4.1] Getting property descriptors...', 'info');
+        // Original family value
+        out('<div class="data"><span class="label">Original family:</span> <span class="value">' + ff2.family + '</span></div>');
         
-        var props = ['family', 'style', 'weight', 'stretch', 'unicodeRange', 'variant', 'featureSettings'];
-        
-        for (var i = 0; i < props.length; i++) {
-            var desc = Object.getOwnPropertyDescriptor(ff, props[i]);
-            if (desc) {
-                log(props[i] + ': configurable=' + desc.configurable + ', writable=' + desc.writable, 'info');
-            }
+        // Get original descriptor
+        var origDesc = Object.getOwnPropertyDescriptor(ff2, 'family');
+        out('<div class="data"><span class="label">Original descriptor exists:</span> <span class="value">' + (origDesc !== undefined) + '</span></div>');
+        if (origDesc) {
+            out('<div class="data"><span class="label">Original configurable:</span> <span class="value">' + origDesc.configurable + '</span></div>');
+            out('<div class="data"><span class="label">Original writable:</span> <span class="value">' + origDesc.writable + '</span></div>');
+            out('<div class="data"><span class="label">Original has getter:</span> <span class="value">' + (origDesc.get !== undefined) + '</span></div>');
         }
         
-        log('', '');
-        log('[4.2] Attempting to redefine properties...', 'info');
+        out('<div style="height: 10px;"></div>');
+        
+        // Try to redefine with custom getter
+        var customGetterCalled = false;
+        var redefineError = null;
         
         try {
-            Object.defineProperty(ff, 'family', {
+            Object.defineProperty(ff2, 'family', {
                 get: function() {
-                    log('⚠️ CRITICAL: Custom getter called!', 'critical');
-                    return 'hacked';
+                    customGetterCalled = true;
+                    return 'CUSTOM_GETTER_VALUE';
                 },
                 configurable: true
             });
-            
-            var fam = ff.family;
-            log('Family after redefine: ' + fam, fam === 'hacked' ? 'critical' : 'info');
-            
-            if (fam === 'hacked') {
-                testResults.push('Test 4: VULNERABLE - Property redefinition works');
-            }
-            
         } catch(e) {
-            log('✗ Redefine blocked: ' + e.message, 'fail');
+            redefineError = e.message;
         }
         
-        log('', '');
-        log('[4.3] Testing length property on FontFaceSet...', 'info');
+        out('<div class="data"><span class="label">Redefine executed:</span> <span class="value">' + (redefineError === null) + '</span></div>');
+        if (redefineError) {
+            out('<div class="data"><span class="label">Redefine error:</span> <span class="value">' + redefineError + '</span></div>');
+        }
+        
+        // Access family to trigger custom getter
+        var familyValue = ff2.family;
+        
+        out('<div class="data"><span class="label">Custom getter called:</span> <span class="value">' + customGetterCalled + '</span></div>');
+        out('<div class="data"><span class="label">family value after redefine:</span> <span class="value">' + familyValue + '</span></div>');
+        out('<div class="data"><span class="label">Value equals "CUSTOM_GETTER_VALUE":</span> <span class="value">' + (familyValue === 'CUSTOM_GETTER_VALUE') + '</span></div>');
+        
+        // Get descriptor after modification
+        var newDesc = Object.getOwnPropertyDescriptor(ff2, 'family');
+        if (newDesc) {
+            out('<div class="data"><span class="label">New descriptor.configurable:</span> <span class="value">' + newDesc.configurable + '</span></div>');
+            out('<div class="data"><span class="label">New descriptor has getter:</span> <span class="value">' + (newDesc.get !== undefined) + '</span></div>');
+        }
+        
+    } catch(e) {
+        out('<div class="data" style="color: #f00;">TEST 2 ERROR: ' + e.message + '</div>');
+    }
+    
+    out('</div>');
+    
+    // ============================================
+    // TEST 3: FontFaceSet.size Corruption
+    // ============================================
+    out('<div class="test">');
+    out('<div class="test-title">TEST 3: FONTFACESET SIZE CORRUPTION (Raw Data)</div>');
+    
+    try {
+        var ff3 = new FontFace("test3", "");
+        var ffs = new FontFaceSet([ff3]);
+        
+        out('<div class="data"><span class="label">Original FontFaceSet.size:</span> <span class="value">' + ffs.size + '</span></div>');
+        out('<div class="data"><span class="label">typeof size:</span> <span class="value">' + typeof ffs.size + '</span></div>');
+        
+        // Get original descriptor
+        var sizeDesc1 = Object.getOwnPropertyDescriptor(ffs, 'size');
+        out('<div class="data"><span class="label">size is own property:</span> <span class="value">' + (sizeDesc1 !== undefined) + '</span></div>');
+        if (sizeDesc1) {
+            out('<div class="data"><span class="label">size.configurable:</span> <span class="value">' + sizeDesc1.configurable + '</span></div>');
+            out('<div class="data"><span class="label">size.writable:</span> <span class="value">' + sizeDesc1.writable + '</span></div>');
+        }
+        
+        out('<div style="height: 10px;"></div>');
+        
+        // Try to corrupt size
+        var sizeCorruptError = null;
         
         try {
             Object.defineProperty(ffs, 'size', {
                 value: 999999,
-                writable: true
+                writable: true,
+                configurable: true
             });
-            
-            log('FontFaceSet.size after redefine: ' + ffs.size, ffs.size === 999999 ? 'critical' : 'info');
-            
-            if (ffs.size === 999999) {
-                log('⚠️ CRITICAL: Size corrupted!', 'critical');
-                testResults.push('Test 4: VULNERABLE - Size property corruption');
-            }
-            
         } catch(e) {
-            log('✗ Size redefine blocked: ' + e.message, 'fail');
+            sizeCorruptError = e.message;
         }
+        
+        out('<div class="data"><span class="label">Size corruption executed:</span> <span class="value">' + (sizeCorruptError === null) + '</span></div>');
+        if (sizeCorruptError) {
+            out('<div class="data"><span class="label">Size corruption error:</span> <span class="value">' + sizeCorruptError + '</span></div>');
+        }
+        
+        // Read size after corruption attempt
+        var newSize = ffs.size;
+        out('<div class="data"><span class="label">Size after corruption:</span> <span class="value">' + newSize + '</span></div>');
+        out('<div class="data"><span class="label">Size equals 999999:</span> <span class="value">' + (newSize === 999999) + '</span></div>');
+        
+        // Get descriptor after
+        var sizeDesc2 = Object.getOwnPropertyDescriptor(ffs, 'size');
+        if (sizeDesc2) {
+            out('<div class="data"><span class="label">New size.configurable:</span> <span class="value">' + sizeDesc2.configurable + '</span></div>');
+            out('<div class="data"><span class="label">New size.value:</span> <span class="value">' + sizeDesc2.value + '</span></div>');
+        }
+        
+        // Check if forEach still works correctly
+        var forEachCount = 0;
+        try {
+            ffs.forEach(function() {
+                forEachCount++;
+            });
+        } catch(e) {
+            out('<div class="data"><span class="label">forEach error:</span> <span class="value">' + e.message + '</span></div>');
+        }
+        
+        out('<div class="data"><span class="label">forEach count:</span> <span class="value">' + forEachCount + '</span></div>');
+        out('<div class="data"><span class="label">size != forEach count:</span> <span class="value">' + (ffs.size !== forEachCount) + '</span></div>');
         
     } catch(e) {
-        log('✗ Test 4 failed: ' + e.message, 'fail');
+        out('<div class="data" style="color: #f00;">TEST 3 ERROR: ' + e.message + '</div>');
     }
     
-    separator();
+    out('</div>');
+    
+    // ============================================
+    // SUMMARY
+    // ============================================
+    out('<div class="test">');
+    out('<div class="test-title">SUMMARY - BOOLEAN CHECKS</div>');
+    out('<div class="data">These values should all be TRUE for exploitability:</div>');
+    out('<div style="height: 10px;"></div>');
+    
+    // We'll set these based on the tests above
+    out('<div class="data"><span class="label">1. Prototype became configurable:</span> <span class="value" id="check1">See Test 1</span></div>');
+    out('<div class="data"><span class="label">2. Custom getter was called:</span> <span class="value" id="check2">See Test 2</span></div>');
+    out('<div class="data"><span class="label">3. Size corrupted to 999999:</span> <span class="value" id="check3">See Test 3</span></div>');
+    
+    out('</div>');
 }
 
-// ============================================
-// TEST 5: RECURSIVE OPERATIONS
-// ============================================
-function test5() {
-    clearLog();
-    separator();
-    log('TEST 5: Recursive FontFaceSet Operations', 'warn');
-    log('Testing deep recursion and re-entrancy', 'info');
-    separator();
-    log('', '');
-    
-    try {
-        log('[5.1] Creating recursive getter...', 'info');
-        
-        var callCount = 0;
-        var ff = new FontFace("test", "");
-        
-        try {
-            ff.__defineGetter__('family', function() {
-                callCount++;
-                if (callCount > 100) {
-                    log('Recursion stopped at ' + callCount, 'warn');
-                    return 'stopped';
-                }
-                
-                // Recursive call
-                return this.family;
-            });
-            
-            var fam = ff.family;
-            log('Recursive getter result: ' + fam, 'info');
-            log('Call count: ' + callCount, callCount > 50 ? 'warn' : 'info');
-            
-        } catch(e) {
-            log('✗ Recursive getter error: ' + e.message, 'fail');
-            if (e.message.includes('stack') || e.message.includes('recursion')) {
-                log('Stack overflow detected at call ' + callCount, 'warn');
-            }
-        }
-        
-        log('', '');
-        log('[5.2] Re-entrant operations...', 'info');
-        
-        var reentryCount = 0;
-        var ffs = new FontFaceSet([]);
-        
-        var reentrantFont = new FontFace("reentrant", "");
-        
-        try {
-            reentrantFont.__defineGetter__('family', function() {
-                reentryCount++;
-                
-                if (reentryCount === 1) {
-                    log('Re-entering: Adding to set during property access...', 'warn');
-                    
-                    // Try to modify the set while accessing font property
-                    ffs.add(new FontFace("injected", ""));
-                    log('Set size during re-entry: ' + ffs.size, 'warn');
-                }
-                
-                return "reentrant" + reentryCount;
-            });
-            
-            ffs.add(reentrantFont);
-            
-            // Trigger the getter
-            ffs.forEach(function(f) {
-                log('Font: ' + f.family, 'info');
-            });
-            
-            log('Re-entry count: ' + reentryCount, reentryCount > 1 ? 'warn' : 'info');
-            
-        } catch(e) {
-            log('✗ Re-entrant operation error: ' + e.message, 'fail');
-        }
-        
-    } catch(e) {
-        log('✗ Test 5 failed: ' + e.message, 'fail');
-    }
-    
-    separator();
-}
-
-// ============================================
-// RUN ALL TESTS
-// ============================================
-function runAll() {
-    clearLog();
-    separator();
-    log('RUNNING ALL FONTFACESET ADVANCED TESTS', 'warn');
-    log('PS4 Firmware 13.04 | WebKit 605.1.15', 'info');
-    separator();
-    log('', '');
-    
-    setTimeout(function() { test1(); }, 100);
-    setTimeout(function() { 
-        log('', '');
-        test2(); 
-    }, 500);
-    setTimeout(function() { 
-        log('', '');
-        test3(); 
-    }, 900);
-    setTimeout(function() { 
-        log('', '');
-        test4(); 
-    }, 1300);
-    setTimeout(function() { 
-        log('', '');
-        test5(); 
-        
-        // Summary
-        setTimeout(function() {
-            log('', '');
-            separator();
-            log('TEST SUMMARY', 'warn');
-            separator();
-            
-            if (testResults.length === 0) {
-                log('All tests passed - No vulnerabilities found', 'success');
-            } else {
-                for (var i = 0; i < testResults.length; i++) {
-                    log(testResults[i], 'warn');
-                }
-            }
-            
-            separator();
-        }, 100);
-        
-    }, 1700);
-}
-
-window.onerror = function(msg, url, line, col, error) {
-    log('', '');
-    log('💥 CRASH DETECTED!', 'critical');
-    log('Message: ' + msg, 'critical');
-    log('Line: ' + line, 'critical');
-    if (error && error.stack) {
-        log('Stack: ' + error.stack.substring(0, 200), 'critical');
-    }
-    testResults.push('CRASH: ' + msg);
+window.onerror = function(msg, url, line) {
+    out('<div style="color: #f00; padding: 20px; margin: 20px 0; border: 2px solid #f00;">');
+    out('<div style="font-size: 18px; font-weight: bold;">JAVASCRIPT ERROR</div>');
+    out('<div>Message: ' + msg + '</div>');
+    out('<div>Line: ' + line + '</div>');
+    out('</div>');
     return true;
 };
 </script>
