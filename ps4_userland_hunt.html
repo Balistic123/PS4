@@ -1,216 +1,108 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <title>USB Access Test</title>
+    <title>PS4 WebKit Version Detector</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: monospace; background: #000; color: #0f0; padding: 10px; font-size: 11px; line-height: 1.3; }
-        h1 { color: #f00; font-size: 18px; margin-bottom: 10px; text-align: center; border-bottom: 2px solid #f00; padding-bottom: 5px; }
-        .section { background: #1a0000; border: 2px solid #f00; margin: 8px 0; padding: 10px; height: calc(100vh - 100px); overflow-y: auto; }
-        .btn { padding: 10px 20px; background: #f00; border: none; color: #fff; margin: 5px; cursor: pointer; font-size: 12px; font-weight: bold; }
-        .log { padding: 2px 0; font-size: 11px; }
-        .success { color: #0f0; font-weight: bold; }
-        .fail { color: #f00; font-weight: bold; }
-        .warn { color: #ff0; font-weight: bold; }
-        .info { color: #0ff; }
-        .critical { color: #f0f; font-weight: bold; }
+        body {
+            font-family: monospace;
+            background: #000;
+            color: #0f0;
+            padding: 20px;
+            font-size: 16px;
+        }
+        .info {
+            border: 2px solid #0f0;
+            padding: 15px;
+            margin: 10px 0;
+            background: #001100;
+        }
+        h1 {
+            color: #0f0;
+            text-align: center;
+        }
+        .label {
+            color: #0ff;
+            font-weight: bold;
+        }
+        .value {
+            color: #ff0;
+        }
     </style>
 </head>
 <body>
-    <h1>🔌 USB ACCESS TEST 🔌</h1>
-    <div style="text-align: center; margin-bottom: 8px;">
-        <button class="btn" onclick="testAll()">RUN ALL TESTS</button>
+    <h1>PS4 WebKit Version Detector</h1>
+    
+    <div class="info">
+        <div class="label">User Agent:</div>
+        <div class="value" id="ua"></div>
     </div>
-    <div class="section"><div id="log"></div></div>
-
-<script>
-function log(msg, type) {
-    var div = document.createElement('div');
-    div.className = 'log ' + (type || '');
-    div.textContent = msg;
-    document.getElementById('log').appendChild(div);
-}
-
-function testAll() {
-    document.getElementById('log').innerHTML = '';
-    log('═══════════════════════════════════════', 'critical');
-    log('       USB/FILE SYSTEM ACCESS TEST       ', 'critical');
-    log('═══════════════════════════════════════', 'critical');
-    log('', '');
     
-    // Test 1: File API
-    log('[TEST 1] File API', 'info');
-    if (typeof File !== 'undefined') {
-        log('  ✓ File API available', 'success');
-    } else {
-        log('  ✗ File API NOT available', 'fail');
-    }
+    <div class="info">
+        <div class="label">WebKit Version:</div>
+        <div class="value" id="webkit"></div>
+    </div>
     
-    if (typeof FileReader !== 'undefined') {
-        log('  ✓ FileReader available', 'success');
-    } else {
-        log('  ✗ FileReader NOT available', 'fail');
-    }
+    <div class="info">
+        <div class="label">Platform:</div>
+        <div class="value" id="platform"></div>
+    </div>
     
-    if (typeof Blob !== 'undefined') {
-        log('  ✓ Blob API available', 'success');
-    } else {
-        log('  ✗ Blob API NOT available', 'fail');
-    }
-    log('', '');
+    <div class="info">
+        <div class="label">JavaScript Engine Features:</div>
+        <div class="value" id="features"></div>
+    </div>
     
-    // Test 2: File Input
-    log('[TEST 2] File Input Element', 'info');
-    try {
-        var input = document.createElement('input');
-        input.type = 'file';
-        log('  ✓ <input type="file"> created', 'success');
-        log('  ✓ Can trigger: input.click()', 'success');
-    } catch(e) {
-        log('  ✗ Error: ' + e.message, 'fail');
-    }
-    log('', '');
+    <div class="info">
+        <div class="label">Detected Firmware:</div>
+        <div class="value" id="firmware"></div>
+    </div>
     
-    // Test 3: FileSystem API
-    log('[TEST 3] FileSystem API', 'info');
-    if (typeof requestFileSystem !== 'undefined') {
-        log('  ✓ requestFileSystem available', 'critical');
-    } else {
-        log('  ✗ requestFileSystem NOT available', 'fail');
-    }
-    
-    if (typeof webkitRequestFileSystem !== 'undefined') {
-        log('  ✓ webkitRequestFileSystem available', 'critical');
-    } else {
-        log('  ✗ webkitRequestFileSystem NOT available', 'fail');
-    }
-    log('', '');
-    
-    // Test 4: Direct path access attempts
-    log('[TEST 4] Direct Path Access Attempts', 'info');
-    var paths = [
-        '/mnt/usb0/',
-        '/mnt/usb1/',
-        '/usb0/',
-        '/usb1/',
-        '/dev/usb/',
-        'file:///mnt/usb0/',
-        '/hostapp/',
-        '/system/',
-        '/data/',
-        '/user/'
-    ];
-    
-    for (var i = 0; i < paths.length; i++) {
-        try {
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', paths[i], false);
-            xhr.send();
-            log('  [!] ' + paths[i] + ' → status: ' + xhr.status, 'critical');
-        } catch(e) {
-            log('  ✗ ' + paths[i] + ' → ' + e.message, 'warn');
-        }
-    }
-    log('', '');
-    
-    // Test 5: WebUSB API
-    log('[TEST 5] WebUSB API', 'info');
-    if (typeof navigator.usb !== 'undefined') {
-        log('  ✓ navigator.usb available', 'critical');
-        try {
-            navigator.usb.getDevices().then(function(devices) {
-                log('  ✓ USB devices: ' + devices.length, 'critical');
-            }).catch(function(e) {
-                log('  ✗ getDevices error: ' + e.message, 'fail');
-            });
-        } catch(e) {
-            log('  ✗ Error: ' + e.message, 'fail');
-        }
-    } else {
-        log('  ✗ navigator.usb NOT available', 'fail');
-    }
-    log('', '');
-    
-    // Test 6: Storage APIs
-    log('[TEST 6] Storage APIs', 'info');
-    if (typeof navigator.storage !== 'undefined') {
-        log('  ✓ navigator.storage available', 'success');
-    } else {
-        log('  ✗ navigator.storage NOT available', 'fail');
-    }
-    
-    if (typeof navigator.getStorageUpdates !== 'undefined') {
-        log('  ✓ navigator.getStorageUpdates available', 'critical');
-    } else {
-        log('  ✗ navigator.getStorageUpdates NOT available', 'fail');
-    }
-    log('', '');
-    
-    // Test 7: Create download link (file:// protocol)
-    log('[TEST 7] File Download/Save', 'info');
-    try {
-        var blob = new Blob(['TEST DATA'], {type: 'text/plain'});
-        var url = URL.createObjectURL(blob);
-        log('  ✓ Blob URL created: ' + url.substring(0, 50) + '...', 'success');
+    <script>
+        // User Agent
+        document.getElementById('ua').textContent = navigator.userAgent;
         
-        var a = document.createElement('a');
-        a.href = url;
-        a.download = 'test.txt';
-        log('  ✓ Download link created', 'success');
-    } catch(e) {
-        log('  ✗ Error: ' + e.message, 'fail');
-    }
-    log('', '');
-    
-    // Test 8: XMLHttpRequest to file paths
-    log('[TEST 8] XHR File Protocol Test', 'info');
-    var filePaths = [
-        'file:///mnt/usb0/test.txt',
-        'file:///usb0/test.txt',
-        'file:///data/test.txt'
-    ];
-    
-    for (var i = 0; i < filePaths.length; i++) {
-        try {
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', filePaths[i], false);
-            xhr.send();
-            log('  [!] ' + filePaths[i] + ' → ' + xhr.status, 'critical');
-        } catch(e) {
-            log('  ✗ ' + filePaths[i] + ' → ' + e.message, 'warn');
-        }
-    }
-    log('', '');
-    
-    // Test 9: Fetch API
-    log('[TEST 9] Fetch API File Access', 'info');
-    if (typeof fetch !== 'undefined') {
-        log('  ✓ fetch() available', 'success');
+        // Extract WebKit version
+        let ua = navigator.userAgent;
+        let webkitMatch = ua.match(/AppleWebKit\/([\d.]+)/);
+        let webkitVersion = webkitMatch ? webkitMatch[1] : 'Unknown';
+        document.getElementById('webkit').textContent = webkitVersion;
         
-        fetch('file:///mnt/usb0/test.txt').then(function(r) {
-            log('  [!] Fetch succeeded! Status: ' + r.status, 'critical');
-        }).catch(function(e) {
-            log('  ✗ Fetch failed: ' + e.message, 'warn');
-        });
-    } else {
-        log('  ✗ fetch() NOT available', 'fail');
-    }
-    log('', '');
-    
-    // Test 10: IndexedDB
-    log('[TEST 10] IndexedDB', 'info');
-    if (typeof indexedDB !== 'undefined') {
-        log('  ✓ IndexedDB available', 'success');
-    } else {
-        log('  ✗ IndexedDB NOT available', 'fail');
-    }
-    log('', '');
-    
-    log('═══════════════════════════════════════', 'critical');
-    log('              TEST COMPLETE              ', 'critical');
-    log('═══════════════════════════════════════', 'critical');
-}
-</script>
+        // Platform
+        document.getElementById('platform').textContent = navigator.platform;
+        
+        // Try to extract firmware from UA
+        let fwMatch = ua.match(/PlayStation 4\/([\d.]+)/);
+        let firmware = fwMatch ? fwMatch[1] : 'Unknown';
+        document.getElementById('firmware').textContent = firmware;
+        
+        // Test JS features to narrow down version
+        let features = [];
+        
+        // ES6 features
+        try { eval('let x = 1'); features.push('let/const'); } catch(e) {}
+        try { eval('const f = () => 1'); features.push('arrow-functions'); } catch(e) {}
+        try { eval('class C {}'); features.push('classes'); } catch(e) {}
+        try { eval('async function f() {}'); features.push('async/await'); } catch(e) {}
+        try { eval('for (let x of [1,2,3]) {}'); features.push('for-of'); } catch(e) {}
+        
+        // Check SharedArrayBuffer (indicates newer WebKit)
+        if (typeof SharedArrayBuffer !== 'undefined') {
+            features.push('SharedArrayBuffer');
+        }
+        
+        // Check WebAssembly
+        if (typeof WebAssembly !== 'undefined') {
+            features.push('WebAssembly');
+        }
+        
+        document.getElementById('features').textContent = features.join(', ') || 'None detected';
+        
+        // Log to console for copy-paste
+        console.log('=== PS4 WEBKIT INFO ===');
+        console.log('User Agent:', navigator.userAgent);
+        console.log('WebKit:', webkitVersion);
+        console.log('Firmware:', firmware);
+        console.log('Features:', features.join(', '));
+    </script>
 </body>
 </html>
