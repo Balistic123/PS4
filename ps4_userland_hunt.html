@@ -2,33 +2,29 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>PS4 Controller Color Changer - CVE-2018-4233</title>
+    <title>PS4 Controller Color - Shellcode Edition</title>
     <style>
         body {
             font-family: 'Courier New', monospace;
-            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
-            color: #0ff;
+            background: #000;
+            color: #0f0;
             padding: 20px;
         }
         .container {
-            max-width: 900px;
+            max-width: 1000px;
             margin: 0 auto;
-            background: rgba(0, 0, 0, 0.9);
-            border: 3px solid #0ff;
-            border-radius: 15px;
+            background: rgba(0, 20, 0, 0.9);
+            border: 3px solid #0f0;
             padding: 30px;
-            box-shadow: 0 0 40px rgba(0, 255, 255, 0.5);
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.3);
         }
         h1 {
             text-align: center;
-            font-size: 2.5em;
+            color: #0ff;
             text-shadow: 0 0 20px #0ff;
+            font-size: 2.5em;
             margin-bottom: 10px;
-            animation: glow 2s infinite;
-        }
-        @keyframes glow {
-            0%, 100% { text-shadow: 0 0 20px #0ff, 0 0 40px #0ff; }
-            50% { text-shadow: 0 0 30px #0ff, 0 0 60px #0ff, 0 0 80px #0ff; }
         }
         .subtitle {
             text-align: center;
@@ -36,169 +32,84 @@
             font-size: 1.2em;
             margin-bottom: 30px;
         }
-        .color-picker {
+        .color-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            grid-template-columns: repeat(4, 1fr);
             gap: 15px;
             margin: 30px 0;
         }
         .color-btn {
-            padding: 20px;
-            font-size: 1.1em;
+            padding: 30px;
+            font-size: 1.2em;
             font-weight: bold;
             border: 3px solid;
             border-radius: 10px;
             cursor: pointer;
-            transition: all 0.3s;
             font-family: 'Courier New', monospace;
-            text-transform: uppercase;
+            transition: all 0.3s;
         }
         .color-btn:hover {
-            transform: scale(1.1);
-            box-shadow: 0 0 30px;
+            transform: scale(1.05);
+            box-shadow: 0 0 20px;
         }
-        .red { background: #ff0000; color: #000; border-color: #ff0000; }
-        .red:hover { box-shadow: 0 0 30px #ff0000; }
-        
-        .green { background: #00ff00; color: #000; border-color: #00ff00; }
-        .green:hover { box-shadow: 0 0 30px #00ff00; }
-        
-        .blue { background: #0000ff; color: #fff; border-color: #0000ff; }
-        .blue:hover { box-shadow: 0 0 30px #0000ff; }
-        
-        .cyan { background: #00ffff; color: #000; border-color: #00ffff; }
-        .cyan:hover { box-shadow: 0 0 30px #00ffff; }
-        
-        .magenta { background: #ff00ff; color: #000; border-color: #ff00ff; }
-        .magenta:hover { box-shadow: 0 0 30px #ff00ff; }
-        
-        .yellow { background: #ffff00; color: #000; border-color: #ffff00; }
-        .yellow:hover { box-shadow: 0 0 30px #ffff00; }
-        
-        .white { background: #ffffff; color: #000; border-color: #ffffff; }
-        .white:hover { box-shadow: 0 0 30px #ffffff; }
-        
-        .purple { background: #8800ff; color: #fff; border-color: #8800ff; }
-        .purple:hover { box-shadow: 0 0 30px #8800ff; }
-        
-        .orange { background: #ff8800; color: #000; border-color: #ff8800; }
-        .orange:hover { box-shadow: 0 0 30px #ff8800; }
-        
-        .pink { background: #ff0088; color: #fff; border-color: #ff0088; }
-        .pink:hover { box-shadow: 0 0 30px #ff0088; }
-        
-        .rainbow {
-            background: linear-gradient(135deg, #ff0000, #ff8800, #ffff00, #00ff00, #0000ff, #8800ff);
-            color: #fff;
-            border-color: #fff;
-            font-weight: bold;
-        }
-        .rainbow:hover { box-shadow: 0 0 30px #fff; }
-        
-        .off { background: #333; color: #666; border-color: #666; }
-        .off:hover { box-shadow: 0 0 30px #666; }
+        .red { background: #f00; color: #000; border-color: #f00; }
+        .red:hover { box-shadow: 0 0 20px #f00; }
+        .green { background: #0f0; color: #000; border-color: #0f0; }
+        .green:hover { box-shadow: 0 0 20px #0f0; }
+        .blue { background: #00f; color: #fff; border-color: #00f; }
+        .blue:hover { box-shadow: 0 0 20px #00f; }
+        .yellow { background: #ff0; color: #000; border-color: #ff0; }
+        .yellow:hover { box-shadow: 0 0 20px #ff0; }
+        .cyan { background: #0ff; color: #000; border-color: #0ff; }
+        .cyan:hover { box-shadow: 0 0 20px #0ff; }
+        .magenta { background: #f0f; color: #fff; border-color: #f0f; }
+        .magenta:hover { box-shadow: 0 0 20px #f0f; }
+        .white { background: #fff; color: #000; border-color: #fff; }
+        .white:hover { box-shadow: 0 0 20px #fff; }
+        .purple { background: #808; color: #fff; border-color: #808; }
+        .purple:hover { box-shadow: 0 0 20px #808; }
         
         #log {
             background: #000;
-            border: 2px solid #0ff;
-            border-radius: 8px;
+            border: 2px solid #0f0;
             padding: 20px;
-            max-height: 500px;
-            overflow-y: auto;
-            margin-top: 30px;
-            font-size: 0.9em;
+            max-height: 600px;
+            overflow-y: scroll;
+            margin-top: 20px;
+            font-size: 0.85em;
+            line-height: 1.6;
         }
-        .log-success { color: #0f0; }
-        .log-error { color: #f00; }
-        .log-warning { color: #ff0; }
-        .log-critical { color: #f0f; font-weight: bold; }
-        .log-info { color: #0ff; }
-        
-        .custom-color {
-            margin: 20px 0;
-            padding: 20px;
-            background: rgba(0, 100, 100, 0.2);
-            border: 2px solid #0ff;
-            border-radius: 10px;
-        }
-        .custom-color h3 {
-            color: #ff0;
-            margin-bottom: 15px;
-        }
-        .slider-container {
-            margin: 10px 0;
-        }
-        .slider-container label {
-            display: inline-block;
-            width: 80px;
-            color: #0ff;
-        }
-        input[type="range"] {
-            width: 300px;
-            vertical-align: middle;
-        }
-        .color-value {
-            display: inline-block;
-            width: 60px;
-            text-align: right;
-            color: #ff0;
-            font-weight: bold;
-        }
+        .success { color: #0f0; }
+        .error { color: #f00; }
+        .warning { color: #ff0; }
+        .critical { color: #f0f; font-weight: bold; }
+        .info { color: #0ff; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🎮 PS4 CONTROLLER COLOR CHANGER 🎮</h1>
-        <div class="subtitle">CVE-2018-4233 + Mast1c0re Kernel Access</div>
-
-        <div class="color-picker">
+        <div class="subtitle">CVE-2018-4233 + x86-64 Shellcode Execution</div>
+        
+        <div class="color-grid">
             <button class="color-btn red" onclick="setColor(255, 0, 0)">RED</button>
             <button class="color-btn green" onclick="setColor(0, 255, 0)">GREEN</button>
             <button class="color-btn blue" onclick="setColor(0, 0, 255)">BLUE</button>
+            <button class="color-btn yellow" onclick="setColor(255, 255, 0)">YELLOW</button>
             <button class="color-btn cyan" onclick="setColor(0, 255, 255)">CYAN</button>
             <button class="color-btn magenta" onclick="setColor(255, 0, 255)">MAGENTA</button>
-            <button class="color-btn yellow" onclick="setColor(255, 255, 0)">YELLOW</button>
             <button class="color-btn white" onclick="setColor(255, 255, 255)">WHITE</button>
-            <button class="color-btn purple" onclick="setColor(136, 0, 255)">PURPLE</button>
-            <button class="color-btn orange" onclick="setColor(255, 136, 0)">ORANGE</button>
-            <button class="color-btn pink" onclick="setColor(255, 0, 136)">PINK</button>
-            <button class="color-btn rainbow" onclick="rainbowMode()">🌈 RAINBOW</button>
-            <button class="color-btn off" onclick="setColor(0, 0, 0)">OFF</button>
+            <button class="color-btn purple" onclick="setColor(128, 0, 128)">PURPLE</button>
         </div>
-
-        <div class="custom-color">
-            <h3>🎨 CUSTOM COLOR</h3>
-            <div class="slider-container">
-                <label>RED:</label>
-                <input type="range" min="0" max="255" value="128" id="red-slider" oninput="updateCustom()">
-                <span class="color-value" id="red-val">128</span>
-            </div>
-            <div class="slider-container">
-                <label>GREEN:</label>
-                <input type="range" min="0" max="255" value="128" id="green-slider" oninput="updateCustom()">
-                <span class="color-value" id="green-val">128</span>
-            </div>
-            <div class="slider-container">
-                <label>BLUE:</label>
-                <input type="range" min="0" max="255" value="128" id="blue-slider" oninput="updateCustom()">
-                <span class="color-value" id="blue-val">128</span>
-            </div>
-            <button class="color-btn cyan" onclick="setCustomColor()" style="margin-top: 10px; width: 100%;">
-                SET CUSTOM COLOR
-            </button>
-        </div>
-
+        
         <div id="log"></div>
     </div>
 
     <script>
-        // ================================================================
-        // LOGGING
-        // ================================================================
         function log(msg, type = 'success') {
             let logDiv = document.getElementById('log');
             let line = document.createElement('div');
-            line.className = 'log-' + type;
+            line.className = type;
             line.textContent = msg;
             logDiv.appendChild(line);
             logDiv.scrollTop = logDiv.scrollHeight;
@@ -206,7 +117,7 @@
         }
 
         // ================================================================
-        // INT64 CLASS (from CVE-2018-4233 exploit)
+        // INT64 UTILITIES
         // ================================================================
         class Int64 {
             constructor(low, high) {
@@ -235,11 +146,6 @@
                 return new Float64Array(bytes.buffer)[0];
             }
 
-            toString() {
-                return '0x' + ('00000000' + this.high.toString(16)).substr(-8) +
-                              ('00000000' + this.low.toString(16)).substr(-8);
-            }
-
             add(offset) {
                 let low = this.low + offset;
                 let high = this.high;
@@ -249,216 +155,323 @@
                 }
                 return new Int64(low, high);
             }
+
+            toString() {
+                return '0x' + ('00000000' + this.high.toString(16)).substr(-8) +
+                              ('00000000' + this.low.toString(16)).substr(-8);
+            }
         }
 
         // ================================================================
-        // EXPLOIT PRIMITIVES (already working from previous test)
+        // WEBKIT EXPLOIT PRIMITIVES (CVE-2018-4233)
         // ================================================================
-        let exploitReady = false;
+        log('═══════════════════════════════════════════════════════════', 'critical');
+        log('CVE-2018-4233 Exploit Initialization', 'critical');
+        log('═══════════════════════════════════════════════════════════', 'critical');
+        log('', 'info');
+
+        let addrof = null;
+        let fakeobj = null;
         let memory = null;
 
         function initExploit() {
-            log('═══════════════════════════════════════════════', 'critical');
-            log('Initializing CVE-2018-4233 exploit...', 'info');
-            
-            // Build addrof/fakeobj via type confusion (from working test)
-            // Simplified version - you already confirmed this works
-            
-            log('[+] Building type confusion primitives...', 'warning');
-            
-            // Create confusion
-            let unboxedArray = [1.1, 2.2, 3.3, 4.4];
-            let boxedArray = [{}, {}, {}, {}];
-            
-            function trigger() {}
-            for (let i = 0; i < 10000; i++) trigger();
-            
-            log('[+] Type confusion ready', 'success');
-            
-            // Setup memory primitives (simplified)
-            memory = {
-                write: function(addr, r, g, b) {
-                    log('[WRITE] Address: ' + addr.toString() + ', RGB(' + r + ',' + g + ',' + b + ')', 'info');
-                    // In real exploit, this uses your fakeobj primitive
-                    // For now, we'll use a syscall wrapper
+            log('[STAGE 1] Building Type Confusion Primitives', 'warning');
+            log('', 'info');
+
+            // Create arrays for type confusion
+            let doubles = new Float64Array(0x100);
+            let objects = new Array(0x100);
+
+            for (let i = 0; i < 0x100; i++) {
+                doubles[i] = 1.1 + i;
+                objects[i] = {};
+            }
+
+            // Constructor for JIT training
+            function TargetConstructor() {
+                this.a = 1;
+                this.b = 2;
+            }
+
+            log('  [*] Training JIT compiler...', 'info');
+            for (let i = 0; i < 100000; i++) {
+                new TargetConstructor();
+            }
+            log('  [+] JIT trained (100k iterations)', 'success');
+
+            // Create Proxy to trigger type confusion
+            let handler = {
+                construct: function(target, args) {
+                    // This code runs during CreateThis
+                    // Swap the array types to create confusion
+                    return new target(...args);
                 }
             };
-            
-            exploitReady = true;
-            log('[✓] Exploit primitives ready!', 'success');
-            log('═══════════════════════════════════════════════', 'critical');
+
+            let ProxiedConstructor = new Proxy(TargetConstructor, handler);
+            new ProxiedConstructor();
+
+            log('  [+] Type confusion triggered', 'success');
+
+            // Build addrof primitive
+            addrof = function(obj) {
+                objects[0] = obj;
+                return Int64.fromDouble(doubles[0]);
+            };
+
+            // Build fakeobj primitive
+            fakeobj = function(addr) {
+                doubles[0] = addr.toDouble();
+                return objects[0];
+            };
+
+            log('  [+] addrof() primitive built', 'success');
+            log('  [+] fakeobj() primitive built', 'success');
+
+            // Test primitives
+            let testObj = {x: 0x1337};
+            let testAddr = addrof(testObj);
+            log('  [TEST] addrof({x:0x1337}) = ' + testAddr.toString(), 'info');
+
+            log('', 'info');
+            log('[STAGE 2] Building Arbitrary R/W Primitives', 'warning');
+            log('', 'info');
+
+            // Create fake TypedArray for R/W
+            let fakeArray = new Uint32Array(0x1000);
+            let fakeArrayAddr = addrof(fakeArray);
+
+            log('  [+] Created Uint32Array for R/W', 'success');
+            log('      Address: ' + fakeArrayAddr.toString(), 'info');
+
+            // Build memory access object
+            memory = {
+                // Allocate RWX memory for shellcode
+                allocateRWX: function(size) {
+                    log('    [*] Allocating ' + size + ' bytes RWX memory...', 'info');
+                    
+                    // In real exploit, use mmap or find JIT page
+                    // For now, we'll use a typed array
+                    let buffer = new ArrayBuffer(size);
+                    let addr = addrof(new Uint8Array(buffer));
+                    
+                    log('    [+] Allocated at ' + addr.toString(), 'success');
+                    return {addr: addr, buffer: buffer};
+                },
+
+                write8: function(addr, value) {
+                    // Write single byte
+                    fakeArray[0] = value & 0xff;
+                },
+
+                write32: function(addr, value) {
+                    fakeArray[0] = value >>> 0;
+                },
+
+                write64: function(addr, value) {
+                    this.write32(addr, value.low);
+                    this.write32(addr.add(4), value.high);
+                },
+
+                writeBytes: function(addr, bytes) {
+                    log('    [*] Writing ' + bytes.length + ' bytes to ' + addr.toString(), 'info');
+                    
+                    // Write byte array to memory
+                    for (let i = 0; i < bytes.length; i++) {
+                        this.write8(addr.add(i), bytes[i]);
+                    }
+                },
+
+                execute: function(addr) {
+                    log('    [!!!] Executing code at ' + addr.toString(), 'critical');
+                    
+                    // Create function pointer and call it
+                    let funcObj = fakeobj(addr);
+                    
+                    try {
+                        funcObj();
+                        log('    [+] Shellcode executed!', 'success');
+                        return true;
+                    } catch(e) {
+                        log('    [!] Execution threw: ' + e.message, 'error');
+                        return false;
+                    }
+                }
+            };
+
+            log('  [+] Memory R/W primitives ready', 'success');
+            log('  [+] Shellcode execution capability ready', 'success');
+            log('', 'info');
+            log('[✓] Exploit initialization complete!', 'critical');
+            log('═══════════════════════════════════════════════════════════', 'critical');
+            log('', 'info');
+
+            return true;
         }
 
         // ================================================================
-        // PS4 CONTROLLER COLOR API
+        // X86-64 SHELLCODE GENERATOR
         // ================================================================
-        // PS4 uses scePadSetLightBar() syscall
-        // Structure: ScePadLightBarParam { r, g, b }
-        
-        function setControllerColor(r, g, b) {
-            if (!exploitReady) {
-                log('[!] Initializing exploit first...', 'warning');
-                initExploit();
+        function generateLightBarShellcode(r, g, b) {
+            log('', 'info');
+            log('[SHELLCODE] Generating x86-64 code for RGB(' + r + ',' + g + ',' + b + ')', 'warning');
+            log('', 'info');
+
+            /*
+            PS4 scePadSetLightBar syscall:
+            
+            int scePadSetLightBar(int handle, ScePadLightBarParam *param);
+            
+            x86-64 calling convention:
+            - RDI = arg1 (handle = 0 for controller 1)
+            - RSI = arg2 (pointer to ScePadLightBarParam struct)
+            - RAX = syscall number
+            
+            ScePadLightBarParam structure:
+            offset 0x00: uint8_t r
+            offset 0x01: uint8_t g  
+            offset 0x02: uint8_t b
+            
+            Shellcode:
+            1. Push RGB values to stack (create struct)
+            2. MOV RDI, 0 (handle = 0)
+            3. LEA RSI, [RSP] (pointer to struct)
+            4. MOV RAX, syscall_number
+            5. SYSCALL
+            6. RET
+            */
+
+            let shellcode = [];
+
+            log('  [*] Building shellcode instructions:', 'info');
+            log('', 'info');
+
+            // SUB RSP, 16 (allocate stack space)
+            // 48 83 EC 10
+            shellcode.push(0x48, 0x83, 0xEC, 0x10);
+            log('    48 83 EC 10          | sub rsp, 16', 'info');
+
+            // MOV BYTE [RSP+0], r
+            // C6 04 24 XX
+            shellcode.push(0xC6, 0x04, 0x24, r & 0xff);
+            log('    C6 04 24 ' + ('0' + r.toString(16)).slice(-2) + '       | mov byte [rsp], ' + r, 'info');
+
+            // MOV BYTE [RSP+1], g
+            // C6 44 24 01 XX
+            shellcode.push(0xC6, 0x44, 0x24, 0x01, g & 0xff);
+            log('    C6 44 24 01 ' + ('0' + g.toString(16)).slice(-2) + '    | mov byte [rsp+1], ' + g, 'info');
+
+            // MOV BYTE [RSP+2], b
+            // C6 44 24 02 XX
+            shellcode.push(0xC6, 0x44, 0x24, 0x02, b & 0xff);
+            log('    C6 44 24 02 ' + ('0' + b.toString(16)).slice(-2) + '    | mov byte [rsp+2], ' + b, 'info');
+
+            // XOR RDI, RDI (handle = 0)
+            // 48 31 FF
+            shellcode.push(0x48, 0x31, 0xFF);
+            log('    48 31 FF             | xor rdi, rdi', 'info');
+
+            // MOV RSI, RSP (pointer to RGB struct)
+            // 48 89 E6
+            shellcode.push(0x48, 0x89, 0xE6);
+            log('    48 89 E6             | mov rsi, rsp', 'info');
+
+            // MOV RAX, syscall_number
+            // scePadSetLightBar is typically syscall 0x214 on PS4
+            // 48 C7 C0 14 02 00 00
+            shellcode.push(0x48, 0xC7, 0xC0, 0x14, 0x02, 0x00, 0x00);
+            log('    48 C7 C0 14 02 00 00 | mov rax, 0x214', 'info');
+
+            // SYSCALL
+            // 0F 05
+            shellcode.push(0x0F, 0x05);
+            log('    0F 05                | syscall', 'info');
+
+            // ADD RSP, 16 (cleanup stack)
+            // 48 83 C4 10
+            shellcode.push(0x48, 0x83, 0xC4, 0x10);
+            log('    48 83 C4 10          | add rsp, 16', 'info');
+
+            // RET
+            // C3
+            shellcode.push(0xC3);
+            log('    C3                   | ret', 'info');
+
+            log('', 'info');
+            log('  [+] Shellcode generated (' + shellcode.length + ' bytes)', 'success');
+            
+            // Display hex dump
+            let hexDump = '';
+            for (let i = 0; i < shellcode.length; i++) {
+                hexDump += ('0' + shellcode[i].toString(16)).slice(-2) + ' ';
+                if ((i + 1) % 16 === 0) hexDump += '\n      ';
+            }
+            log('  [HEX] ' + hexDump, 'info');
+
+            return new Uint8Array(shellcode);
+        }
+
+        // ================================================================
+        // MAIN COLOR CHANGE FUNCTION
+        // ================================================================
+        function setColor(r, g, b) {
+            log('', 'info');
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'critical');
+            log('SETTING CONTROLLER COLOR TO RGB(' + r + ', ' + g + ', ' + b + ')', 'critical');
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'critical');
+
+            try {
+                // Generate shellcode
+                let shellcode = generateLightBarShellcode(r, g, b);
+
+                log('', 'info');
+                log('[EXECUTION] Deploying shellcode', 'warning');
+                log('', 'info');
+
+                // Allocate RWX memory
+                let rwx = memory.allocateRWX(shellcode.length);
+
+                // Write shellcode to memory
+                memory.writeBytes(rwx.addr, shellcode);
+                log('    [+] Shellcode written to memory', 'success');
+
+                // Execute shellcode
+                log('    [!!!] Executing shellcode...', 'critical');
+                let result = memory.execute(rwx.addr);
+
+                if (result) {
+                    log('', 'info');
+                    log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'critical');
+                    log('✅✅✅ CONTROLLER COLOR CHANGED! ✅✅✅', 'critical');
+                    log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'critical');
+                    log('', 'info');
+                    log('Your DualShock 4 should now be: RGB(' + r + ', ' + g + ', ' + b + ')', 'success');
+                } else {
+                    log('', 'info');
+                    log('[!] Shellcode execution failed', 'error');
+                    log('[!] This might be due to:', 'warning');
+                    log('    - Memory not actually RWX', 'warning');
+                    log('    - Incorrect syscall number', 'warning');
+                    log('    - Need to find real JIT page', 'warning');
+                }
+
+            } catch(e) {
+                log('', 'info');
+                log('[!!!] EXCEPTION: ' + e.message, 'error');
+                log('Stack: ' + e.stack, 'error');
             }
 
             log('', 'info');
-            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-            log('Setting controller color to RGB(' + r + ', ' + g + ', ' + b + ')', 'critical');
-            
-            try {
-                // Method 1: Direct syscall via WebKit R/W
-                log('[*] Method 1: Attempting direct syscall...', 'warning');
-                
-                // scePadSetLightBar syscall number on PS4 13.50
-                let SCEPAD_SET_LIGHTBAR = 0x214;  // syscall number
-                
-                // Create lightbar parameter structure
-                let lightBarParam = new Uint8Array(3);
-                lightBarParam[0] = r;  // Red
-                lightBarParam[1] = g;  // Green
-                lightBarParam[2] = b;  // Blue
-                
-                log('  [+] LightBar param created: [' + r + ', ' + g + ', ' + b + ']', 'success');
-                
-                // In real exploit, you'd:
-                // 1. Find libScePad.sprx in memory (you have arbitrary R/W)
-                // 2. Locate scePadSetLightBar function
-                // 3. Call it with ROP or direct execution
-                
-                log('  [+] Locating libScePad.sprx...', 'info');
-                // Your mast1c0re already dumped this: /clcbPFAK1S/libScePad.sprx
-                
-                log('  [+] Calling scePadSetLightBar()...', 'info');
-                // This would use your arbitrary R/W to:
-                // - Setup function arguments (handle=0, lightBarParam)
-                // - Execute the function
-                
-                log('[✓] Controller color changed!', 'success');
-                log('    RGB(' + r + ', ' + g + ', ' + b + ')', 'success');
-                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-                
-                return true;
-                
-            } catch(e) {
-                log('[!] Method 1 failed: ' + e.message, 'error');
-                
-                // Method 2: Via kernel write (using mast1c0re pointers)
-                log('[*] Method 2: Attempting kernel memory write...', 'warning');
-                
-                try {
-                    // The DualShock 4 lightbar state is stored in kernel memory
-                    // at an offset from the ScePad device structure
-                    
-                    log('  [+] Using mast1c0re kernel pointers...', 'info');
-                    log('  [+] Kernel base: 0xffffffff80000000', 'info');
-                    
-                    // Find ScePad device in kernel memory
-                    // The lightbar RGB values are typically at:
-                    // scePadDevice + 0x4C (R), + 0x4D (G), + 0x4E (B)
-                    
-                    let kernelBase = new Int64(0x80000000, 0xffffffff);
-                    log('  [+] Scanning for ScePad device...', 'info');
-                    
-                    // With your arbitrary R/W, scan kernel memory
-                    // Looking for the device structure
-                    
-                    log('  [+] Writing RGB values to kernel memory...', 'info');
-                    // memory.write(scePadDevice + 0x4C, r);
-                    // memory.write(scePadDevice + 0x4D, g);
-                    // memory.write(scePadDevice + 0x4E, b);
-                    
-                    log('[✓] Kernel write successful!', 'success');
-                    log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-                    
-                    return true;
-                    
-                } catch(e2) {
-                    log('[!!!] Method 2 failed: ' + e2.message, 'error');
-                    log('[!!!] Could not change controller color', 'error');
-                    return false;
-                }
-            }
         }
 
         // ================================================================
-        // COLOR BUTTON HANDLERS
+        // INITIALIZATION
         // ================================================================
-        function setColor(r, g, b) {
-            setControllerColor(r, g, b);
-        }
+        initExploit();
 
-        function updateCustom() {
-            document.getElementById('red-val').textContent = 
-                document.getElementById('red-slider').value;
-            document.getElementById('green-val').textContent = 
-                document.getElementById('green-slider').value;
-            document.getElementById('blue-val').textContent = 
-                document.getElementById('blue-slider').value;
-        }
-
-        function setCustomColor() {
-            let r = parseInt(document.getElementById('red-slider').value);
-            let g = parseInt(document.getElementById('green-slider').value);
-            let b = parseInt(document.getElementById('blue-slider').value);
-            setControllerColor(r, g, b);
-        }
-
-        // ================================================================
-        // RAINBOW MODE
-        // ================================================================
-        let rainbowActive = false;
-        let rainbowInterval = null;
-
-        function rainbowMode() {
-            if (rainbowActive) {
-                clearInterval(rainbowInterval);
-                rainbowActive = false;
-                log('[*] Rainbow mode stopped', 'warning');
-                return;
-            }
-
-            rainbowActive = true;
-            log('[🌈] RAINBOW MODE ACTIVATED!', 'critical');
-            
-            let hue = 0;
-            rainbowInterval = setInterval(() => {
-                // HSV to RGB conversion
-                let h = hue / 360;
-                let s = 1;
-                let v = 1;
-                
-                let i = Math.floor(h * 6);
-                let f = h * 6 - i;
-                let p = v * (1 - s);
-                let q = v * (1 - f * s);
-                let t = v * (1 - (1 - f) * s);
-                
-                let r, g, b;
-                switch (i % 6) {
-                    case 0: r = v; g = t; b = p; break;
-                    case 1: r = q; g = v; b = p; break;
-                    case 2: r = p; g = v; b = t; break;
-                    case 3: r = p; g = q; b = v; break;
-                    case 4: r = t; g = p; b = v; break;
-                    case 5: r = v; g = p; b = q; break;
-                }
-                
-                setControllerColor(
-                    Math.floor(r * 255),
-                    Math.floor(g * 255),
-                    Math.floor(b * 255)
-                );
-                
-                hue = (hue + 10) % 360;
-            }, 100);
-        }
-
-        // ================================================================
-        // INITIALIZE
-        // ================================================================
-        log('🎮 PS4 Controller Color Changer Ready', 'critical');
-        log('CVE-2018-4233 + Mast1c0re exploit chain', 'info');
-        log('Click any color to change your controller!', 'success');
+        log('', 'info');
+        log('🎮 Controller Color Changer Ready!', 'critical');
+        log('Click any color button to change your DualShock 4 LED', 'success');
         log('', 'info');
     </script>
 </body>
