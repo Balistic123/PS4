@@ -832,6 +832,6 @@ async function main() {
   await make_arw(rdr, view2, pop);
 
   clear_log();
-  import("./lapse.mjs");
+  import("./PS4/src/lapse.mjs");
 }
 main();
