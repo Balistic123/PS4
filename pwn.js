@@ -1,8 +1,8 @@
-import {IN_BROWSER, IN_SHELL, IS_IOS, NUM_REGS} from './env.js';
-import {hexdump, assert, Int64, Add, Sub, And} from './utils.js';
-import {log} from './logging.js';
-import {offsets} from './offsets.js';
-import {waitFor, ready} from './ready.js';
+import {IN_BROWSER, IN_SHELL, IS_IOS, NUM_REGS} from './PS4/env.js';
+import {hexdump, assert, Int64, Add, Sub, And} from './PS4/utils.js';
+import {log} from './PS4/logging.js';
+import {offsets} from './PS4/offsets.js';
+import {waitFor, ready} from './PS4/ready.js';
 
 // This is an upper limit on the number of iterations. Functions
 // that need to be JITed will attempt to detect when they
