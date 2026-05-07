@@ -1,14 +1,41 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <title>CSE'xploit</title>
-        <style>
-            body {
-              font-family: monospace;
+<head>
+    <title>CLS</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #111;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            flex-direction: column;
+        }
+
+        button {
+            font-size: 20px;
+            padding: 12px 24px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+
+    <button id="runBtn">Execute pwn.js</button>
+
+    <script>
+        document.getElementById("runBtn").addEventListener("click", async () => {
+            try {
+                await import("./PS4/pwn.js");
+                console.log("pwn.js executed");
+            } catch (e) {
+                console.error("Failed to load script.js:", e);
             }
-        </style>
-        <script type="module" src="./PS4/pwn.js"></script>
-    </head>
-    <body>
-    </body>
+        });
+    </script>
+
+</body>
 </html>
